@@ -1,5 +1,5 @@
-//! Entradas MIDI (piano e mesinha). Procura aparelhos a cada 1,5 s: se o cabo
-//! soltar e voltar, reconecta sozinho.
+//! Entradas MIDI (piano e mesinha), pelo cabo USB e (no Windows) pelo Bluetooth.
+//! Procura aparelhos a cada 1,5 s: se o cabo soltar ou o Bluetooth cair, reconecta sozinho.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,6 +12,9 @@ use midir::{Ignore, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnec
 use crate::core::SharedCore;
 use crate::engine::Cmd;
 use crate::model::PortRole;
+
+/// Final do nome dos aparelhos que chegam pelo Bluetooth.
+pub const BT_SUFFIX: &str = " (Bluetooth)";
 
 #[derive(Clone)]
 pub struct PortInfo {
@@ -29,9 +32,41 @@ pub struct MidiStatus {
 
 pub type SharedMidiStatus = Arc<Mutex<MidiStatus>>;
 
+/// Ligação aberta com um aparelho (fecha sozinha quando sai do mapa).
+enum Link {
+    Usb(#[allow(dead_code)] MidiInputConnection<()>),
+    #[cfg(windows)]
+    Bt(#[allow(dead_code)] crate::ble::BleIn),
+}
+
 struct Conn {
     role: PortRole,
-    _conn: MidiInputConnection<()>,
+    _link: Link,
+}
+
+/// Saída para as luzes dos botões da mesinha.
+enum LedOut {
+    Usb(MidiOutputConnection),
+    #[cfg(windows)]
+    Bt(crate::ble::BleOut),
+}
+
+impl LedOut {
+    fn send(&mut self, msg: &[u8]) {
+        match self {
+            LedOut::Usb(c) => {
+                let _ = c.send(msg);
+            }
+            #[cfg(windows)]
+            LedOut::Bt(c) => c.send(msg),
+        }
+    }
+}
+
+/// Um aparelho encontrado: nome mostrado na tela e, se for Bluetooth, o id do Windows.
+struct Found {
+    name: String,
+    bt_id: Option<String>,
 }
 
 pub fn start(core: SharedCore, tx: Sender<Cmd>, status: SharedMidiStatus, rescan: Arc<AtomicBool>) {
@@ -42,9 +77,11 @@ pub fn start(core: SharedCore, tx: Sender<Cmd>, status: SharedMidiStatus, rescan
 }
 
 fn run(core: SharedCore, tx: Sender<Cmd>, status: SharedMidiStatus, rescan: Arc<AtomicBool>) {
+    #[cfg(windows)]
+    crate::ble::init_thread();
     let mut conns: HashMap<String, Conn> = HashMap::new();
     let mut errors: HashMap<String, String> = HashMap::new();
-    let mut led_out: Option<(String, MidiOutputConnection)> = None;
+    let mut led_out: Option<(String, LedOut)> = None;
     let mut leds_sent: HashMap<(u8, u8), bool> = HashMap::new();
     let mut last_scan = Instant::now() - Duration::from_secs(10);
 
@@ -53,29 +90,37 @@ fn run(core: SharedCore, tx: Sender<Cmd>, status: SharedMidiStatus, rescan: Arc<
             || rescan.swap(false, Ordering::Relaxed)
         {
             last_scan = Instant::now();
-            let names = input_names();
+            let found = find_inputs();
             let roles: Vec<(String, PortRole)> = {
                 let c = core.lock().unwrap();
-                names
+                found
                     .iter()
-                    .map(|n| (n.clone(), c.cfg.role_for(n)))
+                    .map(|f| (f.name.clone(), c.cfg.role_for(&f.name)))
                     .collect()
             };
             // Fecha o que sumiu ou mudou de função.
             conns.retain(|name, conn| roles.iter().any(|(n, r)| n == name && *r == conn.role));
             // Abre o que é novo.
-            for (name, role) in &roles {
+            for (f, (name, role)) in found.iter().zip(&roles) {
                 if *role == PortRole::Ignore || conns.contains_key(name) {
                     continue;
                 }
-                match connect(name, *role, core.clone(), tx.clone()) {
-                    Ok(conn) => {
+                let handler = make_handler(*role, core.clone(), tx.clone());
+                let link = match &f.bt_id {
+                    None => connect_usb(name, handler).map(Link::Usb),
+                    #[cfg(windows)]
+                    Some(id) => crate::ble::BleIn::open(id, handler).map(Link::Bt),
+                    #[cfg(not(windows))]
+                    Some(_) => Err("Bluetooth só no Windows".to_string()),
+                };
+                match link {
+                    Ok(link) => {
                         errors.remove(name);
                         conns.insert(
                             name.clone(),
                             Conn {
                                 role: *role,
-                                _conn: conn,
+                                _link: link,
                             },
                         );
                     }
@@ -120,7 +165,7 @@ fn run(core: SharedCore, tx: Sender<Cmd>, status: SharedMidiStatus, rescan: Arc<
             let leds = core.lock().map(|c| c.leds()).unwrap_or_default();
             for (ch, note, lit) in leds {
                 if leds_sent.get(&(ch, note)) != Some(&lit) {
-                    let _ = out.send(&[0x90 | (ch & 0x0F), note, if lit { 0x7F } else { 0 }]);
+                    out.send(&[0x90 | (ch & 0x0F), note, if lit { 0x7F } else { 0 }]);
                     leds_sent.insert((ch, note), lit);
                 }
             }
@@ -130,7 +175,27 @@ fn run(core: SharedCore, tx: Sender<Cmd>, status: SharedMidiStatus, rescan: Arc<
     }
 }
 
-fn input_names() -> Vec<String> {
+/// Aparelhos do cabo (WinMM) + Bluetooth (só os que não apareceram no cabo).
+fn find_inputs() -> Vec<Found> {
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut found: Vec<Found> = usb_input_names()
+        .into_iter()
+        .map(|name| Found { name, bt_id: None })
+        .collect();
+    #[cfg(windows)]
+    for (id, name) in crate::ble::inputs() {
+        let shown = format!("{name}{BT_SUFFIX}");
+        if !found.iter().any(|f| f.name == shown) {
+            found.push(Found {
+                name: shown,
+                bt_id: Some(id),
+            });
+        }
+    }
+    found
+}
+
+fn usb_input_names() -> Vec<String> {
     let Ok(input) = MidiInput::new("piano-sf2 lista") else {
         return Vec::new();
     };
@@ -143,12 +208,23 @@ fn input_names() -> Vec<String> {
     names
 }
 
-fn connect(
-    name: &str,
-    role: PortRole,
-    core: SharedCore,
-    tx: Sender<Cmd>,
-) -> Result<MidiInputConnection<()>, String> {
+type Handler = Box<dyn FnMut(&[u8]) + Send + 'static>;
+
+/// O que fazer com cada mensagem: piano toca; mesinha comanda a tela.
+fn make_handler(role: PortRole, core: SharedCore, tx: Sender<Cmd>) -> Handler {
+    match role {
+        PortRole::Piano => Box::new(move |msg| piano_message(msg, &core, &tx)),
+        _ => Box::new(move |msg| {
+            if let Ok(mut c) = core.lock() {
+                if c.handle_controller(msg) {
+                    c.request_repaint();
+                }
+            }
+        }),
+    }
+}
+
+fn connect_usb(name: &str, mut handler: Handler) -> Result<MidiInputConnection<()>, String> {
     let mut input = MidiInput::new("piano-sf2").map_err(|e| e.to_string())?;
     input.ignore(Ignore::All);
     let port = input
@@ -156,28 +232,10 @@ fn connect(
         .into_iter()
         .find(|p| input.port_name(p).ok().as_deref() == Some(name))
         .ok_or("porta sumiu")?;
-    let result = match role {
-        PortRole::Piano => input.connect(
-            &port,
-            "piano-sf2-in",
-            move |_, msg, _| piano_message(msg, &core, &tx),
-            (),
-        ),
-        _ => input.connect(
-            &port,
-            "piano-sf2-ctl",
-            move |_, msg, _| {
-                if let Ok(mut c) = core.lock() {
-                    if c.handle_controller(msg) {
-                        c.request_repaint();
-                    }
-                }
-            },
-            (),
-        ),
-    };
     // No Windows, se outro programa (ex.: Numa) estiver usando o aparelho, dá erro aqui.
-    result.map_err(|e| format!("em uso por outro programa? ({e})"))
+    input
+        .connect(&port, "piano-sf2-in", move |_, msg, _| handler(msg), ())
+        .map_err(|e| format!("em uso por outro programa? ({e})"))
 }
 
 /// Piano: notas vão direto para o motor (sem esperar a tela).
@@ -221,7 +279,12 @@ fn piano_message(msg: &[u8], core: &SharedCore, tx: &Sender<Cmd>) {
     }
 }
 
-fn open_output_like(input_name: &str) -> Option<MidiOutputConnection> {
+fn open_output_like(input_name: &str) -> Option<LedOut> {
+    #[cfg(windows)]
+    if let Some(base) = input_name.strip_suffix(BT_SUFFIX) {
+        let (id, _) = crate::ble::outputs().into_iter().find(|(_, n)| n == base)?;
+        return crate::ble::BleOut::open(&id).map(LedOut::Bt);
+    }
     let out = MidiOutput::new("piano-sf2 luzes").ok()?;
     let ports = out.ports();
     let key = input_name.to_lowercase();
@@ -241,5 +304,5 @@ fn open_output_like(input_name: &str) -> Option<MidiOutputConnection> {
             })
         })?
         .clone();
-    out.connect(&port, "piano-sf2-leds").ok()
+    out.connect(&port, "piano-sf2-leds").ok().map(LedOut::Usb)
 }

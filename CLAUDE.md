@@ -13,7 +13,7 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 ## Como o projeto é montado
 - Rust. `src/model.rs` (dados/config/mapeamento SMC), `src/engine.rs` (motor na thread de áudio, nada de travar ou
   alocar lá), `src/core.rs` (estado + ações, usado pela tela e pelo MIDI), `src/audio.rs` (cpal/WASAPI),
-  `src/midi.rs` (midir, reconexão a cada 1,5 s, luzes), `src/app.rs` (tela egui), `src/main.rs`.
+  `src/midi.rs` (midir/WinMM p/ USB + `src/ble.rs` WinRT p/ Bluetooth, reconexão a cada 1,5 s, luzes), `src/app.rs` (tela egui), `src/main.rs`.
 - `vendor/rustysynth` = cópia do rustysynth 1.3.8 com ajustes marcados `piano-sf2:` (não trocar pela versão do crates.io).
 - `LAYERS = 6` (v0.3; canais 7/8 da mesinha = PAD/GERAL). Uma camada = um canal MIDI de um único `Synthesizer`. Liga/desliga usa expressão (CC11) + corte após 60 ms.
 - `src/pads.rs` (v0.2/v0.3): pads por tom (12 tons × estilos Escuro/Coral/Suave) embutidos em OGG (`assets/pads/`), decodificados

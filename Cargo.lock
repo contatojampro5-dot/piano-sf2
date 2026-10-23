@@ -1845,6 +1845,7 @@ dependencies = [
  "serde",
  "serde_json",
  "symphonia",
+ "windows",
  "windows-sys 0.61.2",
 ]
 

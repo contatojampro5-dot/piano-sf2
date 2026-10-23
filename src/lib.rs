@@ -9,6 +9,8 @@ pub mod pads;
 pub mod app;
 #[cfg(feature = "app")]
 pub mod audio;
+#[cfg(all(feature = "app", windows))]
+pub mod ble;
 #[cfg(feature = "app")]
 pub mod midi;
 #[cfg(feature = "app")]

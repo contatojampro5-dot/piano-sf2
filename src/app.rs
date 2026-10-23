@@ -2145,7 +2145,7 @@ fn settings_window(
                 ui.heading("Aparelhos MIDI");
                 let ports = midi_status.lock().map(|s| s.ports.clone()).unwrap_or_default();
                 if ports.is_empty() {
-                    ui.label(RichText::new("Nenhum aparelho encontrado. Ligue o piano e a mesinha pelo cabo USB.").color(th().dim));
+                    ui.label(RichText::new("Nenhum aparelho encontrado. Ligue o piano e a mesinha pelo cabo USB ou pelo Bluetooth.").color(th().dim));
                 }
                 egui::Grid::new("midi").num_columns(3).spacing([12.0, 8.0]).show(ui, |ui| {
                     for p in &ports {
@@ -2171,6 +2171,11 @@ fn settings_window(
                 if ports.iter().any(|p| p.error.is_some()) {
                     ui.label(RichText::new("⚠ Algum aparelho está em uso por outro programa (feche o Numa e outros).").color(YELLOW));
                 }
+                ui.label(
+                    RichText::new("Bluetooth: primeiro ligue o Bluetooth da mesinha e pareie no Windows (Configurações → Dispositivos → Bluetooth e outros → Adicionar → Bluetooth). Depois ela aparece aqui sozinha, com \"(Bluetooth)\" no nome.")
+                        .size(13.0)
+                        .color(th().dim),
+                );
                 if ui.checkbox(&mut core.cfg.program_change_scenes, "Troca de programa do piano muda a cena (programa 1 = Cena 1)").changed() {
                     core.dirty = true;
                 }

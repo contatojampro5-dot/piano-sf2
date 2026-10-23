@@ -27,6 +27,8 @@ eframe = { version = "0.37", default-features = false, features = ["x11"], optio
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
+# MIDI por Bluetooth (WinRT). Mesma versão que o midir usa.
+windows = { version = "0.62", features = ["Devices_Midi", "Devices_Enumeration", "Foundation", "Foundation_Collections", "Storage_Streams", "Win32_System_WinRT"] }
 cpal = { version = "0.18", features = ["realtime"], optional = true }
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
 

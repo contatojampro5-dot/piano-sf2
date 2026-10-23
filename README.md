@@ -33,6 +33,18 @@ Piano (LINE OUT) ──► caixas / mesa da igreja
 - **Feche o Numa** (e qualquer outro programa de música): no Windows, só um programa por vez consegue usar o piano e a mesinha.
 - Zumbido com o carregador ligado? Um **isolador de áudio P2** resolve.
 
+## Mesinha pelo Bluetooth
+
+A SMC-Mixer também funciona **sem fio** (Windows 10/11 com Bluetooth):
+1. Ligue a mesinha no modo **Bluetooth** (veja o manual dela; normalmente segurar o botão de Bluetooth até a luz piscar).
+2. No Windows: **Configurações → Dispositivos → Bluetooth e outros dispositivos → Adicionar → Bluetooth** →
+   escolha **SMC-Mixer** (ou parecido) e espere "Conectado"/"Pareado".
+3. Abra o Piano SF2. Ela aparece sozinha como **"SMC-Mixer (Bluetooth)"** (bolinha verde em *Mesinha*).
+   Se não aparecer, abra **⚙ Ajustes → Aparelhos MIDI** e confira se está como *Mesinha (controla)*.
+
+Dicas: pelo Bluetooth pode ter um pouquinho mais de atraso que no cabo (para faders e botões não faz diferença).
+Se cair, o programa reconecta sozinho em ~2 s. Para o **piano**, continue usando o cabo USB.
+
 ## Primeiro uso
 
 1. Clique em **📂 Abrir SF2...** e escolha o seu arquivo (ex.: *Soundpack Eliab Campos Teclas.sf2*).
@@ -143,6 +155,10 @@ Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B)
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.6 — mesinha pelo Bluetooth
+- A SMC-Mixer (e outros aparelhos MIDI Bluetooth pareados no Windows) aparece como "… (Bluetooth)" e funciona sem fio.
+- Luzes dos botões também pelo Bluetooth; reconexão automática.
 
 ### v0.5 — visual de vidro (estilo iPhone)
 - Fundo celestial com nuvens de luz e estrelas (4 temas), painéis de vidro fosco com transparência ajustável.
