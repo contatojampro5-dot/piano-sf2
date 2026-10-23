@@ -156,6 +156,11 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.6.1 — Bluetooth: busca mais ampla e diagnóstico
+- Procura a mesinha em todos os aparelhos MIDI que o Windows enxerga (não só pelo "jeito" do id Bluetooth),
+  sem abrir duas vezes o que já veio pelo cabo.
+- ⚙ Ajustes → Aparelhos MIDI → **Diagnóstico**: mostra tudo que o Windows enxerga e o erro de cada aparelho.
+
 ### v0.6 — mesinha pelo Bluetooth
 - A SMC-Mixer (e outros aparelhos MIDI Bluetooth pareados no Windows) aparece como "… (Bluetooth)" e funciona sem fio.
 - Luzes dos botões também pelo Bluetooth; reconexão automática.

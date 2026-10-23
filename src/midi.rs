@@ -28,6 +28,8 @@ pub struct PortInfo {
 pub struct MidiStatus {
     pub ports: Vec<PortInfo>,
     pub led_output: Option<String>,
+    /// Diagnóstico: tudo que o Windows enxerga pela API nova (nome, id, usado?).
+    pub winrt_seen: Vec<(String, String, bool)>,
 }
 
 pub type SharedMidiStatus = Arc<Mutex<MidiStatus>>;
@@ -90,7 +92,7 @@ fn run(core: SharedCore, tx: Sender<Cmd>, status: SharedMidiStatus, rescan: Arc<
             || rescan.swap(false, Ordering::Relaxed)
         {
             last_scan = Instant::now();
-            let found = find_inputs();
+            let (found, seen) = find_inputs();
             let roles: Vec<(String, PortRole)> = {
                 let c = core.lock().unwrap();
                 found
@@ -154,6 +156,7 @@ fn run(core: SharedCore, tx: Sender<Cmd>, status: SharedMidiStatus, rescan: Arc<
                 })
                 .collect();
             st.led_output = led_out.as_ref().map(|(n, _)| n.clone());
+            st.winrt_seen = seen;
             drop(st);
             if let Ok(c) = core.lock() {
                 c.request_repaint();
@@ -175,24 +178,51 @@ fn run(core: SharedCore, tx: Sender<Cmd>, status: SharedMidiStatus, rescan: Arc<
     }
 }
 
-/// Aparelhos do cabo (WinMM) + Bluetooth (só os que não apareceram no cabo).
-fn find_inputs() -> Vec<Found> {
+/// Nome "limpo" para comparar aparelhos (sem espaços, símbolos e números de porta).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn plain(name: &str) -> String {
+    name.to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphabetic())
+        .collect::<String>()
+        .replace("midi", "")
+}
+
+/// Aparelhos do cabo (WinMM) + os que só a API nova enxerga (Bluetooth).
+/// Devolve também o diagnóstico (o que a API nova viu e se foi usado).
+fn find_inputs() -> (Vec<Found>, Vec<(String, String, bool)>) {
     #[cfg_attr(not(windows), allow(unused_mut))]
     let mut found: Vec<Found> = usb_input_names()
         .into_iter()
         .map(|name| Found { name, bt_id: None })
         .collect();
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut seen = Vec::new();
     #[cfg(windows)]
-    for (id, name) in crate::ble::inputs() {
-        let shown = format!("{name}{BT_SUFFIX}");
-        if !found.iter().any(|f| f.name == shown) {
-            found.push(Found {
-                name: shown,
-                bt_id: Some(id),
-            });
+    {
+        let usb: Vec<String> = found.iter().map(|f| plain(&f.name)).collect();
+        for p in crate::ble::inputs() {
+            // Mesmo aparelho do cabo? Então não abre de novo (senão cada botão contaria 2 vezes).
+            let pn = plain(&p.name);
+            let same_as_usb = !pn.is_empty()
+                && usb
+                    .iter()
+                    .any(|u| !u.is_empty() && (u.contains(&pn) || pn.contains(u.as_str())));
+            let use_it = p.looks_ble || !same_as_usb;
+            seen.push((p.name.clone(), p.id.clone(), use_it));
+            if !use_it {
+                continue;
+            }
+            let shown = format!("{}{BT_SUFFIX}", p.name);
+            if !found.iter().any(|f| f.name == shown) {
+                found.push(Found {
+                    name: shown,
+                    bt_id: Some(p.id),
+                });
+            }
         }
     }
-    found
+    (found, seen)
 }
 
 fn usb_input_names() -> Vec<String> {
@@ -282,8 +312,8 @@ fn piano_message(msg: &[u8], core: &SharedCore, tx: &Sender<Cmd>) {
 fn open_output_like(input_name: &str) -> Option<LedOut> {
     #[cfg(windows)]
     if let Some(base) = input_name.strip_suffix(BT_SUFFIX) {
-        let (id, _) = crate::ble::outputs().into_iter().find(|(_, n)| n == base)?;
-        return crate::ble::BleOut::open(&id).map(LedOut::Bt);
+        let port = crate::ble::outputs().into_iter().find(|p| p.name == base)?;
+        return crate::ble::BleOut::open(&port.id).map(LedOut::Bt);
     }
     let out = MidiOutput::new("piano-sf2 luzes").ok()?;
     let ports = out.ports();

@@ -26,16 +26,24 @@ fn is_ble(id: &str) -> bool {
     id.contains(BLE_MIDI_SERVICE) || id.contains("bthle")
 }
 
-/// Aparelhos MIDI Bluetooth pareados e ligados: (id, nome).
-pub fn inputs() -> Vec<(String, String)> {
+/// Um aparelho MIDI que a API nova do Windows enxerga.
+pub struct WinRtPort {
+    pub id: String,
+    pub name: String,
+    /// O id tem cara de Bluetooth (serviço BLE MIDI).
+    pub looks_ble: bool,
+}
+
+/// Todas as entradas MIDI que a API nova enxerga (cabo e Bluetooth).
+pub fn inputs() -> Vec<WinRtPort> {
     list(MidiInPort::GetDeviceSelector())
 }
 
-pub fn outputs() -> Vec<(String, String)> {
+pub fn outputs() -> Vec<WinRtPort> {
     list(MidiOutPort::GetDeviceSelector())
 }
 
-fn list(selector: windows::core::Result<HSTRING>) -> Vec<(String, String)> {
+fn list(selector: windows::core::Result<HSTRING>) -> Vec<WinRtPort> {
     let Ok(selector) = selector else {
         return Vec::new();
     };
@@ -51,9 +59,12 @@ fn list(selector: windows::core::Result<HSTRING>) -> Vec<(String, String)> {
             continue;
         };
         let id = id.to_string_lossy();
-        if is_ble(&id) {
-            out.push((id, name.to_string_lossy()));
-        }
+        let looks_ble = is_ble(&id);
+        out.push(WinRtPort {
+            id,
+            name: name.to_string_lossy(),
+            looks_ble,
+        });
     }
     out
 }

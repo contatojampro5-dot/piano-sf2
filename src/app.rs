@@ -2152,10 +2152,12 @@ fn settings_window(
                         let c = if p.connected { GREEN } else { RED };
                         let (r, _) = ui.allocate_exact_size(Vec2::splat(14.0), Sense::hover());
                         ui.painter().circle_filled(r.center(), 5.0, c);
-                        let r = ui.label(&p.name);
-                        if let Some(e) = &p.error {
-                            r.on_hover_text(e);
-                        }
+                        ui.vertical(|ui| {
+                            ui.label(&p.name);
+                            if let Some(e) = &p.error {
+                                ui.label(RichText::new(format!("⚠ {e}")).size(12.0).color(YELLOW));
+                            }
+                        });
                         egui::ComboBox::from_id_salt(&p.name).selected_text(p.role.label()).show_ui(ui, |ui| {
                             for role in [PortRole::Piano, PortRole::Controller, PortRole::Ignore] {
                                 if ui.selectable_label(p.role == role, role.label()).clicked() {
@@ -2176,6 +2178,19 @@ fn settings_window(
                         .size(13.0)
                         .color(th().dim),
                 );
+                let seen = midi_status.lock().map(|s| s.winrt_seen.clone()).unwrap_or_default();
+                egui::CollapsingHeader::new(format!("Diagnóstico (o que o Windows enxerga: {})", seen.len())).show(ui, |ui| {
+                    if seen.is_empty() {
+                        ui.label(RichText::new("O Windows não mostrou nenhum aparelho MIDI pela API nova. Se a mesinha está no Bluetooth, confira se ela aparece como \"Pareado\"/\"Conectado\" nas configurações de Bluetooth do Windows.").size(13.0).color(th().dim));
+                    }
+                    for (name, id, used) in &seen {
+                        ui.label(RichText::new(format!("{} {name}", if *used { "✔ usando" } else { "– já veio pelo cabo" })).size(13.0));
+                        ui.label(RichText::new(id).size(10.0).color(th().dim));
+                    }
+                    if ui.button("Procurar aparelhos de novo").clicked() {
+                        rescan.store(true, Ordering::Relaxed);
+                    }
+                });
                 if ui.checkbox(&mut core.cfg.program_change_scenes, "Troca de programa do piano muda a cena (programa 1 = Cena 1)").changed() {
                     core.dirty = true;
                 }
