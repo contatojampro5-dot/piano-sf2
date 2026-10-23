@@ -13,7 +13,7 @@ use eframe::egui::{
 use crate::audio::{self, Audio};
 use crate::core::{load_sf2_async, start_pad_loader, Core, SharedCore};
 use crate::engine::{Cmd, Engine, Garbage, Stats};
-use crate::midi::{self, SharedMidiStatus};
+use crate::midi::{self, BtCmd, SharedMidiStatus};
 use crate::model::*;
 use crate::pads;
 use crate::theme::{self, th};
@@ -40,6 +40,9 @@ struct UiState {
     picker_search: String,
     picker_focus: bool,
     settings: bool,
+    /// Janela "Bluetooth" aberta (e se já mandou procurar).
+    bt_open: bool,
+    bt_was_open: bool,
     rename: Option<(usize, String)>,
     audio_devices: Vec<String>,
     /// Pedidos que só podem rodar com o `core` destravado (abrir arquivo trava a tela até escolher).
@@ -63,6 +66,8 @@ pub struct PianoApp {
     garbage: Receiver<Garbage>,
     midi_status: SharedMidiStatus,
     midi_rescan: Arc<AtomicBool>,
+    /// Pedidos para o Bluetooth direto (procurar / conectar / esquecer).
+    bt: crossbeam_channel::Sender<BtCmd>,
     ui: UiState,
     last_save: Instant,
     audio_retry: Option<Instant>,
@@ -108,6 +113,11 @@ impl PianoApp {
 
         let midi_status: SharedMidiStatus = Default::default();
         let midi_rescan = Arc::new(AtomicBool::new(true));
+        let (bt, bt_rx) = crossbeam_channel::unbounded::<BtCmd>();
+        #[cfg(windows)]
+        crate::btdirect::start(core.clone(), tx.clone(), midi_status.clone(), bt_rx);
+        #[cfg(not(windows))]
+        drop(bt_rx);
         midi::start(core.clone(), tx, midi_status.clone(), midi_rescan.clone());
 
         Self {
@@ -117,11 +127,14 @@ impl PianoApp {
             garbage: grx,
             midi_status,
             midi_rescan,
+            bt,
             ui: UiState {
                 picker: None,
                 picker_search: String::new(),
                 picker_focus: false,
                 settings: false,
+                bt_open: false,
+                bt_was_open: false,
                 rename: None,
                 audio_devices: Vec::new(),
                 open_sf2_dialog: false,
@@ -269,6 +282,7 @@ impl eframe::App for PianoApp {
             &self.config_path,
         );
         rename_window(&ctx, &mut core, &mut self.ui);
+        bt_window(&ctx, &mut self.ui, &self.midi_status, &self.bt);
         drop(core);
         if restart {
             self.restart_audio();
@@ -723,6 +737,13 @@ fn top_bar(
                 core.learn.active = !core.learn.active;
                 core.learn.target = None;
             }
+            if ui
+                .add(egui::Button::new("Bluetooth").fill(th().glass_hi))
+                .on_hover_text("Procurar e conectar a mesinha pelo Bluetooth")
+                .clicked()
+            {
+                st.bt_open = true;
+            }
             let wiz = egui::Button::new("Configurar mesinha").fill(th().glass_hi);
             if ui
                 .add(wiz)
@@ -773,7 +794,7 @@ fn top_bar(
             // Aparelhos MIDI
             let ports = midi_status
                 .lock()
-                .map(|s| s.ports.clone())
+                .map(|s| s.all_ports())
                 .unwrap_or_default();
             let ctl = ports
                 .iter()
@@ -785,12 +806,15 @@ fn top_bar(
                 t.map(|t| t.elapsed() < Duration::from_millis(150))
                     .unwrap_or(false)
             };
-            status_dot(
+            let r = status_dot(
                 ui,
                 "Mesinha",
                 ctl.map(|p| p.name.as_str()),
                 blink(core.controller_activity),
             );
+            if r.clicked() {
+                st.bt_open = true;
+            }
             status_dot(
                 ui,
                 "Piano",
@@ -858,20 +882,21 @@ fn top_bar(
     }
 }
 
-fn status_dot(ui: &mut Ui, what: &str, name: Option<&str>, active: bool) {
+fn status_dot(ui: &mut Ui, what: &str, name: Option<&str>, active: bool) -> egui::Response {
     let color = match (name.is_some(), active) {
         (true, true) => Color32::WHITE,
         (true, false) => GREEN,
         _ => RED,
     };
-    let r = ui.label(RichText::new(what).color(color));
+    let r = ui.add(egui::Label::new(RichText::new(what).color(color)).sense(Sense::click()));
     let c = Pos2::new(r.rect.left() - 8.0, r.rect.center().y);
     ui.painter().circle_filled(c, 5.0, color);
     ui.add_space(20.0);
-    r.on_hover_text(
-        name.map(|n| format!("Conectado: {n}"))
-            .unwrap_or_else(|| format!("{what} não encontrado. Ligue pelo cabo USB.")),
-    );
+    r.on_hover_text(name.map(|n| format!("Conectado: {n}")).unwrap_or_else(|| {
+        format!(
+            "{what} não encontrado. Ligue pelo cabo USB (ou clique para procurar no Bluetooth)."
+        )
+    }))
 }
 
 // ---------- Abas ----------
@@ -1147,6 +1172,130 @@ fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: 
             ui.close();
         }
     });
+}
+
+// ---------- Bluetooth (conectar a mesinha direto) ----------
+
+fn bt_window(
+    ctx: &egui::Context,
+    st: &mut UiState,
+    midi_status: &SharedMidiStatus,
+    bt: &crossbeam_channel::Sender<BtCmd>,
+) {
+    if !st.bt_open {
+        if st.bt_was_open {
+            let _ = bt.send(BtCmd::StopScan);
+            st.bt_was_open = false;
+        }
+        return;
+    }
+    if !st.bt_was_open {
+        let _ = bt.send(BtCmd::StartScan);
+        st.bt_was_open = true;
+    }
+    let (scanning, err, hits, saved) = midi_status
+        .lock()
+        .map(|s| {
+            (
+                s.bt_scanning,
+                s.bt_scan_error.clone(),
+                s.bt_hits.clone(),
+                s.bt_states.clone(),
+            )
+        })
+        .unwrap_or_default();
+    let mut open = true;
+    egui::Window::new("Bluetooth — conectar a mesinha")
+        .open(&mut open)
+        .collapsible(false)
+        .default_size([520.0, 480.0])
+        .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+        .show(ctx, |ui| {
+            if cfg!(not(windows)) {
+                ui.label(RichText::new("Bluetooth direto só funciona no Windows.").color(YELLOW));
+            }
+            ui.label(RichText::new("1) Ligue o Bluetooth da mesinha (botão BT, luz piscando).   2) Espere ela aparecer abaixo.   3) Clique em Conectar.").size(14.0));
+            ui.label(
+                RichText::new("O programa fala direto com o Bluetooth da mesinha, sem precisar de driver. Depois de conectada uma vez, ela reconecta sozinha sempre que você abrir o programa.")
+                    .size(12.0)
+                    .color(th().dim),
+            );
+            ui.add_space(6.0);
+
+            if !saved.is_empty() {
+                ui.label(RichText::new("Conectados por aqui").strong());
+                for (addr, name, state) in &saved {
+                    ui.horizontal(|ui| {
+                        let ok = state.starts_with("conectado");
+                        let (r, _) = ui.allocate_exact_size(Vec2::splat(14.0), Sense::hover());
+                        ui.painter().circle_filled(r.center(), 5.0, if ok { GREEN } else { ORANGE });
+                        ui.label(RichText::new(name).strong());
+                        ui.label(RichText::new(state).size(12.0).color(th().dim));
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.small_button("Esquecer").clicked() {
+                                let _ = bt.send(BtCmd::Forget { address: *addr });
+                            }
+                        });
+                    });
+                }
+                ui.separator();
+            }
+
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Aparelhos por perto").strong());
+                if scanning {
+                    ui.spinner();
+                    ui.label(RichText::new("procurando...").size(12.0).color(th().dim));
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.button("Procurar de novo").clicked() {
+                        let _ = bt.send(BtCmd::StartScan);
+                    }
+                });
+            });
+            if let Some(e) = &err {
+                ui.label(RichText::new(format!("⚠ {e}")).color(RED));
+            }
+            if hits.is_empty() {
+                ui.label(
+                    RichText::new("Nada ainda. Confira se o Bluetooth do notebook está ligado e se a luz da mesinha está piscando. Se ela estiver conectada no celular/tablet, desconecte de lá.")
+                        .size(13.0)
+                        .color(th().dim),
+                );
+            }
+            egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+                for h in &hits {
+                    ui.horizontal(|ui| {
+                        let bars = match h.rssi {
+                            r if r > -60 => "▮▮▮▮",
+                            r if r > -70 => "▮▮▮▯",
+                            r if r > -80 => "▮▮▯▯",
+                            _ => "▮▯▯▯",
+                        };
+                        ui.label(RichText::new(bars).monospace().color(if h.rssi > -100 { GREEN } else { th().dim }));
+                        let name = if h.name.is_empty() { "(sem nome)".to_string() } else { h.name.clone() };
+                        ui.label(RichText::new(&name).strong());
+                        if h.midi {
+                            ui.label(RichText::new("MIDI").size(11.0).color(LAYER_COLORS[0]));
+                        }
+                        if h.paired {
+                            ui.label(RichText::new("pareado no Windows").size(11.0).color(th().dim));
+                        }
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            let already = saved.iter().any(|(a, _, _)| *a == h.address);
+                            let b = egui::Button::new(RichText::new(if already { "Conectado" } else { "Conectar" }).color(if already { th().dim } else { th().ink }))
+                                .fill(if already { th().glass } else { GREEN });
+                            if ui.add_enabled(!already, b).clicked() {
+                                let _ = bt.send(BtCmd::Connect { address: h.address, name: name.clone() });
+                            }
+                        });
+                    });
+                }
+            });
+        });
+    if !open {
+        st.bt_open = false;
+    }
 }
 
 // ---------- Cenas ----------
@@ -2143,7 +2292,10 @@ fn settings_window(
 
                 ui.separator();
                 ui.heading("Aparelhos MIDI");
-                let ports = midi_status.lock().map(|s| s.ports.clone()).unwrap_or_default();
+                let ports = midi_status.lock().map(|s| s.all_ports()).unwrap_or_default();
+                if ui.button("🔍 Procurar mesinha Bluetooth...").clicked() {
+                    st.bt_open = true;
+                }
                 if ports.is_empty() {
                     ui.label(RichText::new("Nenhum aparelho encontrado. Ligue o piano e a mesinha pelo cabo USB ou pelo Bluetooth.").color(th().dim));
                 }

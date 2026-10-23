@@ -35,15 +35,13 @@ Piano (LINE OUT) ──► caixas / mesa da igreja
 
 ## Mesinha pelo Bluetooth
 
-A SMC-Mixer também funciona **sem fio** (Windows 10/11 com Bluetooth):
-1. Ligue a mesinha no modo **Bluetooth** (veja o manual dela; normalmente segurar o botão de Bluetooth até a luz piscar).
-2. No Windows: **Configurações → Dispositivos → Bluetooth e outros dispositivos → Adicionar → Bluetooth** →
-   escolha **SMC-Mixer** (ou parecido) e espere "Conectado"/"Pareado".
-3. Abra o Piano SF2. Ela aparece sozinha como **"SMC-Mixer (Bluetooth)"** (bolinha verde em *Mesinha*).
-   Se não aparecer, abra **⚙ Ajustes → Aparelhos MIDI** e confira se está como *Mesinha (controla)*.
+O programa conecta **direto** no Bluetooth da SMC-Mixer (sem driver, sem depender do MIDI do Windows):
+1. Ligue o **Bluetooth da mesinha** (botão BT, luz piscando). Se ela estiver conectada num celular/tablet, desconecte de lá.
+2. No Piano SF2, clique em **Bluetooth** (lá em cima) — ou clique em **Mesinha** quando estiver vermelha.
+3. Espere ela aparecer em *Aparelhos por perto* e clique em **Conectar**.
+4. Pronto: a bolinha de **Mesinha** fica verde. Das próximas vezes ela **reconecta sozinha** ao abrir o programa.
 
-Dicas: pelo Bluetooth pode ter um pouquinho mais de atraso que no cabo (para faders e botões não faz diferença).
-Se cair, o programa reconecta sozinho em ~2 s. Para o **piano**, continue usando o cabo USB.
+Para parar de usar: janela Bluetooth → **Esquecer**. O piano continua melhor no cabo USB (menos atraso).
 
 ## Primeiro uso
 
@@ -155,6 +153,10 @@ Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B)
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.7 — Bluetooth direto (janela "Procurar mesinha")
+- Botão **Bluetooth**: procura aparelhos por perto e conecta a mesinha direto (BLE-MIDI pelo GATT), sem driver.
+- Reconecta sozinha ao abrir o programa e se o Bluetooth cair; luzes dos botões também pelo Bluetooth.
 
 ### v0.6.1 — Bluetooth: busca mais ampla e diagnóstico
 - Procura a mesinha em todos os aparelhos MIDI que o Windows enxerga (não só pelo "jeito" do id Bluetooth),

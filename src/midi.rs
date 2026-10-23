@@ -30,6 +30,43 @@ pub struct MidiStatus {
     pub led_output: Option<String>,
     /// Diagnóstico: tudo que o Windows enxerga pela API nova (nome, id, usado?).
     pub winrt_seen: Vec<(String, String, bool)>,
+    /// Aparelhos conectados direto pelo Bluetooth (ver `btdirect.rs`).
+    pub bt_ports: Vec<PortInfo>,
+    /// Janela "Procurar Bluetooth": está procurando? o que achou?
+    pub bt_scanning: bool,
+    pub bt_scan_error: Option<String>,
+    pub bt_hits: Vec<BtHit>,
+    /// Situação de cada aparelho salvo: (endereço, nome, texto).
+    pub bt_states: Vec<(u64, String, String)>,
+}
+
+impl MidiStatus {
+    /// Todas as portas (cabo, Bluetooth do Windows e Bluetooth direto).
+    pub fn all_ports(&self) -> Vec<PortInfo> {
+        self.ports
+            .iter()
+            .chain(self.bt_ports.iter())
+            .cloned()
+            .collect()
+    }
+}
+
+/// Aparelho achado na busca Bluetooth.
+#[derive(Clone, Debug)]
+pub struct BtHit {
+    pub address: u64,
+    pub name: String,
+    pub rssi: i16,
+    pub midi: bool,
+    pub paired: bool,
+}
+
+/// Pedidos da tela para o Bluetooth direto.
+pub enum BtCmd {
+    StartScan,
+    StopScan,
+    Connect { address: u64, name: String },
+    Forget { address: u64 },
 }
 
 pub type SharedMidiStatus = Arc<Mutex<MidiStatus>>;
@@ -92,7 +129,18 @@ fn run(core: SharedCore, tx: Sender<Cmd>, status: SharedMidiStatus, rescan: Arc<
             || rescan.swap(false, Ordering::Relaxed)
         {
             last_scan = Instant::now();
-            let (found, seen) = find_inputs();
+            let (mut found, seen) = find_inputs();
+            // O que já está conectado direto pelo Bluetooth não é aberto de novo pelo MIDI do Windows.
+            {
+                let c = core.lock().unwrap();
+                let direct: Vec<String> = c.cfg.bt_devices.iter().map(|d| plain(&d.name)).collect();
+                found.retain(|f| {
+                    f.bt_id.is_none()
+                        || !direct
+                            .iter()
+                            .any(|d| !d.is_empty() && plain(&f.name).contains(d.as_str()))
+                });
+            }
             let roles: Vec<(String, PortRole)> = {
                 let c = core.lock().unwrap();
                 found
@@ -179,7 +227,6 @@ fn run(core: SharedCore, tx: Sender<Cmd>, status: SharedMidiStatus, rescan: Arc<
 }
 
 /// Nome "limpo" para comparar aparelhos (sem espaços, símbolos e números de porta).
-#[cfg_attr(not(windows), allow(dead_code))]
 fn plain(name: &str) -> String {
     name.to_lowercase()
         .chars()
@@ -238,10 +285,10 @@ fn usb_input_names() -> Vec<String> {
     names
 }
 
-type Handler = Box<dyn FnMut(&[u8]) + Send + 'static>;
+pub type Handler = Box<dyn FnMut(&[u8]) + Send + 'static>;
 
 /// O que fazer com cada mensagem: piano toca; mesinha comanda a tela.
-fn make_handler(role: PortRole, core: SharedCore, tx: Sender<Cmd>) -> Handler {
+pub fn make_handler(role: PortRole, core: SharedCore, tx: Sender<Cmd>) -> Handler {
     match role {
         PortRole::Piano => Box::new(move |msg| piano_message(msg, &core, &tx)),
         _ => Box::new(move |msg| {

@@ -348,6 +348,8 @@ pub struct Config {
     /// Aba aberta (0 = Sons SF2, 1 = Pads).
     pub tab: usize,
     pub look: Appearance,
+    /// Aparelhos Bluetooth conectados direto (ver `ble.rs`).
+    pub bt_devices: Vec<BtDevice>,
     /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
     #[serde(default)]
     pub mappings_version: u32,
@@ -383,6 +385,13 @@ impl Default for Appearance {
     }
 }
 
+/// Mesinha (ou outro aparelho) conectada direto pelo Bluetooth: reconecta sozinha ao abrir.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BtDevice {
+    pub address: u64,
+    pub name: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PadFile {
     pub bank: usize,
@@ -410,6 +419,7 @@ impl Default for Config {
             tab: 0,
             mappings_version: MAPPINGS_VERSION,
             look: Appearance::default(),
+            bt_devices: Vec::new(),
         }
     }
 }
