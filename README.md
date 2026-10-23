@@ -42,6 +42,21 @@ Piano (LINE OUT) ──► caixas / mesa da igreja
 4. Monte o som, clique numa cena (ex.: *F2*) e em **💾 Salvar cena**.
    Botão direito numa cena: **salvar aqui / renomear / apagar**.
 
+## Pads (aba 🎶 Pads)
+
+Lá em cima tem duas abas: **🎹 Sons SF2** (a mesa com as 8 camadas) e **🎶 Pads** (o fundo contínuo por tom).
+
+- **12 botões quadrados**, um por tom (C, C#, D... B). Clique para tocar; clique de novo para parar.
+- Trocar de tom faz a **passagem suave** (um some enquanto o outro entra).
+- **Sem terça**: o pad de C serve para **C e Cm** (vale para todos os tons).
+- Dois estilos prontos, já dentro do programa:
+  - **Escuro**: grave, fechado, místico.
+  - **Coral**: vozes graves e médias ("aah/ooh").
+- **Seu próprio som**: botão direito num tom → *Usar meu arquivo (WAV/MP3/OGG)*. Para voltar: *Voltar ao som padrão*.
+- Volume do pad separado, botões ◀ ▶ (tom anterior/próximo) e **PARAR PAD**.
+- Tudo pode ir para a mesinha com **Aprender**: cada tom, volume do pad, parar, anterior/próximo e trocar Escuro/Coral.
+  (Ex.: clique em Aprender → clique no botão "C" da tela → aperte um botão da mesinha.)
+
 ## Mesinha SMC-Mixer (padrão Mackie)
 
 | Na mesinha | No programa |
@@ -93,9 +108,20 @@ cargo test --no-default-features   # testes do motor (sem tela)
 cargo run --release                # programa completo
 ```
 
+Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B) e são gerados por
+`tools/gerar_pads.py` (Python + numpy/scipy; `python3 tools/gerar_pads.py escuro 0 saida.wav`, depois `ffmpeg -c:a libvorbis -q:a 4`).
+
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.2 — pads e correção do travamento
+- **Corrigido**: escolher o SF2 pelo botão 📂 travava o programa para sempre ("Não está respondendo").
+  Agora carrega em segundo plano (um SF2 de 1,4 GB levou ~6 s no teste).
+- Abas no topo: **Sons SF2** e **Pads**.
+- Pads em 12 tons, estilos **Escuro** e **Coral** (gerados para o projeto, sem terça), troca suave entre tons.
+- Cada tom aceita um arquivo próprio (WAV/MP3/OGG/FLAC).
+- Pads mapeáveis na mesinha (tons, volume, parar, anterior/próximo, estilo); a luz do botão acende no tom tocando.
 
 ### v0.1 — primeira versão
 - 8 camadas no estilo SMC-Mixer (liga/desliga, solo, volume, reverb, escolha de timbre com busca).

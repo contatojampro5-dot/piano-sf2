@@ -9,13 +9,13 @@ use eframe::egui::{
     self, Align, Align2, Color32, CornerRadius, FontId, Key, Layout, Pos2, Rect, RichText, Sense,
     Shape, Stroke, StrokeKind, Ui, Vec2,
 };
-use rustysynth::Synthesizer;
 
 use crate::audio::{self, Audio};
-use crate::core::{load_sf2_async, Core, SharedCore};
-use crate::engine::{Cmd, Engine, Stats};
+use crate::core::{load_sf2_async, start_pad_loader, Core, SharedCore};
+use crate::engine::{Cmd, Engine, Garbage, Stats};
 use crate::midi::{self, SharedMidiStatus};
 use crate::model::*;
+use crate::pads;
 
 // ---------- Cores ----------
 const BG: Color32 = Color32::from_rgb(0x0e, 0x10, 0x14);
@@ -49,13 +49,16 @@ struct UiState {
     settings: bool,
     rename: Option<(usize, String)>,
     audio_devices: Vec<String>,
+    /// Pedidos que só podem rodar com o `core` destravado (abrir arquivo trava a tela até escolher).
+    open_sf2_dialog: bool,
+    pad_file_dialog: Option<(usize, usize)>,
 }
 
 pub struct PianoApp {
     core: SharedCore,
     audio: Audio,
     stats: Arc<Stats>,
-    garbage: Receiver<Box<Synthesizer>>,
+    garbage: Receiver<Garbage>,
     midi_status: SharedMidiStatus,
     midi_rescan: Arc<AtomicBool>,
     ui: UiState,
@@ -86,7 +89,7 @@ impl PianoApp {
             let mut c = core.lock().unwrap();
             let (dev, buf) = (c.cfg.audio_device.clone(), c.cfg.buffer_frames);
             if let Ok(sr) = audio.start(dev.as_deref(), buf) {
-                c.sample_rate = sr;
+                c.set_sample_rate(sr);
             }
             c.sync_engine();
             if let Some(path) = c.cfg.sf2_path.clone() {
@@ -96,6 +99,8 @@ impl PianoApp {
                 }
             }
         }
+
+        start_pad_loader(core.clone());
 
         let midi_status: SharedMidiStatus = Default::default();
         let midi_rescan = Arc::new(AtomicBool::new(true));
@@ -115,6 +120,8 @@ impl PianoApp {
                 settings: false,
                 rename: None,
                 audio_devices: Vec::new(),
+                open_sf2_dialog: false,
+                pad_file_dialog: None,
             },
             last_save: Instant::now(),
             audio_retry: None,
@@ -126,10 +133,7 @@ impl PianoApp {
         let mut c = self.core.lock().unwrap();
         let (dev, buf) = (c.cfg.audio_device.clone(), c.cfg.buffer_frames);
         if let Ok(sr) = self.audio.start(dev.as_deref(), buf) {
-            if sr != c.sample_rate {
-                c.sample_rate = sr;
-                c.rebuild_synth();
-            }
+            c.set_sample_rate(sr);
         }
     }
 
@@ -180,17 +184,26 @@ impl eframe::App for PianoApp {
                     &self.stats,
                     &self.midi_status,
                     &mut self.ui,
-                    &self.core,
                 );
             });
-        egui::Panel::top("cenas")
-            .frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin {
+        egui::Panel::top("abas")
+            .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin {
                 left: 14,
                 right: 14,
-                top: 10,
-                bottom: 4,
+                top: 6,
+                bottom: 0,
             }))
-            .show(ui, |ui| scenes_bar(ui, &mut core, &mut self.ui));
+            .show(ui, |ui| tabs_bar(ui, &mut core));
+        if core.cfg.tab == 0 {
+            egui::Panel::top("cenas")
+                .frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin {
+                    left: 14,
+                    right: 14,
+                    top: 10,
+                    bottom: 4,
+                }))
+                .show(ui, |ui| scenes_bar(ui, &mut core, &mut self.ui));
+        }
         egui::Panel::bottom("rodape")
             .frame(
                 egui::Frame::new()
@@ -205,7 +218,13 @@ impl eframe::App for PianoApp {
                 top: 6,
                 bottom: 10,
             }))
-            .show(ui, |ui| mixer(ui, &mut core, &mut self.ui));
+            .show(ui, |ui| {
+                if core.cfg.tab == 0 {
+                    mixer(ui, &mut core, &mut self.ui);
+                } else {
+                    pads_page(ui, &mut core, &mut self.ui);
+                }
+            });
 
         preset_picker(&ctx, &mut core, &mut self.ui);
         let mut restart = false;
@@ -223,6 +242,27 @@ impl eframe::App for PianoApp {
         drop(core);
         if restart {
             self.restart_audio();
+        }
+        // Janelas de arquivo: só com o `core` destravado (o carregamento também usa ele).
+        if std::mem::take(&mut self.ui.open_sf2_dialog) {
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter("SoundFont", &["sf2", "SF2"])
+                .pick_file()
+            {
+                load_sf2_async(self.core.clone(), path.to_string_lossy().to_string());
+            }
+        }
+        if let Some((bank, key)) = self.ui.pad_file_dialog.take() {
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter(
+                    "Áudio",
+                    &["wav", "mp3", "ogg", "flac", "WAV", "MP3", "OGG", "FLAC"],
+                )
+                .pick_file()
+            {
+                let p = path.to_string_lossy().to_string();
+                self.core.lock().unwrap().set_pad_file(bank, key, Some(p));
+            }
         }
 
         let busy = self
@@ -323,7 +363,6 @@ fn top_bar(
     stats: &Stats,
     midi_status: &SharedMidiStatus,
     st: &mut UiState,
-    shared: &SharedCore,
 ) {
     ui.horizontal(|ui| {
         ui.label(RichText::new("🎹 Piano SF2").size(20.0).strong());
@@ -358,13 +397,8 @@ fn top_bar(
                 .on_hover_text("Escolher o arquivo .sf2")
                 .clicked()
             {
-                if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("SoundFont", &["sf2", "SF2"])
-                    .pick_file()
-                {
-                    let p = path.to_string_lossy().to_string();
-                    load_sf2_async(shared.clone(), p);
-                }
+                // Não abre aqui: o `core` está travado por esta tela e o carregamento também precisa dele.
+                st.open_sf2_dialog = true;
             }
         }
         if let Some(e) = &core.load_error {
@@ -495,6 +529,286 @@ fn status_dot(ui: &mut Ui, what: &str, name: Option<&str>, active: bool) {
         name.map(|n| format!("Conectado: {n}"))
             .unwrap_or_else(|| format!("{what} não encontrado. Ligue pelo cabo USB.")),
     );
+}
+
+// ---------- Abas ----------
+
+fn tabs_bar(ui: &mut Ui, core: &mut Core) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        let pad_tag = core
+            .pad_active
+            .map(|k| format!("  ·  {}", pads::KEY_NAMES[k]))
+            .unwrap_or_default();
+        let tabs = [
+            (
+                "🎹  Sons SF2".to_string(),
+                core.sf2_name.is_some() && core.cfg.mix.layers.iter().any(|l| l.on),
+            ),
+            (format!("🎶  Pads{pad_tag}"), core.pad_active.is_some()),
+        ];
+        for (i, (label, live)) in tabs.iter().enumerate() {
+            let active = core.cfg.tab == i;
+            let (rect, resp) = ui.allocate_exact_size(Vec2::new(210.0, 38.0), Sense::click());
+            let radius = CornerRadius {
+                nw: 10,
+                ne: 10,
+                sw: 0,
+                se: 0,
+            };
+            let fill = if active {
+                BG
+            } else if resp.hovered() {
+                STRIP_HI
+            } else {
+                STRIP
+            };
+            let p = ui.painter();
+            p.rect_filled(rect, radius, fill);
+            if active {
+                p.rect_filled(
+                    Rect::from_min_size(rect.min, Vec2::new(rect.width(), 3.0)),
+                    CornerRadius {
+                        nw: 10,
+                        ne: 10,
+                        sw: 0,
+                        se: 0,
+                    },
+                    if i == 0 { LAYER_COLORS[0] } else { PAD_COLOR },
+                );
+            }
+            p.text(
+                rect.center() + Vec2::new(if *live { 6.0 } else { 0.0 }, 1.0),
+                Align2::CENTER_CENTER,
+                label,
+                FontId::proportional(16.0),
+                if active { TEXT } else { DIM },
+            );
+            if *live {
+                p.circle_filled(
+                    Pos2::new(rect.left() + 16.0, rect.center().y + 1.0),
+                    4.5,
+                    GREEN,
+                );
+            }
+            if resp.clicked() {
+                core.cfg.tab = i;
+                core.dirty = true;
+            }
+        }
+    });
+}
+
+// ---------- Pads ----------
+
+const PAD_COLOR: Color32 = Color32::from_rgb(0xa7, 0x8b, 0xfa);
+
+fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
+    let avail = ui.available_size();
+    let side_w = 170.0;
+    let gap = 10.0;
+
+    // Banco: Escuro / Coral
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Estilo:").color(DIM));
+        for b in 0..pads::PAD_BANKS {
+            let sel = core.cfg.pad_bank == b;
+            let text = RichText::new(format!(
+                "{}  ·  {}",
+                pads::BANK_NAMES[b],
+                pads::BANK_HINTS[b]
+            ))
+            .size(15.0)
+            .color(if sel { BG } else { TEXT });
+            let r = ui.add_sized(
+                [300.0, 38.0],
+                egui::Button::new(text).fill(if sel { PAD_COLOR } else { STRIP_HI }),
+            );
+            if !learnable(ui, core, &r, Target::PadBank) && r.clicked() {
+                core.set_pad_bank(b);
+            }
+        }
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.label(
+                RichText::new("Sem terça: o pad de C serve para C e Cm.")
+                    .size(13.0)
+                    .color(DIM),
+            );
+        });
+    });
+    ui.add_space(10.0);
+
+    let grid_w = avail.x - side_w - gap;
+    let rows_h = ui.available_height() - 30.0;
+    let cell = ((grid_w - 5.0 * gap) / 6.0)
+        .min((rows_h - gap) / 2.0)
+        .max(70.0);
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing = Vec2::splat(gap);
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing = Vec2::splat(gap);
+            for row in 0..2 {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = gap;
+                    for col in 0..6 {
+                        pad_button(ui, core, st, row * 6 + col, cell);
+                    }
+                });
+            }
+            ui.label(
+                RichText::new("Clique num tom para tocar · clique de novo para parar · trocar de tom faz a passagem suave · botão direito: usar o seu próprio arquivo")
+                    .size(13.0)
+                    .color(DIM),
+            );
+        });
+
+        // Coluna da direita: volume, anterior/próximo, parar
+        let h = 2.0 * cell + gap;
+        let (rect, _) = ui.allocate_exact_size(Vec2::new(side_w, h), Sense::hover());
+        ui.painter_at(rect).rect_filled(rect, 12, PANEL);
+        let inner = rect.shrink2(Vec2::new(12.0, 10.0));
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(inner)
+                .layout(Layout::top_down(Align::Center)),
+        );
+        let ui = &mut child;
+        ui.label(RichText::new("VOLUME DO PAD").strong().size(14.0));
+        ui.label(RichText::new(format!("{:.0}%", core.cfg.pad_volume * 100.0)).monospace());
+        let fader_h = (ui.available_height() - 100.0).max(80.0);
+        let (resp, newv) = fader(
+            ui,
+            Vec2::new(inner.width(), fader_h),
+            core.cfg.pad_volume,
+            PAD_COLOR,
+            core.learn.active,
+        );
+        learnable(ui, core, &resp, Target::PadVolume);
+        if let Some(v) = newv {
+            core.set_pad_volume(v);
+        }
+        ui.horizontal(|ui| {
+            let w = (inner.width() - ui.spacing().item_spacing.x) / 2.0;
+            let prev = ui.add_sized([w, 30.0], egui::Button::new("◀").fill(STRIP_HI)).on_hover_text("Tom anterior");
+            if !learnable(ui, core, &prev, Target::PadPrev) && prev.clicked() {
+                core.pad_step(-1);
+            }
+            let next = ui.add_sized([w, 30.0], egui::Button::new("▶").fill(STRIP_HI)).on_hover_text("Próximo tom");
+            if !learnable(ui, core, &next, Target::PadNext) && next.clicked() {
+                core.pad_step(1);
+            }
+        });
+        let stop = ui.add_sized(
+            [inner.width(), 44.0],
+            egui::Button::new(RichText::new("■ PARAR PAD").strong().color(Color32::WHITE))
+                .fill(if core.pad_active.is_some() { ORANGE } else { STRIP_HI }),
+        );
+        if !learnable(ui, core, &stop, Target::PadStop) && stop.clicked() {
+            core.pad_stop();
+        }
+    });
+}
+
+fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: f32) {
+    let bank = core.cfg.pad_bank;
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), Sense::click());
+    let active = core.pad_active == Some(key);
+    let ready = core.pad_ready(bank, key);
+    let custom = core.cfg.pad_file(bank, key).map(|p| {
+        std::path::Path::new(p)
+            .file_name()
+            .map(|f| f.to_string_lossy().to_string())
+            .unwrap_or_default()
+    });
+    let sharp = pads::KEY_NAMES[key].contains('#');
+    let base = if sharp {
+        Color32::from_rgb(0x15, 0x17, 0x1c)
+    } else {
+        STRIP_HI
+    };
+    let fill = if active {
+        PAD_COLOR.gamma_multiply(0.9)
+    } else if resp.hovered() {
+        Color32::from_rgb(0x2e, 0x34, 0x3f)
+    } else {
+        base
+    };
+    let p = ui.painter();
+    if active {
+        p.rect_filled(rect.expand(4.0), 16, PAD_COLOR.gamma_multiply(0.25));
+    }
+    p.rect_filled(rect, 14, fill);
+    p.rect_stroke(
+        rect,
+        14,
+        Stroke::new(
+            if active { 2.0 } else { 1.0 },
+            if active {
+                Color32::WHITE
+            } else {
+                Color32::from_rgb(0x34, 0x3a, 0x45)
+            },
+        ),
+        StrokeKind::Inside,
+    );
+    let tc = if active { BG } else { TEXT };
+    p.text(
+        rect.center() - Vec2::new(0.0, size * 0.08),
+        Align2::CENTER_CENTER,
+        pads::KEY_NAMES[key],
+        FontId::proportional((size * 0.32).clamp(24.0, 56.0)),
+        tc,
+    );
+    p.text(
+        rect.center() + Vec2::new(0.0, size * 0.2),
+        Align2::CENTER_CENTER,
+        pads::KEY_NAMES_PT[key],
+        FontId::proportional((size * 0.12).clamp(12.0, 18.0)),
+        if active { BG } else { DIM },
+    );
+    let status = if active && !ready {
+        Some("carregando...".to_string())
+    } else if active {
+        Some("tocando".to_string())
+    } else {
+        custom.clone().map(|c| format!("♪ {c}"))
+    };
+    if let Some(sx) = status {
+        let galley = ui.painter().layout(
+            sx,
+            FontId::proportional(11.0),
+            if active { BG } else { PAD_COLOR },
+            rect.width() - 12.0,
+        );
+        let pos = Pos2::new(
+            rect.center().x - galley.size().x / 2.0,
+            rect.bottom() - 8.0 - galley.size().y,
+        );
+        ui.painter().galley(pos, galley, TEXT);
+    }
+
+    if !learnable(ui, core, &resp, Target::Pad(key)) && resp.clicked() {
+        core.pad_press(key);
+    }
+    let resp = resp.on_hover_text(match &custom {
+        Some(c) => format!("Pad {} — arquivo: {c}", pads::KEY_NAMES[key]),
+        None => format!(
+            "Pad {} ({}) — som padrão {}",
+            pads::KEY_NAMES[key],
+            pads::KEY_NAMES_PT[key],
+            pads::BANK_NAMES[bank]
+        ),
+    });
+    resp.context_menu(|ui| {
+        if ui.button("📂 Usar meu arquivo (WAV/MP3/OGG)...").clicked() {
+            st.pad_file_dialog = Some((bank, key));
+            ui.close();
+        }
+        if custom.is_some() && ui.button("↺ Voltar ao som padrão").clicked() {
+            core.set_pad_file(bank, key, None);
+            ui.close();
+        }
+    });
 }
 
 // ---------- Cenas ----------

@@ -11,6 +11,16 @@ use crossbeam_channel::{Receiver, Sender};
 use rustysynth::{SoundFont, Synthesizer, SynthesizerSettings};
 
 use crate::model::LAYERS;
+use crate::pads::{PadClip, PadVoice};
+
+/// O que a thread de áudio devolve para ser apagado fora dela (liberar memória pode demorar).
+pub enum Garbage {
+    Synth(Box<Synthesizer>),
+    Pad(Arc<PadClip>),
+}
+
+/// Máximo de pads soando juntos (o que entra + os que estão sumindo).
+const MAX_PADS: usize = 4;
 
 /// Comandos para o motor (vindos do piano, da mesinha ou da tela).
 pub enum Cmd {
@@ -52,6 +62,12 @@ pub enum Cmd {
     Panic,
     /// Novo sintetizador (SF2 novo ou taxa de amostragem nova).
     Replace(Box<Synthesizer>),
+    /// Taxa de amostragem da placa de som (os pads precisam dela mesmo sem SF2).
+    SetSampleRate(u32),
+    /// Toca um pad (o que estiver tocando some devagar).
+    PadPlay(Arc<PadClip>),
+    PadStop,
+    PadVolume(f32),
 }
 
 /// Números que a tela mostra (atualizados pela thread de áudio).
@@ -71,7 +87,7 @@ const KILL_DELAY_MS: f32 = 60.0;
 pub struct Engine {
     synth: Option<Box<Synthesizer>>,
     rx: Receiver<Cmd>,
-    garbage: Sender<Box<Synthesizer>>,
+    garbage: Sender<Garbage>,
     pub stats: Arc<Stats>,
     sample_rate: u32,
     audible: [bool; LAYERS],
@@ -88,10 +104,14 @@ pub struct Engine {
     left: Vec<f32>,
     right: Vec<f32>,
     peak_decay: f32,
+    pads: Vec<PadVoice>,
+    /// Volume dos pads (alvo e valor suavizado).
+    pad_vol: f32,
+    pad_vol_now: f32,
 }
 
 impl Engine {
-    pub fn new(rx: Receiver<Cmd>, garbage: Sender<Box<Synthesizer>>, stats: Arc<Stats>) -> Self {
+    pub fn new(rx: Receiver<Cmd>, garbage: Sender<Garbage>, stats: Arc<Stats>) -> Self {
         Self {
             synth: None,
             rx,
@@ -109,6 +129,9 @@ impl Engine {
             left: vec![0.0; 8192],
             right: vec![0.0; 8192],
             peak_decay: 0.0,
+            pads: Vec::with_capacity(MAX_PADS + 1),
+            pad_vol: 0.49,
+            pad_vol_now: 0.49,
         }
     }
 
@@ -152,7 +175,7 @@ impl Engine {
         match cmd {
             Cmd::Replace(new) => {
                 if let Some(old) = self.synth.replace(new) {
-                    let _ = self.garbage.try_send(old);
+                    let _ = self.garbage.try_send(Garbage::Synth(old));
                 }
                 self.sample_rate = self
                     .synth
@@ -254,6 +277,30 @@ impl Engine {
                     s.set_master_volume(self.master);
                 }
             }
+            Cmd::SetSampleRate(sr) => {
+                if self.synth.is_none() {
+                    self.sample_rate = sr.max(8000);
+                }
+            }
+            Cmd::PadPlay(clip) => {
+                let sr = self.sample_rate;
+                for v in &mut self.pads {
+                    v.fade_out(sr);
+                }
+                // Lista cheia: o pad mais antigo sai na hora (já estava sumindo).
+                if self.pads.len() >= MAX_PADS {
+                    let old = self.pads.remove(0);
+                    let _ = self.garbage.try_send(Garbage::Pad(old.clip));
+                }
+                self.pads.push(PadVoice::new(clip, sr));
+            }
+            Cmd::PadStop => {
+                let sr = self.sample_rate;
+                for v in &mut self.pads {
+                    v.fade_out(sr);
+                }
+            }
+            Cmd::PadVolume(v) => self.pad_vol = v.clamp(0.0, 1.0).powi(2),
             Cmd::SetTranspose(t) => self.transpose = t.clamp(-24, 24),
             Cmd::Panic => {
                 if let Some(s) = self.synth.as_mut() {
@@ -287,17 +334,27 @@ impl Engine {
         let channels = channels.max(1);
         let frames = out.len() / channels;
 
-        let Some(synth) = self.synth.as_mut() else {
-            out.fill(0.0);
-            return;
-        };
-
         let mut peak = 0.0f32;
         let mut done = 0;
+        let sr = self.sample_rate;
         while done < frames {
             let n = (frames - done).min(self.left.len());
             let (l, r) = (&mut self.left[..n], &mut self.right[..n]);
-            synth.render(l, r);
+            match self.synth.as_mut() {
+                Some(synth) => synth.render(l, r),
+                None => {
+                    l.fill(0.0);
+                    r.fill(0.0);
+                }
+            }
+            if !self.pads.is_empty() {
+                // Volume do pad muda suave (sem degrau quando mexe o fader).
+                self.pad_vol_now += (self.pad_vol - self.pad_vol_now) * 0.2;
+                let vol = self.pad_vol_now * self.master;
+                for v in &mut self.pads {
+                    v.mix(l, r, vol, sr);
+                }
+            }
             for f in 0..n {
                 let a = soft_clip(l[f]);
                 let b = soft_clip(r[f]);
@@ -313,6 +370,24 @@ impl Engine {
             }
             done += n;
         }
+
+        // Pads que já sumiram: devolve para apagar fora daqui.
+        let mut i = 0;
+        while i < self.pads.len() {
+            if self.pads[i].finished() {
+                let v = self.pads.remove(i);
+                let _ = self.garbage.try_send(Garbage::Pad(v.clip));
+            } else {
+                i += 1;
+            }
+        }
+
+        let Some(synth) = self.synth.as_mut() else {
+            self.stats
+                .peak_milli
+                .store((peak * 1000.0) as u32, Ordering::Relaxed);
+            return;
+        };
 
         // Camadas desligadas: depois do "fade", corta as vozes que sobraram (pedal preso etc.).
         for i in 0..LAYERS {

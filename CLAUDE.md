@@ -16,6 +16,10 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   `src/midi.rs` (midir, reconexão a cada 1,5 s, luzes), `src/app.rs` (tela egui), `src/main.rs`.
 - `vendor/rustysynth` = cópia do rustysynth 1.3.8 com ajustes marcados `piano-sf2:` (não trocar pela versão do crates.io).
 - Uma camada = um canal MIDI (0..7) de um único `Synthesizer`. Liga/desliga usa expressão (CC11) + corte após 60 ms.
+- `src/pads.rs` (R v0.2): pads por tom (12 tons × bancos Escuro/Coral) embutidos em OGG (`assets/pads/`), decodificados
+  por uma thread (`start_pad_loader`) e tocados no motor com crossfade (`Cmd::PadPlay`). Gerador: `tools/gerar_pads.py`.
+- **Nunca** chamar algo que trava o `core` (ex.: `load_sf2_async`, janela de arquivo) com o `core` já travado pela tela:
+  use os pedidos adiados do `UiState` (`open_sf2_dialog`, `pad_file_dialog`). Foi isso que travou a v0.1.
 - Testes: `cargo test --no-default-features` (núcleo, sem tela). Carga: `cargo test --release --no-default-features bench -- --ignored --nocapture`.
 - Checar Windows daqui: `cargo check --target x86_64-pc-windows-gnu`. O `.exe` é montado pelo GitHub Actions
   (`.github/workflows/windows.yml`) e publicado em Releases (`releases/latest/download/PianoSF2.exe`).
@@ -24,4 +28,4 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 ## Regras
 - Toda atualização vai para o GitHub (commit + push em `main`) e ganha uma linha em "Versões" no `README.md`.
 - Mensagem de commit curta em português começando pela versão (ex.: `v0.2: ...`).
-- Pendências/ideias: ASIO (menos atraso), equalizador por camada, dividir teclado (split), gravar WAV.
+- Pendências/ideias: guardar o pad nas cenas, ASIO (menos atraso), equalizador por camada, dividir teclado (split), gravar WAV.

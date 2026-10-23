@@ -3,6 +3,7 @@
 pub mod core;
 pub mod engine;
 pub mod model;
+pub mod pads;
 
 #[cfg(feature = "app")]
 pub mod app;

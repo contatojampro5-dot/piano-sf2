@@ -12,6 +12,10 @@ use rustysynth::SoundFont;
 
 use crate::engine::{Cmd, Engine};
 use crate::model::*;
+use crate::pads::{self, PadClip, PAD_BANKS, PAD_KEYS};
+
+/// Pedido de carregar um pad: (banco, tom, arquivo próprio).
+pub type PadJob = (usize, usize, Option<String>);
 
 pub struct Learn {
     pub active: bool,
@@ -44,6 +48,14 @@ pub struct Core {
     pub controller_activity: Option<Instant>,
     /// Quando mudar, a tela é redesenhada (MIDI chega de outra thread).
     pub repaint: Option<Box<dyn Fn() + Send>>,
+    /// Pads já decodificados [banco][tom].
+    pub pad_clips: Vec<Vec<Option<Arc<PadClip>>>>,
+    /// Tom do pad tocando agora (ou esperando carregar).
+    pub pad_active: Option<usize>,
+    pad_pending: Option<(usize, usize)>,
+    pad_jobs: std::collections::HashSet<(usize, usize)>,
+    /// Thread que decodifica pads (sem ela, decodifica na hora — usado nos testes).
+    pub pad_loader: Option<Sender<PadJob>>,
 }
 
 pub type SharedCore = Arc<Mutex<Core>>;
@@ -69,6 +81,11 @@ impl Core {
             piano_activity: None,
             controller_activity: None,
             repaint: None,
+            pad_clips: vec![vec![None; PAD_KEYS]; PAD_BANKS],
+            pad_active: None,
+            pad_pending: None,
+            pad_jobs: Default::default(),
+            pad_loader: None,
         }
     }
 
@@ -112,6 +129,155 @@ impl Core {
         }
         self.send(Cmd::SetMaster(self.cfg.master));
         self.send(Cmd::SetTranspose(mix.transpose));
+        self.send(Cmd::PadVolume(self.cfg.pad_volume));
+    }
+
+    /// A placa de som abriu com esta taxa de amostragem.
+    pub fn set_sample_rate(&mut self, sr: u32) {
+        let changed = sr != self.sample_rate;
+        self.sample_rate = sr;
+        self.send(Cmd::SetSampleRate(sr));
+        if changed {
+            self.rebuild_synth();
+        }
+    }
+
+    // ---------- Pads ----------
+
+    fn request_pad(&mut self, bank: usize, key: usize) {
+        if self.pad_clips[bank][key].is_some() || !self.pad_jobs.insert((bank, key)) {
+            return;
+        }
+        let custom = self.cfg.pad_file(bank, key).map(str::to_string);
+        match &self.pad_loader {
+            Some(tx) => {
+                let _ = tx.send((bank, key, custom));
+            }
+            None => {
+                let r = pads::load(bank, key, custom.as_deref());
+                self.pad_loaded(bank, key, r);
+            }
+        }
+    }
+
+    /// Deixa os 12 tons do banco prontos (em segundo plano).
+    pub fn preload_pad_bank(&mut self, bank: usize) {
+        for k in 0..PAD_KEYS {
+            self.request_pad(bank % PAD_BANKS, k);
+        }
+    }
+
+    /// Chamado quando um pad terminou de decodificar.
+    pub fn pad_loaded(&mut self, bank: usize, key: usize, result: Result<Arc<PadClip>, String>) {
+        self.pad_jobs.remove(&(bank, key));
+        match result {
+            Ok(clip) => {
+                self.pad_clips[bank][key] = Some(clip);
+                if self.pad_pending == Some((bank, key)) {
+                    self.start_pad(key);
+                }
+            }
+            Err(e) => {
+                if self.cfg.pad_file(bank, key).is_some() {
+                    // Arquivo próprio com problema: volta ao som padrão.
+                    self.cfg
+                        .pad_files
+                        .retain(|f| !(f.bank == bank && f.key == key));
+                    self.dirty = true;
+                    self.notify(format!(
+                        "Pad {}: {e}. Voltei ao som padrão.",
+                        pads::KEY_NAMES[key]
+                    ));
+                    self.request_pad(bank, key);
+                } else {
+                    self.notify(format!("Pad {}: {e}", pads::KEY_NAMES[key]));
+                    if self.pad_pending == Some((bank, key)) {
+                        self.pad_pending = None;
+                        self.pad_active = None;
+                    }
+                }
+            }
+        }
+        self.request_repaint();
+    }
+
+    fn start_pad(&mut self, key: usize) {
+        let bank = self.cfg.pad_bank;
+        self.pad_active = Some(key);
+        match self.pad_clips[bank][key].clone() {
+            Some(clip) => {
+                self.pad_pending = None;
+                self.send(Cmd::PadPlay(clip));
+            }
+            None => {
+                self.pad_pending = Some((bank, key));
+                self.request_pad(bank, key);
+            }
+        }
+    }
+
+    /// Botão de um tom: liga; se já está tocando esse tom, para.
+    pub fn pad_press(&mut self, key: usize) {
+        if self.pad_active == Some(key) {
+            self.pad_stop();
+        } else {
+            self.start_pad(key % PAD_KEYS);
+        }
+    }
+
+    pub fn pad_stop(&mut self) {
+        self.pad_active = None;
+        self.pad_pending = None;
+        self.send(Cmd::PadStop);
+    }
+
+    pub fn pad_step(&mut self, delta: i32) {
+        let cur = self
+            .pad_active
+            .map(|k| k as i32)
+            .unwrap_or(if delta > 0 { -1 } else { 0 });
+        let next = (cur + delta).rem_euclid(PAD_KEYS as i32) as usize;
+        self.start_pad(next);
+    }
+
+    pub fn set_pad_volume(&mut self, v: f32) {
+        self.cfg.pad_volume = v.clamp(0.0, 1.0);
+        self.send(Cmd::PadVolume(self.cfg.pad_volume));
+        self.dirty = true;
+    }
+
+    pub fn set_pad_bank(&mut self, bank: usize) {
+        let bank = bank % PAD_BANKS;
+        if bank == self.cfg.pad_bank {
+            return;
+        }
+        self.cfg.pad_bank = bank;
+        self.dirty = true;
+        self.preload_pad_bank(bank);
+        if let Some(k) = self.pad_active {
+            self.start_pad(k); // troca suave para o mesmo tom no outro banco
+        }
+        self.notify(format!("Pads: {}", pads::BANK_NAMES[bank]));
+    }
+
+    /// Põe um arquivo próprio num botão (None = volta ao som padrão).
+    pub fn set_pad_file(&mut self, bank: usize, key: usize, path: Option<String>) {
+        self.cfg
+            .pad_files
+            .retain(|f| !(f.bank == bank && f.key == key));
+        if let Some(p) = path {
+            self.cfg.pad_files.push(PadFile { bank, key, path: p });
+        }
+        self.dirty = true;
+        self.pad_clips[bank][key] = None;
+        self.request_pad(bank, key);
+        if self.pad_active == Some(key) && self.cfg.pad_bank == bank {
+            self.pad_pending = Some((bank, key));
+        }
+    }
+
+    pub fn pad_ready(&self, bank: usize, key: usize) -> bool {
+        self.pad_clips[bank][key].is_some()
     }
 
     fn sync_audible(&self) {
@@ -267,6 +433,11 @@ impl Core {
             Target::Panic => self.panic(),
             Target::TransposeDown => self.set_transpose(self.cfg.mix.transpose - 1),
             Target::TransposeUp => self.set_transpose(self.cfg.mix.transpose + 1),
+            Target::Pad(k) => self.pad_press(k),
+            Target::PadStop => self.pad_stop(),
+            Target::PadPrev => self.pad_step(-1),
+            Target::PadNext => self.pad_step(1),
+            Target::PadBank => self.set_pad_bank(self.cfg.pad_bank + 1),
             _ => {}
         }
     }
@@ -276,6 +447,7 @@ impl Core {
             Target::Volume(i) => self.cfg.mix.layers[i].volume,
             Target::Reverb(i) => self.cfg.mix.layers[i].reverb,
             Target::Master => self.cfg.master,
+            Target::PadVolume => self.cfg.pad_volume,
             _ => return,
         };
         let v = match value {
@@ -286,6 +458,7 @@ impl Core {
             Target::Volume(i) => self.set_volume(i, v),
             Target::Reverb(i) => self.set_reverb(i, v),
             Target::Master => self.set_master(v),
+            Target::PadVolume => self.set_pad_volume(v),
             _ => {}
         }
     }
@@ -378,6 +551,7 @@ impl Core {
                     Target::Toggle(i) => self.cfg.mix.layers[i].on,
                     Target::Solo(i) => self.cfg.mix.layers[i].solo,
                     Target::Scene(n) => self.cfg.current_scene == Some(n),
+                    Target::Pad(k) => self.pad_active == Some(k),
                     _ => continue,
                 };
                 out.push((ch, num, lit));
@@ -488,6 +662,34 @@ pub fn load_sf2_async(core: SharedCore, path: String) {
             c.request_repaint();
         })
         .expect("thread do SF2");
+}
+
+/// Thread que decodifica pads fora da tela e do áudio.
+pub fn start_pad_loader(core: SharedCore) {
+    let (tx, rx) = crossbeam_channel::unbounded::<PadJob>();
+    let bank = {
+        let mut c = core.lock().unwrap();
+        c.pad_loader = Some(tx);
+        c.cfg.pad_bank
+    };
+    let worker = core.clone();
+    std::thread::Builder::new()
+        .name("pads".into())
+        .spawn(move || {
+            while let Ok((bank, key, custom)) = rx.recv() {
+                let r = pads::load(bank, key, custom.as_deref());
+                if let Ok(mut c) = worker.lock() {
+                    c.pad_loaded(bank, key, r);
+                }
+            }
+        })
+        .expect("thread dos pads");
+    // Os dois bancos ficam prontos (o atual primeiro): trocar Escuro/Coral no culto é na hora.
+    let mut c = core.lock().unwrap();
+    c.preload_pad_bank(bank);
+    for b in 0..PAD_BANKS {
+        c.preload_pad_bank(b);
+    }
 }
 
 struct ProgressReader<R> {

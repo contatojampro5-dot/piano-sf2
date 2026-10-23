@@ -100,12 +100,23 @@ pub enum Target {
     Panic,
     TransposeDown,
     TransposeUp,
+    /// Pad no tom 0..11 (C..B).
+    Pad(usize),
+    PadStop,
+    PadVolume,
+    PadPrev,
+    PadNext,
+    /// Troca entre os bancos de pad (Escuro / Coral).
+    PadBank,
 }
 
 impl Target {
     /// Alvo contínuo (fader/knob) ou botão?
     pub fn is_continuous(self) -> bool {
-        matches!(self, Target::Volume(_) | Target::Reverb(_) | Target::Master)
+        matches!(
+            self,
+            Target::Volume(_) | Target::Reverb(_) | Target::Master | Target::PadVolume
+        )
     }
 
     pub fn label(self) -> String {
@@ -121,6 +132,12 @@ impl Target {
             Target::Panic => "Pânico (cortar notas)".into(),
             Target::TransposeDown => "Transpor −1".into(),
             Target::TransposeUp => "Transpor +1".into(),
+            Target::Pad(k) => format!("Pad {}", crate::pads::KEY_NAMES[k % crate::pads::PAD_KEYS]),
+            Target::PadStop => "Parar pad".into(),
+            Target::PadVolume => "Volume do pad".into(),
+            Target::PadPrev => "Pad: tom anterior".into(),
+            Target::PadNext => "Pad: próximo tom".into(),
+            Target::PadBank => "Pad: trocar Escuro/Coral".into(),
         }
     }
 }
@@ -299,6 +316,21 @@ pub struct Config {
     pub polyphony: usize,
     /// "Program Change" vindo do piano troca a cena (programa 1 = cena 1).
     pub program_change_scenes: bool,
+    /// Volume dos pads 0..1.
+    pub pad_volume: f32,
+    /// Banco de pads em uso (0 = Escuro, 1 = Coral).
+    pub pad_bank: usize,
+    /// Arquivos próprios nos botões de pad.
+    pub pad_files: Vec<PadFile>,
+    /// Aba aberta (0 = Sons SF2, 1 = Pads).
+    pub tab: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PadFile {
+    pub bank: usize,
+    pub key: usize,
+    pub path: String,
 }
 
 impl Default for Config {
@@ -315,6 +347,10 @@ impl Default for Config {
             buffer_frames: 256,
             polyphony: 128,
             program_change_scenes: false,
+            pad_volume: 0.7,
+            pad_bank: 0,
+            pad_files: Vec::new(),
+            tab: 0,
         }
     }
 }
@@ -345,6 +381,18 @@ impl Config {
             self.current_scene = None;
         }
         self.polyphony = self.polyphony.clamp(16, 256);
+        self.pad_volume = self.pad_volume.clamp(0.0, 1.0);
+        self.pad_bank %= crate::pads::PAD_BANKS;
+        self.tab = self.tab.min(1);
+        self.pad_files
+            .retain(|f| f.bank < crate::pads::PAD_BANKS && f.key < crate::pads::PAD_KEYS);
+    }
+
+    pub fn pad_file(&self, bank: usize, key: usize) -> Option<&str> {
+        self.pad_files
+            .iter()
+            .find(|f| f.bank == bank && f.key == key)
+            .map(|f| f.path.as_str())
     }
 
     pub fn role_for(&self, port: &str) -> PortRole {

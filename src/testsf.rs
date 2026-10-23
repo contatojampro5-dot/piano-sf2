@@ -274,3 +274,134 @@ fn bench_four_layers_full_polyphony() {
         used * 100.0
     );
 }
+
+// ---------- Pads ----------
+
+fn pad_rig() -> (Core, Engine) {
+    let (tx, rx) = unbounded::<Cmd>();
+    let (gtx, _grx) = unbounded();
+    let mut engine = Engine::new(rx, gtx, Arc::new(Stats::default()));
+    let mut core = Core::new(Config::default(), tx);
+    core.set_sample_rate(48_000);
+    core.sync_engine();
+    let mut out = vec![0.0; 512];
+    engine.render_interleaved(&mut out, 2);
+    (core, engine)
+}
+
+fn render_secs(engine: &mut Engine, secs: f32) -> Vec<f32> {
+    let mut all = Vec::new();
+    let mut out = vec![0.0; 512];
+    for _ in 0..((48_000.0 * secs) as usize / 256) {
+        engine.render_interleaved(&mut out, 2);
+        all.extend_from_slice(&out);
+    }
+    all
+}
+
+#[test]
+fn builtin_pads_decode() {
+    for bank in 0..crate::pads::PAD_BANKS {
+        for key in [0, 7, 11] {
+            let clip = crate::pads::load(bank, key, None).expect("pad padrão");
+            assert!(
+                clip.frames() > clip.rate as usize * 10,
+                "pelo menos 10 s de loop"
+            );
+        }
+    }
+}
+
+#[test]
+fn pad_plays_without_sf2_and_stops_with_fade() {
+    let (mut core, mut engine) = pad_rig();
+    core.pad_press(0);
+    assert_eq!(core.pad_active, Some(0));
+    let start = render_secs(&mut engine, 0.2);
+    let full = render_secs(&mut engine, 3.0);
+    assert!(rms(&start) < rms(&full), "entra devagar");
+    assert!(
+        rms(&full[full.len() - 48_000..]) > 0.02,
+        "pad soando: {}",
+        rms(&full)
+    );
+    core.pad_press(0); // mesmo botão = parar
+    assert_eq!(core.pad_active, None);
+    let fading = render_secs(&mut engine, 0.5);
+    assert!(rms(&fading) > 0.005, "some devagar, não corta seco");
+    render_secs(&mut engine, 3.0);
+    assert!(
+        rms(&render_secs(&mut engine, 0.5)) < 1e-4,
+        "depois do fade fica mudo"
+    );
+}
+
+#[test]
+fn pad_change_key_crossfades_and_bank_switch_keeps_key() {
+    let (mut core, mut engine) = pad_rig();
+    core.pad_press(2);
+    render_secs(&mut engine, 3.0);
+    core.pad_press(7);
+    // No meio da troca não pode ter buraco.
+    let mid = render_secs(&mut engine, 1.5);
+    for chunk in mid.chunks(9600) {
+        assert!(rms(chunk) > 0.02, "sem buraco na troca");
+    }
+    core.set_pad_bank(1);
+    assert_eq!(core.pad_active, Some(7));
+    assert_eq!(core.cfg.pad_bank, 1);
+}
+
+#[test]
+fn pad_volume_and_mapping() {
+    let (mut core, mut engine) = pad_rig();
+    core.learn.active = true;
+    core.learn.target = Some(crate::model::Target::Pad(4));
+    core.handle_controller(&[0x90, 60, 127]); // nota 60 do controle = pad E
+    core.learn.target = Some(crate::model::Target::PadVolume);
+    core.handle_controller(&[0xB0, 30, 64]);
+    core.learn.active = false;
+    core.handle_controller(&[0x90, 60, 127]);
+    assert_eq!(core.pad_active, Some(4));
+    core.handle_controller(&[0xB0, 30, 0]);
+    assert!(core.cfg.pad_volume < 0.01);
+    render_secs(&mut engine, 3.0);
+    assert!(
+        rms(&render_secs(&mut engine, 0.5)) < 1e-3,
+        "volume do pad no zero"
+    );
+    assert!(
+        core.leds().iter().any(|&(_, n, lit)| n == 60 && lit),
+        "luz do botão do pad acende"
+    );
+}
+
+/// Carrega um SF2 grande pelo mesmo caminho do botão 📂 (thread + progresso).
+/// `PIANO_SF2_BIG=arquivo.sf2 cargo test --release --no-default-features big_sf2 -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn big_sf2_loads_through_shared_core() {
+    let Ok(path) = std::env::var("PIANO_SF2_BIG") else {
+        return;
+    };
+    let (tx, _rx) = unbounded::<Cmd>();
+    let core: crate::core::SharedCore =
+        Arc::new(std::sync::Mutex::new(Core::new(Config::default(), tx)));
+    let t = std::time::Instant::now();
+    crate::core::load_sf2_async(core.clone(), path);
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let c = core.lock().unwrap();
+        if let Some(l) = &c.loading {
+            let _ = l.read.load(std::sync::atomic::Ordering::Relaxed);
+            continue;
+        }
+        assert!(c.load_error.is_none(), "{:?}", c.load_error);
+        println!(
+            "carregou em {:.1} s, {} timbres",
+            t.elapsed().as_secs_f32(),
+            c.presets.len()
+        );
+        break;
+    }
+}
