@@ -595,6 +595,18 @@ impl Core {
                     // Um controle faz uma coisa só. Fader/knob: um por alvo (dois faders brigariam).
                     // Botões: vários botões podem fazer a mesma coisa.
                     let single = t.is_continuous();
+                    // Avisa o que saiu do lugar (para não "sumir" sem explicação).
+                    let mut lost: Vec<String> = Vec::new();
+                    for m in &self.cfg.mappings {
+                        if same_source(m.source, src) && m.target != t {
+                            lost.push(format!(
+                                "esse controle deixou de fazer \"{}\"",
+                                m.target.label()
+                            ));
+                        } else if single && m.target == t && !same_source(m.source, src) {
+                            lost.push(format!("{} não comanda mais isso", m.source.label()));
+                        }
+                    }
                     self.cfg
                         .mappings
                         .retain(|m| !same_source(m.source, src) && !(single && m.target == t));
@@ -604,7 +616,12 @@ impl Core {
                     });
                     self.learn.target = None;
                     self.dirty = true;
-                    self.notify(format!("Aprendido: {} → {}", src.label(), t.label()));
+                    let extra = if lost.is_empty() {
+                        String::new()
+                    } else {
+                        format!("  (atenção: {})", lost.join("; "))
+                    };
+                    self.notify(format!("Aprendido: {} → {}{extra}", src.label(), t.label()));
                     return true;
                 }
                 return false;
@@ -1229,5 +1246,28 @@ mod tests {
             target: Target::Master
         }));
         assert_eq!(cfg.mappings_version, MAPPINGS_VERSION);
+    }
+
+    #[test]
+    fn two_buttons_same_function_both_work_and_warning_shown() {
+        let (mut c, _rx) = core();
+        c.learn.active = true;
+        // REC 2 (nota 1) e SELECT 2 (nota 25) ligam a camada 2, junto com o MUTE 2 de fábrica.
+        c.learn.target = Some(Target::Toggle(1));
+        c.handle_controller(&[0x90, 1, 127]);
+        c.learn.target = Some(Target::Toggle(1));
+        c.handle_controller(&[0x90, 25, 127]);
+        c.learn.active = false;
+        for note in [17u8, 1, 25] {
+            let before = c.cfg.mix.layers[1].on;
+            c.handle_controller(&[0x90, note, 127]);
+            assert_ne!(c.cfg.mix.layers[1].on, before, "botão {note} funciona");
+        }
+        // Reaproveitar um botão avisa o que ele fazia antes.
+        c.learn.active = true;
+        c.learn.target = Some(Target::Panic);
+        c.handle_controller(&[0x90, 1, 127]);
+        let msg = c.toast.as_ref().unwrap().0.clone();
+        assert!(msg.contains("deixou de fazer"), "{msg}");
     }
 }

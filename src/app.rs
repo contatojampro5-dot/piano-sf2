@@ -1302,7 +1302,7 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
 
 fn footer(ui: &mut Ui, core: &mut Core, stats: &Stats) {
     ui.horizontal(|ui| {
-        let toast = core.toast.as_ref().filter(|(_, t)| t.elapsed() < Duration::from_secs(4)).map(|(m, _)| m.clone());
+        let toast = core.toast.as_ref().filter(|(_, t)| t.elapsed() < Duration::from_secs(7)).map(|(m, _)| m.clone());
         match toast {
             Some(m) => {
                 ui.label(RichText::new(m).color(ORANGE));

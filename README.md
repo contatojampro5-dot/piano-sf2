@@ -127,6 +127,10 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.3.1 — aviso no Aprender
+- Quando um mapeamento novo tira outro do lugar, a tela avisa (ex.: "esse controle deixou de fazer Liga/desliga camada 2").
+- Confirmado: vários botões podem fazer a mesma coisa (na v0.2 o segundo botão "desmapeava" o primeiro).
+
 ### v0.3 — pad Suave, 6 canais e configurar mesinha automático
 - Pad novo **Suave** (12 tons), tranquilo e redondo.
 - **6 camadas** (antes 8): o canal 7 virou **PAD** (volume, tom, parar, estilo) e o 8 virou **GERAL**, igual à mesinha.
