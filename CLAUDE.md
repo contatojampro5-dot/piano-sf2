@@ -15,9 +15,11 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   alocar lá), `src/core.rs` (estado + ações, usado pela tela e pelo MIDI), `src/audio.rs` (cpal/WASAPI),
   `src/midi.rs` (midir, reconexão a cada 1,5 s, luzes), `src/app.rs` (tela egui), `src/main.rs`.
 - `vendor/rustysynth` = cópia do rustysynth 1.3.8 com ajustes marcados `piano-sf2:` (não trocar pela versão do crates.io).
-- Uma camada = um canal MIDI (0..7) de um único `Synthesizer`. Liga/desliga usa expressão (CC11) + corte após 60 ms.
-- `src/pads.rs` (R v0.2): pads por tom (12 tons × bancos Escuro/Coral) embutidos em OGG (`assets/pads/`), decodificados
+- `LAYERS = 6` (v0.3; canais 7/8 da mesinha = PAD/GERAL). Uma camada = um canal MIDI de um único `Synthesizer`. Liga/desliga usa expressão (CC11) + corte após 60 ms.
+- `src/pads.rs` (v0.2/v0.3): pads por tom (12 tons × estilos Escuro/Coral/Suave) embutidos em OGG (`assets/pads/`), decodificados
   por uma thread (`start_pad_loader`) e tocados no motor com crossfade (`Cmd::PadPlay`). Gerador: `tools/gerar_pads.py`.
+- Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
+  antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - **Nunca** chamar algo que trava o `core` (ex.: `load_sf2_async`, janela de arquivo) com o `core` já travado pela tela:
   use os pedidos adiados do `UiState` (`open_sf2_dialog`, `pad_file_dialog`). Foi isso que travou a v0.1.
 - Testes: `cargo test --no-default-features` (núcleo, sem tela). Carga: `cargo test --release --no-default-features bench -- --ignored --nocapture`.

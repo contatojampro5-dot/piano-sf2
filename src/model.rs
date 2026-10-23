@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Número de camadas (uma por fader da SMC-Mixer).
-pub const LAYERS: usize = 8;
+pub const LAYERS: usize = 6;
 /// Número de cenas salvas.
 pub const SCENES: usize = 8;
 
@@ -106,8 +106,12 @@ pub enum Target {
     PadVolume,
     PadPrev,
     PadNext,
-    /// Troca entre os bancos de pad (Escuro / Coral).
+    /// Troca entre os estilos de pad (Escuro / Coral / Suave).
     PadBank,
+    /// Knob que escolhe o tom do pad (girar = próximo/anterior; knob comum = posição).
+    PadKnob,
+    /// Alterna entre as abas Sons SF2 / Pads.
+    TabToggle,
 }
 
 impl Target {
@@ -115,7 +119,11 @@ impl Target {
     pub fn is_continuous(self) -> bool {
         matches!(
             self,
-            Target::Volume(_) | Target::Reverb(_) | Target::Master | Target::PadVolume
+            Target::Volume(_)
+                | Target::Reverb(_)
+                | Target::Master
+                | Target::PadVolume
+                | Target::PadKnob
         )
     }
 
@@ -137,7 +145,9 @@ impl Target {
             Target::PadVolume => "Volume do pad".into(),
             Target::PadPrev => "Pad: tom anterior".into(),
             Target::PadNext => "Pad: próximo tom".into(),
-            Target::PadBank => "Pad: trocar Escuro/Coral".into(),
+            Target::PadBank => "Pad: trocar o estilo".into(),
+            Target::PadKnob => "Pad: escolher o tom (knob)".into(),
+            Target::TabToggle => "Trocar de aba (Sons/Pads)".into(),
         }
     }
 }
@@ -183,18 +193,64 @@ pub struct Mapping {
     pub target: Target,
 }
 
-/// Mapeamento padrão da M-Vave SMC-Mixer no modo Mackie Control (MCU):
-/// faders = pitch bend nos canais 1..8 (9 = master), knobs = CC 16..23 relativos,
-/// botões: Solo = notas 8..15, Mute = 16..23, Select = 24..31; transporte 91..95.
+/// Versão do mapeamento padrão (sobe quando o padrão muda; configs antigas são migradas).
+pub const MAPPINGS_VERSION: u32 = 2;
+
+/// Mapeamento padrão da M-Vave SMC-Mixer no modo Mackie Control (MCU), igual à tela:
+/// canais 1..6 = camadas, canal 7 = PAD, canal 8 (e o master) = volume geral.
+/// Faders = pitch bend nos canais 1..9, knobs = CC 16..23 relativos,
+/// botões: REC = notas 0..7, Solo = 8..15, Mute = 16..23, Select = 24..31; transporte 91..95.
+/// REC e Select ficam livres para o Theo usar com "Aprender".
 pub fn smc_default_mappings() -> Vec<Mapping> {
     let mut m = Vec::new();
+    let mut add = |source: Source, target: Target| m.push(Mapping { source, target });
+    let note = |num: u8| Source::Note { ch: 0, num };
+    let knob = |n: u8| Source::Cc {
+        ch: 0,
+        num: 16 + n,
+        relative: true,
+    };
     for i in 0..LAYERS {
         let n = i as u8;
-        m.push(Mapping {
+        add(Source::PitchBend { ch: n }, Target::Volume(i));
+        add(knob(n), Target::Reverb(i));
+        add(note(16 + n), Target::Toggle(i));
+        add(note(8 + n), Target::Solo(i));
+    }
+    // Canal 7 = PAD: fader = volume, knob = escolhe o tom, MUTE = parar, SOLO = troca o estilo.
+    add(Source::PitchBend { ch: 6 }, Target::PadVolume);
+    add(knob(6), Target::PadKnob);
+    add(note(22), Target::PadStop);
+    add(note(14), Target::PadBank);
+    // Canal 8 (e o fader master, se houver) = volume geral; MUTE 8 troca de aba.
+    add(Source::PitchBend { ch: 7 }, Target::Master);
+    add(Source::PitchBend { ch: 8 }, Target::Master);
+    add(note(23), Target::TabToggle);
+    // Transporte: ◀◀ ▶▶ = cena, ■ = pânico. Setas: esquerda/direita = cena, cima/baixo = transpor.
+    add(note(91), Target::PrevScene);
+    add(note(92), Target::NextScene);
+    add(note(93), Target::Panic);
+    add(note(98), Target::PrevScene);
+    add(note(99), Target::NextScene);
+    add(note(96), Target::TransposeUp);
+    add(note(97), Target::TransposeDown);
+    add(note(46), Target::PrevScene);
+    add(note(47), Target::NextScene);
+    m
+}
+
+/// O mapeamento padrão antigo (v0.1/v0.2, 8 camadas). Na migração só sai o que for exatamente
+/// igual a ele: o que o Theo aprendeu continua.
+fn old_default_mappings() -> Vec<Mapping> {
+    let mut v = Vec::new();
+    for i in 0..8usize {
+        let n = i as u8;
+        let note = |num: u8| Source::Note { ch: 0, num };
+        v.push(Mapping {
             source: Source::PitchBend { ch: n },
             target: Target::Volume(i),
         });
-        m.push(Mapping {
+        v.push(Mapping {
             source: Source::Cc {
                 ch: 0,
                 num: 16 + n,
@@ -202,66 +258,33 @@ pub fn smc_default_mappings() -> Vec<Mapping> {
             },
             target: Target::Reverb(i),
         });
-        m.push(Mapping {
-            source: Source::Note { ch: 0, num: 16 + n },
+        v.push(Mapping {
+            source: note(16 + n),
             target: Target::Toggle(i),
         });
-        m.push(Mapping {
-            source: Source::Note { ch: 0, num: 8 + n },
+        v.push(Mapping {
+            source: note(8 + n),
             target: Target::Solo(i),
         });
-        // Botão REC (0..7) e SELECT (24..31) também ligam/desligam: o que estiver mais à mão.
-        m.push(Mapping {
-            source: Source::Note { ch: 0, num: n },
+        v.push(Mapping {
+            source: note(n),
             target: Target::Toggle(i),
         });
-        m.push(Mapping {
-            source: Source::Note { ch: 0, num: 24 + n },
+        v.push(Mapping {
+            source: note(24 + n),
             target: Target::Toggle(i),
         });
     }
-    m.push(Mapping {
+    v.push(Mapping {
         source: Source::PitchBend { ch: 8 },
         target: Target::Master,
     });
-    m.push(Mapping {
-        source: Source::Note { ch: 0, num: 91 },
-        target: Target::PrevScene,
-    });
-    m.push(Mapping {
-        source: Source::Note { ch: 0, num: 92 },
-        target: Target::NextScene,
-    });
-    m.push(Mapping {
-        source: Source::Note { ch: 0, num: 93 },
-        target: Target::Panic,
-    });
-    // Setas (MCU): esquerda/direita = cena, cima/baixo = transpor.
-    m.push(Mapping {
-        source: Source::Note { ch: 0, num: 98 },
-        target: Target::PrevScene,
-    });
-    m.push(Mapping {
-        source: Source::Note { ch: 0, num: 99 },
-        target: Target::NextScene,
-    });
-    m.push(Mapping {
-        source: Source::Note { ch: 0, num: 96 },
-        target: Target::TransposeUp,
-    });
-    m.push(Mapping {
-        source: Source::Note { ch: 0, num: 97 },
-        target: Target::TransposeDown,
-    });
-    m.push(Mapping {
-        source: Source::Note { ch: 0, num: 46 },
-        target: Target::PrevScene,
-    });
-    m.push(Mapping {
-        source: Source::Note { ch: 0, num: 47 },
-        target: Target::NextScene,
-    });
-    m
+    v
+}
+
+#[cfg(test)]
+pub fn old_default_mappings_for_tests() -> Vec<Mapping> {
+    old_default_mappings()
 }
 
 /// Função de cada porta MIDI.
@@ -324,6 +347,9 @@ pub struct Config {
     pub pad_files: Vec<PadFile>,
     /// Aba aberta (0 = Sons SF2, 1 = Pads).
     pub tab: usize,
+    /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
+    #[serde(default)]
+    pub mappings_version: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -351,6 +377,7 @@ impl Default for Config {
             pad_bank: 0,
             pad_files: Vec::new(),
             tab: 0,
+            mappings_version: MAPPINGS_VERSION,
         }
     }
 }
@@ -386,6 +413,26 @@ impl Config {
         self.tab = self.tab.min(1);
         self.pad_files
             .retain(|f| f.bank < crate::pads::PAD_BANKS && f.key < crate::pads::PAD_KEYS);
+        // Nada pode apontar para camada que não existe mais (eram 8, agora são 6).
+        self.mappings.retain(|m| match m.target {
+            Target::Volume(i) | Target::Reverb(i) | Target::Toggle(i) | Target::Solo(i) => {
+                i < LAYERS
+            }
+            Target::Scene(n) => n < SCENES,
+            Target::Pad(k) => k < crate::pads::PAD_KEYS,
+            _ => true,
+        });
+        if self.mappings_version < MAPPINGS_VERSION {
+            // Mantém o que o Theo aprendeu; completa com o padrão novo onde o controle está livre.
+            let old = old_default_mappings();
+            self.mappings.retain(|m| !old.contains(m));
+            for d in smc_default_mappings() {
+                if !self.mappings.iter().any(|m| m.source == d.source) {
+                    self.mappings.push(d);
+                }
+            }
+            self.mappings_version = MAPPINGS_VERSION;
+        }
     }
 
     pub fn pad_file(&self, bank: usize, key: usize) -> Option<&str> {

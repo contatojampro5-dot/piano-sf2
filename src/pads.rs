@@ -13,7 +13,7 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
 pub const PAD_KEYS: usize = 12;
-pub const PAD_BANKS: usize = 2;
+pub const PAD_BANKS: usize = 3;
 
 pub const KEY_NAMES: [&str; PAD_KEYS] = [
     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
@@ -21,8 +21,12 @@ pub const KEY_NAMES: [&str; PAD_KEYS] = [
 pub const KEY_NAMES_PT: [&str; PAD_KEYS] = [
     "Dó", "Dó#", "Ré", "Ré#", "Mi", "Fá", "Fá#", "Sol", "Sol#", "Lá", "Lá#", "Si",
 ];
-pub const BANK_NAMES: [&str; PAD_BANKS] = ["Escuro", "Coral"];
-pub const BANK_HINTS: [&str; PAD_BANKS] = ["grave, fechado, místico", "vozes graves e médias"];
+pub const BANK_NAMES: [&str; PAD_BANKS] = ["Escuro", "Coral", "Suave"];
+pub const BANK_HINTS: [&str; PAD_BANKS] = [
+    "grave, fechado, místico",
+    "vozes graves e médias",
+    "tranquilo, redondo, para a igreja",
+];
 
 /// Um pad decodificado: estéreo intercalado (L, R, L, R...).
 pub struct PadClip {
@@ -55,7 +59,7 @@ macro_rules! bank {
     };
 }
 
-static BUILTIN: [[&[u8]; PAD_KEYS]; PAD_BANKS] = [bank!("escuro"), bank!("coral")];
+static BUILTIN: [[&[u8]; PAD_KEYS]; PAD_BANKS] = [bank!("escuro"), bank!("coral"), bank!("suave")];
 
 pub fn builtin_bytes(bank: usize, key: usize) -> &'static [u8] {
     BUILTIN[bank % PAD_BANKS][key % PAD_KEYS]

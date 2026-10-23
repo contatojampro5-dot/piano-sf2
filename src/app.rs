@@ -35,8 +35,6 @@ const LAYER_COLORS: [Color32; LAYERS] = [
     Color32::from_rgb(0xf0, 0x62, 0x92),
     Color32::from_rgb(0xba, 0x68, 0xc8),
     Color32::from_rgb(0x4d, 0xb6, 0xac),
-    Color32::from_rgb(0xdc, 0xe7, 0x75),
-    Color32::from_rgb(0xff, 0x8a, 0x65),
 ];
 
 const BUFFERS: [u32; 6] = [0, 64, 128, 256, 512, 1024];
@@ -343,7 +341,9 @@ fn keyboard(ctx: &egui::Context, core: &mut Core, st: &mut UiState) {
             }
         }
         if i.consume_key(egui::Modifiers::NONE, Key::Escape) {
-            if core.learn.active {
+            if core.wizard.is_some() {
+                core.wizard_cancel();
+            } else if core.learn.active {
                 core.learn.active = false;
                 core.learn.target = None;
             } else {
@@ -433,6 +433,16 @@ fn top_bar(
                 core.learn.active = !core.learn.active;
                 core.learn.target = None;
             }
+            let wiz = egui::Button::new("Configurar mesinha").fill(STRIP_HI);
+            if ui
+                .add(wiz)
+                .on_hover_text(
+                    "Mexa os faders e knobs na ordem pedida: o programa aprende tudo sozinho",
+                )
+                .clicked()
+            {
+                core.wizard_start();
+            }
             ui.add_space(10.0);
 
             // CPU do áudio
@@ -499,18 +509,57 @@ fn top_bar(
             );
         });
     });
-    if core.learn.active {
+    if let Some(w) = &core.wizard {
+        let (step, total) = (w.step + 1, w.steps.len());
+        let (target, control) = w.current().unwrap_or((Target::Master, ""));
+        let mut skip = false;
+        let mut cancel = false;
+        ui.add_space(4.0);
+        egui::Frame::new()
+            .fill(PAD_COLOR)
+            .corner_radius(6)
+            .inner_margin(egui::Margin::symmetric(10, 4))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!(
+                            "CONFIGURAR MESINHA — passo {step} de {total}:  mexa o {control} da mesinha  ({})",
+                            target.label()
+                        ))
+                        .color(BG)
+                        .strong(),
+                    );
+                    if ui.button("Pular").on_hover_text("Esse controle fica como está").clicked() {
+                        skip = true;
+                    }
+                    if ui.button("Cancelar").clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+        if skip {
+            core.wizard_skip();
+        }
+        if cancel {
+            core.wizard_cancel();
+        }
+    } else if core.learn.active {
         let msg = match core.learn.target {
             None => "MODO APRENDER — 1) clique num controle da tela   2) mexa o controle da mesinha.   (Esc sai)".to_string(),
             Some(t) => format!("Agora mexa na mesinha o controle para: {}", t.label()),
         };
+        let last = core
+            .last_signal
+            .clone()
+            .map(|l| format!("   ·   último sinal da mesinha: {l}"))
+            .unwrap_or_default();
         ui.add_space(4.0);
         egui::Frame::new()
             .fill(ORANGE)
             .corner_radius(6)
             .inner_margin(egui::Margin::symmetric(10, 4))
             .show(ui, |ui| {
-                ui.label(RichText::new(msg).color(BG).strong());
+                ui.label(RichText::new(format!("{msg}{last}")).color(BG).strong());
             });
     }
 }
@@ -621,7 +670,7 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             .size(15.0)
             .color(if sel { BG } else { TEXT });
             let r = ui.add_sized(
-                [300.0, 38.0],
+                [290.0, 38.0],
                 egui::Button::new(text).fill(if sel { PAD_COLOR } else { STRIP_HI }),
             );
             if !learnable(ui, core, &r, Target::PadBank) && r.clicked() {
@@ -908,14 +957,126 @@ fn mixer(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     let avail = ui.available_size();
     let gap = 8.0;
     let master_w = 150.0;
-    let strip_w = ((avail.x - master_w - gap * LAYERS as f32) / LAYERS as f32).clamp(84.0, 170.0);
+    // Como na SMC-Mixer: canais 1..6 = camadas, 7 = PAD, 8 = GERAL.
+    let strip_w =
+        ((avail.x - master_w - gap * (LAYERS + 1) as f32) / (LAYERS + 1) as f32).clamp(84.0, 190.0);
     let h = avail.y.max(360.0);
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
         for i in 0..LAYERS {
             strip(ui, core, st, i, Vec2::new(strip_w, h));
         }
+        pad_strip(ui, core, Vec2::new(strip_w, h));
         master_strip(ui, core, Vec2::new(master_w, h));
+    });
+}
+
+/// Canal 7: o pad (volume, tom, estilo e parar) sem precisar ir para a aba Pads.
+fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
+    let playing = core.pad_active.is_some();
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 12, if playing { STRIP_HI } else { STRIP });
+    if playing {
+        painter.rect_stroke(
+            rect,
+            12,
+            Stroke::new(2.0, PAD_COLOR.gamma_multiply(0.8)),
+            StrokeKind::Inside,
+        );
+    }
+    let inner = rect.shrink2(Vec2::new(8.0, 8.0));
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(inner)
+            .layout(Layout::top_down(Align::Center)),
+    );
+    let ui = &mut child;
+    ui.horizontal(|ui| {
+        let (r, _) = ui.allocate_exact_size(Vec2::new(inner.width(), 22.0), Sense::hover());
+        ui.painter().rect_filled(
+            Rect::from_min_size(r.min, Vec2::new(r.width(), 4.0)),
+            2,
+            PAD_COLOR,
+        );
+        ui.painter().text(
+            r.center() + Vec2::new(0.0, 4.0),
+            Align2::CENTER_CENTER,
+            "7 · PAD",
+            FontId::proportional(17.0),
+            if playing { TEXT } else { DIM },
+        );
+    });
+    // Tom atual (grande) — o knob 7 da mesinha escolhe o tom.
+    let key = core.pad_active.map(|k| pads::KEY_NAMES[k]).unwrap_or("—");
+    let r = ui.add_sized(
+        [inner.width(), 50.0],
+        egui::Button::new(RichText::new(key).size(26.0).strong().color(if playing {
+            BG
+        } else {
+            DIM
+        }))
+        .fill(if playing { PAD_COLOR } else { STRIP }),
+    );
+    let r = r.on_hover_text("Tom do pad (knob 7 da mesinha). Clique para ir à aba Pads.");
+    if !learnable(ui, core, &r, Target::PadKnob) && r.clicked() {
+        core.cfg.tab = 1;
+    }
+    ui.label(
+        RichText::new(pads::BANK_NAMES[core.cfg.pad_bank])
+            .size(12.0)
+            .color(DIM),
+    );
+    let stop = ui.add_sized(
+        [inner.width(), 40.0],
+        egui::Button::new(
+            RichText::new("PARAR")
+                .strong()
+                .size(15.0)
+                .color(if playing { BG } else { DIM }),
+        )
+        .fill(if playing { ORANGE } else { STRIP }),
+    );
+    if !learnable(ui, core, &stop, Target::PadStop) && stop.clicked() {
+        core.pad_stop();
+    }
+    let bank = ui.add_sized(
+        [inner.width(), 28.0],
+        egui::Button::new(RichText::new("ESTILO").size(13.0).color(DIM)).fill(STRIP),
+    );
+    let bank = bank.on_hover_text("Troca Escuro → Coral → Suave");
+    if !learnable(ui, core, &bank, Target::PadBank) && bank.clicked() {
+        core.set_pad_bank(core.cfg.pad_bank + 1);
+    }
+    let preset_h = 84.0;
+    let fader_h = (ui.available_height() - preset_h - 22.0).max(90.0);
+    ui.label(RichText::new(format!("{:.0}%", core.cfg.pad_volume * 100.0)).monospace());
+    let (resp, newv) = fader(
+        ui,
+        Vec2::new(inner.width(), fader_h),
+        core.cfg.pad_volume,
+        if playing { PAD_COLOR } else { DIM },
+        core.learn.active,
+    );
+    learnable(ui, core, &resp, Target::PadVolume);
+    if let Some(v) = newv {
+        core.set_pad_volume(v);
+    }
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        let w = (inner.width() - ui.spacing().item_spacing.x) / 2.0;
+        let prev = ui
+            .add_sized([w, 34.0], egui::Button::new("◀").fill(STRIP))
+            .on_hover_text("Tom anterior");
+        if !learnable(ui, core, &prev, Target::PadPrev) && prev.clicked() {
+            core.pad_step(-1);
+        }
+        let next = ui
+            .add_sized([w, 34.0], egui::Button::new("▶").fill(STRIP))
+            .on_hover_text("Próximo tom");
+        if !learnable(ui, core, &next, Target::PadNext) && next.clicked() {
+            core.pad_step(1);
+        }
     });
 }
 
@@ -1073,7 +1234,7 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
             .layout(Layout::top_down(Align::Center)),
     );
     let ui = &mut child;
-    ui.label(RichText::new("GERAL").strong().size(16.0));
+    ui.label(RichText::new("8 · GERAL").strong().size(16.0));
     ui.add_space(4.0);
 
     // Transpor
@@ -1546,6 +1707,10 @@ fn settings_window(
                 ui.horizontal(|ui| {
                     if ui.button("↺ Restaurar padrão da SMC-Mixer").clicked() {
                         core.reset_mappings();
+                    }
+                    if ui.button("Configurar mesinha (automático)").clicked() {
+                        core.wizard_start();
+                        st.settings = false;
                     }
                     if ui.button("Aprender").clicked() {
                         core.learn.active = true;

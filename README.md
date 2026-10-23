@@ -3,8 +3,8 @@
 Programa **leve** para Windows que toca sons **SF2** ao vivo, feito para a igreja:
 piano **Casio Privia PX-S3000** + mesinha **M-Vave SMC-Mixer** + notebook simples (i5 de 5ª geração, 8 GB).
 
-- 8 camadas de som ao mesmo tempo, cada uma com **liga/desliga, solo, volume e reverb**.
-- A tela copia a SMC-Mixer: **fader 1 = camada 1**, **fader 2 = camada 2**...
+- 6 camadas de som ao mesmo tempo, cada uma com **liga/desliga, solo, volume e reverb**.
+- A tela copia a SMC-Mixer: **faders 1–6 = camadas**, **fader 7 = PAD**, **fader 8 = GERAL**.
 - **8 cenas** para trocar o som inteiro com um botão (F1–F8, setas ou o transporte da mesinha).
 - **Botão de pânico** para cortar nota presa (tecla **Esc**).
 - Um SF2 só, carregado **uma vez** na memória e usado pelas 8 camadas (o pacote de 1,4 GB cabe nos 8 GB do notebook).
@@ -52,6 +52,7 @@ Lá em cima tem duas abas: **🎹 Sons SF2** (a mesa com as 8 camadas) e **🎶 
 - Dois estilos prontos, já dentro do programa:
   - **Escuro**: grave, fechado, místico.
   - **Coral**: vozes graves e médias ("aah/ooh").
+  - **Suave**: tranquilo e redondo, para a igreja.
 - **Seu próprio som**: botão direito num tom → *Usar meu arquivo (WAV/MP3/OGG)*. Para voltar: *Voltar ao som padrão*.
 - Volume do pad separado, botões ◀ ▶ (tom anterior/próximo) e **PARAR PAD**.
 - Tudo pode ir para a mesinha com **Aprender**: cada tom, volume do pad, parar, anterior/próximo e trocar Escuro/Coral.
@@ -61,16 +62,27 @@ Lá em cima tem duas abas: **🎹 Sons SF2** (a mesa com as 8 camadas) e **🎶 
 
 | Na mesinha | No programa |
 |---|---|
-| Fader 1–8 | Volume da camada 1–8 |
-| Fader master (o 9º, se a sua tiver) | Volume geral |
-| Knob 1–8 (girar) | Reverb da camada 1–8 |
-| Botão **M** (mute), **R** (rec) ou **Select** | Liga/desliga a camada |
-| Botão **S** (solo) | Solo da camada |
+| Fader 1–6 | Volume da camada 1–6 |
+| Fader 7 | Volume do PAD |
+| Fader 8 (e o master, se a sua tiver) | Volume geral |
+| Knob 1–6 (girar) | Reverb da camada 1–6 |
+| Knob 7 (girar) | Escolhe o tom do pad (C, C#, D...) |
+| Botão **M** (mute) 1–6 | Liga/desliga a camada |
+| Botão **S** (solo) 1–6 | Solo da camada |
+| **M** 7 / **S** 7 | Parar pad / trocar estilo do pad |
+| **M** 8 | Trocar de aba (Sons SF2 ↔ Pads) |
+| Botões **R** (rec) e **Select** | Livres para você usar com **Aprender** |
 | ◀◀ / ▶▶ (e setas ◀ ▶) | Cena anterior / próxima |
 | ■ Stop | Pânico |
 | Setas ▲ ▼ | Transpor +1 / −1 |
 
 Os botões da mesinha acendem quando a camada está ligada.
+
+**Configurar mesinha (automático):** clique em **Configurar mesinha** lá em cima e mexa os controles na ordem
+que a faixa roxa pedir (fader 1, fader 2... fader 8, depois knob 1... knob 7). Não precisa clicar em nada:
+o programa aprende sozinho, inclusive se a mesinha estiver num modo diferente. **Pular** deixa um controle como está.
+Depois, use **Aprender** só para o que quiser mudar. No modo Aprender aparece o *último sinal da mesinha*,
+para você ver o que cada botão manda.
 Se algum controle não responder (a mesinha pode estar em outro modo), use **Aprender**:
 1. clique em **Aprender** (lá em cima);
 2. clique no controle da tela (ex.: o fader da camada 1);
@@ -114,6 +126,14 @@ Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B)
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.3 — pad Suave, 6 canais e configurar mesinha automático
+- Pad novo **Suave** (12 tons), tranquilo e redondo.
+- **6 camadas** (antes 8): o canal 7 virou **PAD** (volume, tom, parar, estilo) e o 8 virou **GERAL**, igual à mesinha.
+- **Configurar mesinha (automático)**: mexa faders e knobs na ordem pedida e pronto.
+- Mais coisas para mapear: knob escolhe o tom do pad, trocar de aba, e vários botões podem fazer a mesma coisa.
+  REC e Select ficam livres no padrão. O modo Aprender mostra o último sinal da mesinha.
+- Quem já tinha mapeado: o que você aprendeu continua; só o padrão antigo foi atualizado.
 
 ### v0.2 — pads e correção do travamento
 - **Corrigido**: escolher o SF2 pelo botão 📂 travava o programa para sempre ("Não está respondendo").

@@ -1,5 +1,5 @@
 """Gera os pads do Piano SF2 (12 tons × 2 estilos), sem terça (serve maior e menor), em loop de 30 s.
-Uso: python3 gerar_pads.py <estilo escuro|coral> <tom 0..11> <saida.wav>"""
+Uso: python3 gerar_pads.py <estilo escuro|coral|suave> <tom 0..11> <saida.wav>"""
 import sys, wave, numpy as np
 from scipy.signal import butter, sosfilt, fftconvolve
 SR = 44100
@@ -89,11 +89,39 @@ def coral(root, rng, t, loop):
     wl, wr = reverb(L, R, rng, decay=1.8, lp=6000)
     return L, R, wl, wr, .4, .75
 
+def tri(f, t, rng, nh):
+    """Triângulo suave (só harmônicos ímpares, caindo rápido): som redondo, sem 'zumbido'."""
+    out = np.zeros_like(t)
+    for n in range(1, 2 * nh, 2):
+        out += np.sin(2 * np.pi * f * n * t + rng.uniform(0, 6.28)) / (n * n)
+    return out
+
+def suave(root, rng, t, loop):
+    """Pad tranquilo de igreja: redondo, quente, entra e respira devagar."""
+    L = np.zeros_like(t); R = np.zeros_like(t)
+    notes = [(root - 12, .32), (root, .55), (root + 7, .4), (root + 12, .36), (root + 19, .14)]
+    for m, g in notes:
+        f = hz(m)
+        for v, det in enumerate((-4, 0, 4)):
+            ff = f * 2 ** (det / 1200)
+            s = tri(ff, t, rng, nh=min(6, max(1, int(2500 / ff))))
+            amp = g * (1 + .12 * np.sin(2 * np.pi * rng.uniform(.03, .07) * t + rng.uniform(0, 6.28)))
+            p = (v / 2) * .8 + .1
+            L += s * amp * np.cos(p * np.pi / 2); R += s * amp * np.sin(p * np.pi / 2)
+    # brilho bem leve que aparece e some
+    for m, g in [(root + 24, .05), (root + 31, .025)]:
+        f = hz(m)
+        env = np.clip(np.sin(2 * np.pi * rng.uniform(.025, .05) * t + rng.uniform(0, 6.28)), 0, 1) ** 2
+        L += g * env * np.sin(2 * np.pi * f * t); R += g * env * np.sin(2 * np.pi * f * 1.0015 * t + 1)
+    lp = butter(2, 1400, 'low', fs=SR, output='sos'); L = sosfilt(lp, L); R = sosfilt(lp, R)
+    wl, wr = reverb(L, R, rng, secs=8.0, decay=2.2, lp=3500)
+    return L, R, wl, wr, .5, .65
+
 def render(style, key, loop=30, xf=6):
-    rng = np.random.default_rng(100 + key + (50 if style == 'coral' else 0))
+    rng = np.random.default_rng(100 + key + {'escuro': 0, 'coral': 50, 'suave': 200}[style])
     root = 48 + key if key <= 6 else 36 + key   # C3..F#3 e G2..B2: tudo na mesma região
     t = np.arange(int(SR * (loop + xf + 3))) / SR
-    L, R, wl, wr, dry, wet = (escuro if style == 'escuro' else coral)(root, rng, t, loop)
+    L, R, wl, wr, dry, wet = {'escuro': escuro, 'coral': coral, 'suave': suave}[style](root, rng, t, loop)
     hp = butter(2, 40, 'high', fs=SR, output='sos'); L = sosfilt(hp, L); R = sosfilt(hp, R)
     n = max(np.abs(L).max(), np.abs(R).max())
     L = dry * L / n + wet * wl; R = dry * R / n + wet * wr

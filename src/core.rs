@@ -22,6 +22,53 @@ pub struct Learn {
     pub target: Option<Target>,
 }
 
+/// "Configurar mesinha": o Theo mexe cada controle na ordem pedida e o programa aprende sozinho.
+pub struct Wizard {
+    pub step: usize,
+    pub steps: Vec<(Target, &'static str)>,
+    /// Controle candidato do passo atual e quantos sinais dele já chegaram.
+    candidate: Option<(ControlEvent, usize, bool)>,
+    /// Controles já usados neste assistente (o fader anterior ainda pode estar mandando sinal).
+    used: Vec<Source>,
+}
+
+impl Wizard {
+    pub fn new() -> Self {
+        let mut steps: Vec<(Target, &'static str)> = Vec::new();
+        const FADERS: [&str; 8] = [
+            "FADER 1", "FADER 2", "FADER 3", "FADER 4", "FADER 5", "FADER 6", "FADER 7", "FADER 8",
+        ];
+        const KNOBS: [&str; 7] = [
+            "KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4", "KNOB 5", "KNOB 6", "KNOB 7",
+        ];
+        for (i, name) in FADERS.iter().enumerate().take(LAYERS) {
+            steps.push((Target::Volume(i), name));
+        }
+        steps.push((Target::PadVolume, FADERS[6]));
+        steps.push((Target::Master, FADERS[7]));
+        for (i, name) in KNOBS.iter().enumerate().take(LAYERS) {
+            steps.push((Target::Reverb(i), name));
+        }
+        steps.push((Target::PadKnob, KNOBS[6]));
+        Self {
+            step: 0,
+            steps,
+            candidate: None,
+            used: Vec::new(),
+        }
+    }
+
+    pub fn current(&self) -> Option<(Target, &'static str)> {
+        self.steps.get(self.step).copied()
+    }
+}
+
+impl Default for Wizard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Progresso do carregamento do SF2.
 pub struct Loading {
     pub file: String,
@@ -56,6 +103,9 @@ pub struct Core {
     pad_jobs: std::collections::HashSet<(usize, usize)>,
     /// Thread que decodifica pads (sem ela, decodifica na hora — usado nos testes).
     pub pad_loader: Option<Sender<PadJob>>,
+    /// Último sinal que chegou da mesinha (aparece no modo Aprender).
+    pub last_signal: Option<String>,
+    pub wizard: Option<Wizard>,
 }
 
 pub type SharedCore = Arc<Mutex<Core>>;
@@ -86,6 +136,8 @@ impl Core {
             pad_pending: None,
             pad_jobs: Default::default(),
             pad_loader: None,
+            last_signal: None,
+            wizard: None,
         }
     }
 
@@ -424,6 +476,11 @@ impl Core {
     }
 
     fn apply_button(&mut self, t: Target) {
+        if let Target::Toggle(i) | Target::Solo(i) = t {
+            if i >= LAYERS {
+                return;
+            }
+        }
         match t {
             Target::Toggle(i) => self.toggle(i),
             Target::Solo(i) => self.toggle_solo(i),
@@ -438,11 +495,37 @@ impl Core {
             Target::PadPrev => self.pad_step(-1),
             Target::PadNext => self.pad_step(1),
             Target::PadBank => self.set_pad_bank(self.cfg.pad_bank + 1),
+            Target::TabToggle => {
+                self.cfg.tab = 1 - self.cfg.tab.min(1);
+                self.dirty = true;
+            }
+
             _ => {}
         }
     }
 
     fn apply_continuous(&mut self, t: Target, value: ContValue) {
+        if let Target::Volume(i) | Target::Reverb(i) = t {
+            if i >= LAYERS {
+                return;
+            }
+        }
+        if t == Target::PadKnob {
+            match value {
+                // Knob infinito: cada "clique" = um tom.
+                ContValue::Relative(d) if d > 0.0 => self.pad_step(1),
+                ContValue::Relative(d) if d < 0.0 => self.pad_step(-1),
+                ContValue::Relative(_) => {}
+                // Knob comum (0..127): a posição escolhe o tom (C..B).
+                ContValue::Absolute(v) => {
+                    let k = ((v.clamp(0.0, 1.0) * (PAD_KEYS as f32 - 1.0)).round()) as usize;
+                    if self.pad_active != Some(k) {
+                        self.start_pad(k);
+                    }
+                }
+            }
+            return;
+        }
         let cur = match t {
             Target::Volume(i) => self.cfg.mix.layers[i].volume,
             Target::Reverb(i) => self.cfg.mix.layers[i].reverb,
@@ -490,6 +573,7 @@ impl Core {
             return false;
         };
         self.controller_activity = Some(Instant::now());
+        self.last_signal = Some(ev.label());
 
         // Botão "apertado" agora? (CC: subiu de <64 para >=64; nota: velocity > 0)
         let pressed = match ev {
@@ -501,12 +585,19 @@ impl Core {
             ControlEvent::PitchBend { .. } => false,
         };
 
+        if self.wizard.is_some() {
+            return self.wizard_signal(ev);
+        }
+
         if self.learn.active {
             if let Some(t) = self.learn.target {
                 if let Some(src) = ev.source_for(t, pressed) {
+                    // Um controle faz uma coisa só. Fader/knob: um por alvo (dois faders brigariam).
+                    // Botões: vários botões podem fazer a mesma coisa.
+                    let single = t.is_continuous();
                     self.cfg
                         .mappings
-                        .retain(|m| !same_source(m.source, src) && m.target != t);
+                        .retain(|m| !same_source(m.source, src) && !(single && m.target == t));
                     self.cfg.mappings.push(Mapping {
                         source: src,
                         target: t,
@@ -540,6 +631,98 @@ impl Core {
             }
         }
         changed
+    }
+
+    // ---------- Configurar mesinha (assistente) ----------
+
+    pub fn wizard_start(&mut self) {
+        self.learn.active = false;
+        self.learn.target = None;
+        self.wizard = Some(Wizard::new());
+    }
+
+    pub fn wizard_skip(&mut self) {
+        if let Some(w) = &mut self.wizard {
+            w.step += 1;
+            w.candidate = None;
+        }
+        self.wizard_check_done();
+    }
+
+    pub fn wizard_cancel(&mut self) {
+        self.wizard = None;
+        self.notify("Configuração da mesinha cancelada (o que já foi feito ficou salvo)");
+    }
+
+    fn wizard_check_done(&mut self) {
+        if self.wizard.as_ref().is_some_and(|w| w.current().is_none()) {
+            self.wizard = None;
+            self.notify("Mesinha configurada! Faders e knobs prontos.");
+        }
+    }
+
+    fn wizard_signal(&mut self, ev: ControlEvent) -> bool {
+        let Some(w) = self.wizard.as_mut() else {
+            return false;
+        };
+        let Some((target, _)) = w.current() else {
+            return false;
+        };
+        // Só faders e knobs (pitch bend ou CC); botões são ignorados aqui.
+        let src = match ev {
+            ControlEvent::PitchBend { ch, .. } => Source::PitchBend { ch },
+            ControlEvent::Cc { ch, num, .. } => Source::Cc {
+                ch,
+                num,
+                relative: false,
+            },
+            ControlEvent::Note { .. } => return false,
+        };
+        if w.used.iter().any(|u| same_source(*u, src)) {
+            return false; // ainda é o controle do passo anterior
+        }
+        // Espera 3 sinais do mesmo controle (evita pegar um esbarrão em outro).
+        let small = |v: u8| (1..=15).contains(&v) || (65..=79).contains(&v);
+        let (count, all_small) = match (&mut w.candidate, ev) {
+            (Some((prev, n, sm)), _) if prev.matches(src) => {
+                *n += 1;
+                if let ControlEvent::Cc { val, .. } = ev {
+                    *sm &= small(val);
+                }
+                (*n, *sm)
+            }
+            _ => {
+                let sm = matches!(ev, ControlEvent::Cc { val, .. } if small(val));
+                w.candidate = Some((ev, 1, sm));
+                (1, sm)
+            }
+        };
+        if count < 3 {
+            return true;
+        }
+        // Knob "infinito" manda só valores pequenos (1..15 sobe, 65..79 desce).
+        let src = match src {
+            Source::Cc { ch, num, .. } => Source::Cc {
+                ch,
+                num,
+                relative: all_small,
+            },
+            other => other,
+        };
+        w.used.push(src);
+        w.step += 1;
+        w.candidate = None;
+        self.cfg
+            .mappings
+            .retain(|m| !same_source(m.source, src) && m.target != target);
+        self.cfg.mappings.push(Mapping {
+            source: src,
+            target,
+        });
+        self.dirty = true;
+        self.notify(format!("✔ {} → {}", src.label(), target.label()));
+        self.wizard_check_done();
+        true
     }
 
     /// Luzes dos botões da mesinha: (canal, nota, acesa).
@@ -724,6 +907,20 @@ pub enum ContValue {
 const KNOB_STEP: f32 = 0.02;
 
 impl ControlEvent {
+    pub fn label(&self) -> String {
+        match *self {
+            ControlEvent::Note { ch, num, vel } => format!(
+                "botão (nota {num}) canal {} {}",
+                ch + 1,
+                if vel > 0 { "apertado" } else { "solto" }
+            ),
+            ControlEvent::Cc { ch, num, val } => format!("CC {num} = {val} canal {}", ch + 1),
+            ControlEvent::PitchBend { ch, value } => {
+                format!("fader canal {} = {:.0}%", ch + 1, value as f32 / 163.83)
+            }
+        }
+    }
+
     pub fn parse(msg: &[u8]) -> Option<ControlEvent> {
         let status = *msg.first()?;
         let ch = status & 0x0F;
@@ -808,6 +1005,11 @@ fn same_source(a: Source, b: Source) -> bool {
         (Source::Cc { ch, num, .. }, Source::Cc { ch: c, num: n, .. }) => ch == c && num == n,
         (x, y) => x == y,
     }
+}
+
+#[cfg(test)]
+fn tests_old_defaults() -> Vec<Mapping> {
+    crate::model::old_default_mappings_for_tests()
 }
 
 #[cfg(test)]
@@ -923,5 +1125,109 @@ mod tests {
         // Config velha/incompleta não quebra.
         let partial: Config = serde_json::from_str(r#"{"master":0.5}"#).unwrap();
         assert_eq!(partial.mappings.len(), smc_default_mappings().len());
+    }
+
+    #[test]
+    fn faders_7_and_8_are_pad_and_master() {
+        let (mut c, _rx) = core();
+        c.handle_controller(&[0xE6, 0, 0]); // fader 7 no zero
+        assert!(c.cfg.pad_volume < 0.01);
+        c.handle_controller(&[0xE7, 0x7F, 0x7F]); // fader 8 no máximo
+        assert!((c.cfg.master - 1.0).abs() < 1e-3);
+        c.handle_controller(&[0xB0, 22, 0x01]); // knob 7 gira = próximo tom do pad
+        assert_eq!(c.pad_active, Some(0));
+        c.handle_controller(&[0xB0, 22, 0x01]);
+        assert_eq!(c.pad_active, Some(1));
+        c.handle_controller(&[0xB0, 22, 0x41]);
+        assert_eq!(c.pad_active, Some(0));
+    }
+
+    #[test]
+    fn wizard_learns_faders_and_knobs_in_order() {
+        let (mut c, _rx) = core();
+        c.wizard_start();
+        // Mesinha em "modo CC": faders = CC 0..7 absolutos, knobs = CC 20..26 relativos.
+        for f in 0..8u8 {
+            for v in [10u8, 20, 30, 40] {
+                c.handle_controller(&[0xB0, f, v]);
+            }
+        }
+        for k in 0..7u8 {
+            for v in [1u8, 1, 65] {
+                c.handle_controller(&[0xB0, 20 + k, v]);
+            }
+        }
+        assert!(c.wizard.is_none(), "terminou");
+        c.handle_controller(&[0xB0, 2, 127]);
+        assert!((c.cfg.mix.layers[2].volume - 1.0).abs() < 1e-3);
+        c.handle_controller(&[0xB0, 6, 0]);
+        assert!(c.cfg.pad_volume < 0.01);
+        c.handle_controller(&[0xB0, 7, 127]);
+        assert!((c.cfg.master - 1.0).abs() < 1e-3);
+        let before = c.cfg.mix.layers[4].reverb;
+        c.handle_controller(&[0xB0, 24, 0x02]);
+        assert!(
+            c.cfg.mix.layers[4].reverb > before,
+            "knob detectado como infinito"
+        );
+        // O fader antigo (pitch bend) não manda mais no volume 1.
+        let v0 = c.cfg.mix.layers[0].volume;
+        c.handle_controller(&[0xE0, 0, 0]);
+        assert_eq!(c.cfg.mix.layers[0].volume, v0);
+    }
+
+    #[test]
+    fn wizard_skip_and_buttons_ignored() {
+        let (mut c, _rx) = core();
+        c.wizard_start();
+        c.handle_controller(&[0x90, 16, 127]); // botão: ignorado no assistente
+        assert_eq!(c.wizard.as_ref().unwrap().step, 0);
+        c.wizard_skip();
+        assert_eq!(c.wizard.as_ref().unwrap().step, 1);
+        c.wizard_cancel();
+        assert!(c.wizard.is_none());
+    }
+
+    #[test]
+    fn old_config_with_8_layers_migrates_and_keeps_learned() {
+        // Config da v0.2: 8 camadas, padrão antigo + uma coisa que o Theo aprendeu no REC 1.
+        let mut old = serde_json::to_value(Config::default()).unwrap();
+        let obj = old.as_object_mut().unwrap();
+        obj.remove("mappings_version");
+        let mut maps = serde_json::to_value(super::tests_old_defaults()).unwrap();
+        maps.as_array_mut()
+            .unwrap()
+            .retain(|m| m["source"] != serde_json::json!({"Note": {"ch": 0, "num": 0}}));
+        maps.as_array_mut().unwrap().push(
+            serde_json::json!({"source": {"Note": {"ch": 0, "num": 0}}, "target": {"Pad": 3}}),
+        );
+        obj.insert("mappings".into(), maps);
+        let layers: Vec<serde_json::Value> = (0..8)
+            .map(|_| serde_json::to_value(Layer::default()).unwrap())
+            .collect();
+        obj["mix"]["layers"] = serde_json::Value::Array(layers);
+        let mut cfg: Config = serde_json::from_value(old).unwrap();
+        cfg.normalize();
+        assert_eq!(cfg.mix.layers.len(), LAYERS);
+        assert!(cfg
+            .mappings
+            .iter()
+            .all(|m| !matches!(m.target, Target::Volume(i) if i >= LAYERS)));
+        assert!(
+            cfg.mappings.contains(&Mapping {
+                source: Source::Note { ch: 0, num: 0 },
+                target: Target::Pad(3)
+            }),
+            "o aprendido fica"
+        );
+        assert!(cfg.mappings.contains(&Mapping {
+            source: Source::PitchBend { ch: 6 },
+            target: Target::PadVolume
+        }));
+        assert!(cfg.mappings.contains(&Mapping {
+            source: Source::PitchBend { ch: 7 },
+            target: Target::Master
+        }));
+        assert_eq!(cfg.mappings_version, MAPPINGS_VERSION);
     }
 }
