@@ -11,6 +11,8 @@ pub mod app;
 pub mod audio;
 #[cfg(feature = "app")]
 pub mod midi;
+#[cfg(feature = "app")]
+pub mod theme;
 
 #[cfg(test)]
 mod testsf;

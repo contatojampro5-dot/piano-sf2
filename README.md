@@ -42,6 +42,15 @@ Piano (LINE OUT) ──► caixas / mesa da igreja
 4. Monte o som, clique numa cena (ex.: *F2*) e em **💾 Salvar cena**.
    Botão direito numa cena: **salvar aqui / renomear / apagar**.
 
+## Aparência (⚙ Ajustes → Aparência)
+
+Visual de vidro (estilo iPhone) sobre um fundo celestial que respira devagar.
+- **Fundo**: Celestial, Aurora, Pôr do sol ou Grafite.
+- **Vidro**: do bem transparente ao bem fosco.
+- **Brilho** em volta das camadas ligadas e do pad tocando.
+- **Tamanho da tela** (80% a 130%), **Fundo em movimento** e **Estrelas**.
+- No culto, se o computador ficar pesado, desligue **Fundo em movimento** (a tela fica parada e quase não gasta nada).
+
 ## Teclado de teste (sem o piano ligado)
 
 Na aba **Sons SF2**, o botão **🎹 Teclado** (ao lado de *Salvar cena*) mostra/esconde um piano na tela.
@@ -134,6 +143,11 @@ Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B)
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.5 — visual de vidro (estilo iPhone)
+- Fundo celestial com nuvens de luz e estrelas (4 temas), painéis de vidro fosco com transparência ajustável.
+- Faders e knobs novos (pílula branca com sombra), movimento suave, aura colorida no que está ligado.
+- Cores do sistema do iPhone; quadrados de pad de vidro; seção **Aparência** nos Ajustes.
 
 ### v0.4 — teclado de teste na tela
 - Botão **🎹 Teclado**: piano na tela (mouse e teclado do computador), com pedal; abre e fecha com um clique.

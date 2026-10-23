@@ -20,6 +20,7 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   por uma thread (`start_pad_loader`) e tocados no motor com crossfade (`Cmd::PadPlay`). Gerador: `tools/gerar_pads.py`.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
+- Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.
 - **Nunca** chamar algo que trava o `core` (ex.: `load_sf2_async`, janela de arquivo) com o `core` já travado pela tela:
   use os pedidos adiados do `UiState` (`open_sf2_dialog`, `pad_file_dialog`). Foi isso que travou a v0.1.
 - Testes: `cargo test --no-default-features` (núcleo, sem tela). Carga: `cargo test --release --no-default-features bench -- --ignored --nocapture`.

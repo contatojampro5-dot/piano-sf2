@@ -16,25 +16,20 @@ use crate::engine::{Cmd, Engine, Garbage, Stats};
 use crate::midi::{self, SharedMidiStatus};
 use crate::model::*;
 use crate::pads;
+use crate::theme::{self, th};
 
 // ---------- Cores ----------
-const BG: Color32 = Color32::from_rgb(0x0e, 0x10, 0x14);
-const PANEL: Color32 = Color32::from_rgb(0x16, 0x19, 0x1f);
-const STRIP: Color32 = Color32::from_rgb(0x1c, 0x20, 0x27);
-const STRIP_HI: Color32 = Color32::from_rgb(0x24, 0x29, 0x32);
-const TEXT: Color32 = Color32::from_rgb(0xe8, 0xea, 0xed);
-const DIM: Color32 = Color32::from_rgb(0x86, 0x8f, 0x9c);
-const GREEN: Color32 = Color32::from_rgb(0x22, 0xc5, 0x5e);
-const YELLOW: Color32 = Color32::from_rgb(0xf5, 0xc2, 0x1b);
-const RED: Color32 = Color32::from_rgb(0xe5, 0x48, 0x4d);
-const ORANGE: Color32 = Color32::from_rgb(0xff, 0x8a, 0x3d);
+const GREEN: Color32 = Color32::from_rgb(0x30, 0xd1, 0x58);
+const YELLOW: Color32 = Color32::from_rgb(0xff, 0xd6, 0x0a);
+const RED: Color32 = Color32::from_rgb(0xff, 0x45, 0x3a);
+const ORANGE: Color32 = Color32::from_rgb(0xff, 0x9f, 0x0a);
 const LAYER_COLORS: [Color32; LAYERS] = [
-    Color32::from_rgb(0x4f, 0xc3, 0xf7),
-    Color32::from_rgb(0x81, 0xc7, 0x84),
-    Color32::from_rgb(0xff, 0xb7, 0x4d),
-    Color32::from_rgb(0xf0, 0x62, 0x92),
-    Color32::from_rgb(0xba, 0x68, 0xc8),
-    Color32::from_rgb(0x4d, 0xb6, 0xac),
+    Color32::from_rgb(0x64, 0xd2, 0xff),
+    Color32::from_rgb(0x30, 0xd1, 0x58),
+    Color32::from_rgb(0xff, 0xb3, 0x40),
+    Color32::from_rgb(0xff, 0x5e, 0x9a),
+    Color32::from_rgb(0xbf, 0x5a, 0xf2),
+    Color32::from_rgb(0x5e, 0xe6, 0xd0),
 ];
 
 const BUFFERS: [u32; 6] = [0, 64, 128, 256, 512, 1024];
@@ -72,6 +67,8 @@ pub struct PianoApp {
     last_save: Instant,
     audio_retry: Option<Instant>,
     config_path: std::path::PathBuf,
+    /// Aparência já aplicada no estilo do egui (reaplica quando muda nos Ajustes).
+    look_applied: Option<Appearance>,
 }
 
 impl PianoApp {
@@ -138,6 +135,7 @@ impl PianoApp {
             last_save: Instant::now(),
             audio_retry: None,
             config_path,
+            look_applied: None,
         }
     }
 
@@ -180,12 +178,21 @@ impl eframe::App for PianoApp {
         let core_arc = self.core.clone();
         let mut core = core_arc.lock().unwrap();
 
+        // Visual: tema (vidro + fundo celestial).
+        let look = core.cfg.look.clone();
+        if self.look_applied.as_ref() != Some(&look) {
+            theme::set(theme::Theme::build(look.palette, look.frost, look.glow));
+            theme::apply_style(&ctx, look.scale);
+            self.look_applied = Some(look.clone());
+        }
+        theme::paint_background(&ctx, ctx.input(|i| i.time), look.motion, look.stars);
+
         keyboard(&ctx, &mut core, &mut self.ui);
 
         egui::Panel::top("topo")
             .frame(
                 egui::Frame::new()
-                    .fill(PANEL)
+                    .fill(th().bar)
                     .inner_margin(egui::Margin::symmetric(14, 8)),
             )
             .show(ui, |ui| {
@@ -199,7 +206,7 @@ impl eframe::App for PianoApp {
                 );
             });
         egui::Panel::top("abas")
-            .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin {
+            .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: 14,
                 right: 14,
                 top: 6,
@@ -208,7 +215,7 @@ impl eframe::App for PianoApp {
             .show(ui, |ui| tabs_bar(ui, &mut core));
         if core.cfg.tab == 0 {
             egui::Panel::top("cenas")
-                .frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin {
+                .frame(egui::Frame::new().inner_margin(egui::Margin {
                     left: 14,
                     right: 14,
                     top: 10,
@@ -219,7 +226,7 @@ impl eframe::App for PianoApp {
         egui::Panel::bottom("rodape")
             .frame(
                 egui::Frame::new()
-                    .fill(PANEL)
+                    .fill(th().bar)
                     .inner_margin(egui::Margin::symmetric(14, 5)),
             )
             .show(ui, |ui| footer(ui, &mut core, &self.stats));
@@ -227,7 +234,7 @@ impl eframe::App for PianoApp {
             egui::Panel::bottom("teclado")
                 .frame(
                     egui::Frame::new()
-                        .fill(PANEL)
+                        .fill(th().bar)
                         .inner_margin(egui::Margin::symmetric(14, 8)),
                 )
                 .show(ui, |ui| piano_keyboard(ui, &mut core, &mut self.ui));
@@ -235,7 +242,7 @@ impl eframe::App for PianoApp {
             release_keyboard(&mut core, &mut self.ui);
         }
         egui::CentralPanel::no_frame()
-            .frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin {
+            .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: 14,
                 right: 14,
                 top: 6,
@@ -294,7 +301,16 @@ impl eframe::App for PianoApp {
             .map(|c| c.loading.is_some())
             .unwrap_or(false);
         let fast = busy || self.ui.kb_open;
-        ctx.request_repaint_after(Duration::from_millis(if fast { 60 } else { 250 }));
+        let motion = self.core.lock().map(|c| c.cfg.look.motion).unwrap_or(false);
+        // Fundo animado: ~25 quadros/s (leve). Sem animação: só quando algo muda.
+        let ms = if motion {
+            40
+        } else if fast {
+            60
+        } else {
+            250
+        };
+        ctx.request_repaint_after(Duration::from_millis(ms));
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -304,7 +320,7 @@ impl eframe::App for PianoApp {
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        BG.to_normalized_gamma_f32()
+        crate::theme::th().bottom.to_normalized_gamma_f32()
     }
 }
 
@@ -319,13 +335,11 @@ fn setup_style(ctx: &egui::Context) {
         s.text_styles.insert(Monospace, FontId::monospace(15.0));
         s.spacing.item_spacing = Vec2::new(8.0, 6.0);
         s.spacing.button_padding = Vec2::new(10.0, 6.0);
-        s.visuals.panel_fill = BG;
-        s.visuals.window_fill = PANEL;
-        s.visuals.override_text_color = Some(TEXT);
+
         s.visuals.widgets.inactive.corner_radius = CornerRadius::same(8);
         s.visuals.widgets.hovered.corner_radius = CornerRadius::same(8);
         s.visuals.widgets.active.corner_radius = CornerRadius::same(8);
-        s.visuals.widgets.inactive.weak_bg_fill = STRIP_HI;
+
         s.visuals.window_corner_radius = CornerRadius::same(12);
     });
 }
@@ -486,16 +500,16 @@ fn piano_keyboard(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         ui.label(
             RichText::new("clique nas teclas (mais embaixo = mais forte) · computador: A W S E D F T G Y H U J K = notas · Z / X = oitava · espaço = pedal")
                 .size(13.0)
-                .color(DIM),
+                .color(th().dim),
         );
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            let ped = egui::Button::new(RichText::new("PEDAL").strong().color(if st.kb_sustain { BG } else { TEXT }))
-                .fill(if st.kb_sustain { YELLOW } else { STRIP_HI });
+            let ped = egui::Button::new(RichText::new("PEDAL").strong().color(if st.kb_sustain { th().ink } else { th().text }))
+                .fill(if st.kb_sustain { YELLOW } else { th().glass_hi });
             if ui.add(ped).on_hover_text("Segura as notas (como o pedal do piano)").clicked() {
                 st.kb_sustain = !st.kb_sustain;
                 core.sustain(st.kb_sustain);
             }
-            ui.label(RichText::new(format!("teclas do PC: C{}", st.kb_octave)).size(13.0).color(DIM));
+            ui.label(RichText::new(format!("teclas do PC: C{}", st.kb_octave)).size(13.0).color(th().dim));
         });
     });
     ui.add_space(4.0);
@@ -585,7 +599,7 @@ fn piano_keyboard(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                 note_name(n),
                 FontId::proportional(11.0),
                 if on {
-                    BG
+                    th().ink
                 } else {
                     Color32::from_rgb(0x70, 0x76, 0x80)
                 },
@@ -659,7 +673,7 @@ fn top_bar(
                 .unwrap_or_else(|| "Abrir SF2...".into());
             let btn = egui::Button::new(RichText::new(format!("📂 {label}")).size(15.0)).fill(
                 if core.sf2_name.is_some() {
-                    STRIP_HI
+                    th().glass_hi
                 } else {
                     ORANGE.gamma_multiply(0.6)
                 },
@@ -679,7 +693,7 @@ fn top_bar(
 
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if ui
-                .add(egui::Button::new("⚙ Ajustes").fill(STRIP_HI))
+                .add(egui::Button::new("⚙ Ajustes").fill(th().glass_hi))
                 .clicked()
             {
                 st.settings = !st.settings;
@@ -692,11 +706,15 @@ fn top_bar(
             };
             let learn_btn =
                 egui::Button::new(RichText::new(learn_txt).color(if core.learn.active {
-                    BG
+                    th().ink
                 } else {
-                    TEXT
+                    th().text
                 }))
-                .fill(if core.learn.active { ORANGE } else { STRIP_HI });
+                .fill(if core.learn.active {
+                    ORANGE
+                } else {
+                    th().glass_hi
+                });
             if ui
                 .add(learn_btn)
                 .on_hover_text("Ligar um controle da mesinha a um controle da tela")
@@ -705,7 +723,7 @@ fn top_bar(
                 core.learn.active = !core.learn.active;
                 core.learn.target = None;
             }
-            let wiz = egui::Button::new("Configurar mesinha").fill(STRIP_HI);
+            let wiz = egui::Button::new("Configurar mesinha").fill(th().glass_hi);
             if ui
                 .add(wiz)
                 .on_hover_text(
@@ -742,7 +760,7 @@ fn top_bar(
                         Some(ms) => format!("🔊 {} kHz · {:.1} ms", info.sample_rate / 1000, ms),
                         None => format!("🔊 {} kHz", info.sample_rate / 1000),
                     };
-                    ui.label(RichText::new(txt).color(DIM))
+                    ui.label(RichText::new(txt).color(th().dim))
                         .on_hover_text(&info.device);
                 }
                 None => {
@@ -798,7 +816,7 @@ fn top_bar(
                             "CONFIGURAR MESINHA — passo {step} de {total}:  mexa o {control} da mesinha  ({})",
                             target.label()
                         ))
-                        .color(BG)
+                        .color(th().ink)
                         .strong(),
                     );
                     if ui.button("Pular").on_hover_text("Esse controle fica como está").clicked() {
@@ -831,7 +849,11 @@ fn top_bar(
             .corner_radius(6)
             .inner_margin(egui::Margin::symmetric(10, 4))
             .show(ui, |ui| {
-                ui.label(RichText::new(format!("{msg}{last}")).color(BG).strong());
+                ui.label(
+                    RichText::new(format!("{msg}{last}"))
+                        .color(th().ink)
+                        .strong(),
+                );
             });
     }
 }
@@ -878,11 +900,11 @@ fn tabs_bar(ui: &mut Ui, core: &mut Core) {
                 se: 0,
             };
             let fill = if active {
-                BG
+                th().glass_hi
             } else if resp.hovered() {
-                STRIP_HI
+                th().glass_hi.gamma_multiply(0.7)
             } else {
-                STRIP
+                th().glass
             };
             let p = ui.painter();
             p.rect_filled(rect, radius, fill);
@@ -903,7 +925,7 @@ fn tabs_bar(ui: &mut Ui, core: &mut Core) {
                 Align2::CENTER_CENTER,
                 label,
                 FontId::proportional(16.0),
-                if active { TEXT } else { DIM },
+                if active { th().text } else { th().dim },
             );
             if *live {
                 p.circle_filled(
@@ -922,7 +944,7 @@ fn tabs_bar(ui: &mut Ui, core: &mut Core) {
 
 // ---------- Pads ----------
 
-const PAD_COLOR: Color32 = Color32::from_rgb(0xa7, 0x8b, 0xfa);
+const PAD_COLOR: Color32 = Color32::from_rgb(0xbf, 0x8c, 0xff);
 
 fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     let avail = ui.available_size();
@@ -931,7 +953,7 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
 
     // Banco: Escuro / Coral
     ui.horizontal(|ui| {
-        ui.label(RichText::new("Estilo:").color(DIM));
+        ui.label(RichText::new("Estilo:").color(th().dim));
         for b in 0..pads::PAD_BANKS {
             let sel = core.cfg.pad_bank == b;
             let text = RichText::new(format!(
@@ -940,10 +962,10 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                 pads::BANK_HINTS[b]
             ))
             .size(15.0)
-            .color(if sel { BG } else { TEXT });
+            .color(if sel { th().ink } else { th().text });
             let r = ui.add_sized(
                 [290.0, 38.0],
-                egui::Button::new(text).fill(if sel { PAD_COLOR } else { STRIP_HI }),
+                egui::Button::new(text).fill(if sel { PAD_COLOR } else { th().glass_hi }),
             );
             if !learnable(ui, core, &r, Target::PadBank) && r.clicked() {
                 core.set_pad_bank(b);
@@ -953,7 +975,7 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             ui.label(
                 RichText::new("Sem terça: o pad de C serve para C e Cm.")
                     .size(13.0)
-                    .color(DIM),
+                    .color(th().dim),
             );
         });
     });
@@ -961,32 +983,42 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
 
     let grid_w = avail.x - side_w - gap;
     let rows_h = ui.available_height() - 30.0;
-    let cell = ((grid_w - 5.0 * gap) / 6.0)
-        .min((rows_h - gap) / 2.0)
-        .max(70.0);
+    // Escolhe a grade (6×2, 4×3 ou 3×4) que deixa os quadrados maiores na tela.
+    let (cols, rows, cell) = [(6usize, 2usize), (4, 3), (3, 4)]
+        .iter()
+        .map(|&(c, r)| {
+            let cell = ((grid_w - (c as f32 - 1.0) * gap) / c as f32)
+                .min((rows_h - (r as f32 - 1.0) * gap) / r as f32);
+            (c, r, cell)
+        })
+        .fold(
+            (6, 2, 0.0f32),
+            |best, x| if x.2 > best.2 { x } else { best },
+        );
+    let cell = cell.max(70.0);
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing = Vec2::splat(gap);
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing = Vec2::splat(gap);
-            for row in 0..2 {
+            for row in 0..rows {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = gap;
-                    for col in 0..6 {
-                        pad_button(ui, core, st, row * 6 + col, cell);
+                    for col in 0..cols {
+                        pad_button(ui, core, st, row * cols + col, cell);
                     }
                 });
             }
             ui.label(
                 RichText::new("Clique num tom para tocar · clique de novo para parar · trocar de tom faz a passagem suave · botão direito: usar o seu próprio arquivo")
                     .size(13.0)
-                    .color(DIM),
+                    .color(th().dim),
             );
         });
 
         // Coluna da direita: volume, anterior/próximo, parar
-        let h = 2.0 * cell + gap;
+        let h = rows as f32 * cell + (rows as f32 - 1.0) * gap;
         let (rect, _) = ui.allocate_exact_size(Vec2::new(side_w, h), Sense::hover());
-        ui.painter_at(rect).rect_filled(rect, 12, PANEL);
+        crate::theme::glass(ui.painter(), rect, 18, false, None);
         let inner = rect.shrink2(Vec2::new(12.0, 10.0));
         let mut child = ui.new_child(
             egui::UiBuilder::new()
@@ -1010,11 +1042,11 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         }
         ui.horizontal(|ui| {
             let w = (inner.width() - ui.spacing().item_spacing.x) / 2.0;
-            let prev = ui.add_sized([w, 30.0], egui::Button::new("◀").fill(STRIP_HI)).on_hover_text("Tom anterior");
+            let prev = ui.add_sized([w, 30.0], egui::Button::new("◀").fill(th().glass_hi)).on_hover_text("Tom anterior");
             if !learnable(ui, core, &prev, Target::PadPrev) && prev.clicked() {
                 core.pad_step(-1);
             }
-            let next = ui.add_sized([w, 30.0], egui::Button::new("▶").fill(STRIP_HI)).on_hover_text("Próximo tom");
+            let next = ui.add_sized([w, 30.0], egui::Button::new("▶").fill(th().glass_hi)).on_hover_text("Próximo tom");
             if !learnable(ui, core, &next, Target::PadNext) && next.clicked() {
                 core.pad_step(1);
             }
@@ -1022,7 +1054,7 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         let stop = ui.add_sized(
             [inner.width(), 44.0],
             egui::Button::new(RichText::new("■ PARAR PAD").strong().color(Color32::WHITE))
-                .fill(if core.pad_active.is_some() { ORANGE } else { STRIP_HI }),
+                .fill(if core.pad_active.is_some() { ORANGE } else { th().glass_hi }),
         );
         if !learnable(ui, core, &stop, Target::PadStop) && stop.clicked() {
             core.pad_stop();
@@ -1042,37 +1074,22 @@ fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: 
             .unwrap_or_default()
     });
     let sharp = pads::KEY_NAMES[key].contains('#');
-    let base = if sharp {
-        Color32::from_rgb(0x15, 0x17, 0x1c)
-    } else {
-        STRIP_HI
-    };
-    let fill = if active {
-        PAD_COLOR.gamma_multiply(0.9)
-    } else if resp.hovered() {
-        Color32::from_rgb(0x2e, 0x34, 0x3f)
-    } else {
-        base
-    };
     let p = ui.painter();
-    if active {
-        p.rect_filled(rect.expand(4.0), 16, PAD_COLOR.gamma_multiply(0.25));
+    // Vidro; sustenidos um pouco mais escuros (como as teclas pretas).
+    if sharp && !active {
+        p.rect_filled(rect, 20, Color32::from_black_alpha(70));
     }
-    p.rect_filled(rect, 14, fill);
-    p.rect_stroke(
-        rect,
-        14,
-        Stroke::new(
-            if active { 2.0 } else { 1.0 },
-            if active {
-                Color32::WHITE
-            } else {
-                Color32::from_rgb(0x34, 0x3a, 0x45)
-            },
-        ),
-        StrokeKind::Inside,
-    );
-    let tc = if active { BG } else { TEXT };
+    let hover = ui
+        .ctx()
+        .animate_bool_with_time(resp.id.with("h"), resp.hovered(), 0.15);
+    let on = ui
+        .ctx()
+        .animate_bool_with_time(resp.id.with("on"), active, 0.35);
+    theme::glass(p, rect, 20, hover > 0.5, (on > 0.01).then_some(PAD_COLOR));
+    if on > 0.01 {
+        p.rect_filled(rect, 20, PAD_COLOR.gamma_multiply(0.85 * on));
+    }
+    let tc = if active { th().ink } else { th().text };
     p.text(
         rect.center() - Vec2::new(0.0, size * 0.08),
         Align2::CENTER_CENTER,
@@ -1085,7 +1102,7 @@ fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: 
         Align2::CENTER_CENTER,
         pads::KEY_NAMES_PT[key],
         FontId::proportional((size * 0.12).clamp(12.0, 18.0)),
-        if active { BG } else { DIM },
+        if active { th().ink } else { th().dim },
     );
     let status = if active && !ready {
         Some("carregando...".to_string())
@@ -1098,14 +1115,14 @@ fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: 
         let galley = ui.painter().layout(
             sx,
             FontId::proportional(11.0),
-            if active { BG } else { PAD_COLOR },
+            if active { th().ink } else { PAD_COLOR },
             rect.width() - 12.0,
         );
         let pos = Pos2::new(
             rect.center().x - galley.size().x / 2.0,
             rect.bottom() - 8.0 - galley.size().y,
         );
-        ui.painter().galley(pos, galley, TEXT);
+        ui.painter().galley(pos, galley, th().text);
     }
 
     if !learnable(ui, core, &resp, Target::Pad(key)) && resp.clicked() {
@@ -1146,10 +1163,10 @@ fn scenes_bar(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             let name = core.cfg.scenes[n].name.clone();
             let text = RichText::new(format!("F{}  {}", n + 1, name))
                 .size(15.0)
-                .color(if current { BG } else if filled { TEXT } else { DIM });
+                .color(if current { th().ink } else if filled { th().text } else { th().dim });
             let btn = egui::Button::new(text)
-                .fill(if current { GREEN } else if filled { STRIP_HI } else { STRIP })
-                .stroke(if current { Stroke::NONE } else { Stroke::new(1.0, STRIP_HI) });
+                .fill(if current { GREEN } else if filled { th().glass_hi } else { th().glass })
+                .stroke(if current { Stroke::NONE } else { Stroke::new(1.0, th().glass_hi) });
             let resp = ui.add_sized([w, 44.0], btn);
             if core.learn.active {
                 learn_outline(ui, &resp, core, Target::Scene(n));
@@ -1176,7 +1193,7 @@ fn scenes_bar(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             });
         }
         let target = core.cfg.current_scene;
-        let save = egui::Button::new(RichText::new("💾 Salvar cena").size(15.0)).fill(STRIP_HI);
+        let save = egui::Button::new(RichText::new("💾 Salvar cena").size(15.0)).fill(th().glass_hi);
         let resp = ui.add_sized([save_w, 44.0], save).on_hover_text(
             "Guarda os sons, volumes e liga/desliga na cena selecionada.\nClique com o botão direito numa cena para renomear.",
         );
@@ -1192,9 +1209,9 @@ fn scenes_bar(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         let kb = egui::Button::new(
             RichText::new("🎹 Teclado")
                 .size(15.0)
-                .color(if st.kb_open { BG } else { TEXT }),
+                .color(if st.kb_open { th().ink } else { th().text }),
         )
-        .fill(if st.kb_open { LAYER_COLORS[0] } else { STRIP_HI });
+        .fill(if st.kb_open { LAYER_COLORS[0] } else { th().glass_hi });
         if ui
             .add_sized([kb_w, 44.0], kb)
             .on_hover_text("Mostra/esconde um piano na tela para testar os sons sem o teclado ligado")
@@ -1263,15 +1280,14 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     let compact = compact_height(size.y);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 12, if playing { STRIP_HI } else { STRIP });
-    if playing {
-        painter.rect_stroke(
-            rect,
-            12,
-            Stroke::new(2.0, PAD_COLOR.gamma_multiply(0.8)),
-            StrokeKind::Inside,
-        );
-    }
+    let _ = painter;
+    crate::theme::glass(
+        ui.painter(),
+        rect,
+        18,
+        playing,
+        playing.then_some(PAD_COLOR),
+    );
     let inner = rect.shrink2(Vec2::new(8.0, 8.0));
     let mut child = ui.new_child(
         egui::UiBuilder::new()
@@ -1297,7 +1313,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
             Align2::CENTER_CENTER,
             "7 · PAD",
             FontId::proportional(17.0),
-            if playing { TEXT } else { DIM },
+            if playing { th().text } else { th().dim },
         );
     });
     // Tom atual (grande) — o knob 7 da mesinha escolhe o tom.
@@ -1305,11 +1321,11 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     let r = ui.add_sized(
         [inner.width(), if compact { 34.0 } else { 50.0 }],
         egui::Button::new(RichText::new(key).size(26.0).strong().color(if playing {
-            BG
+            th().ink
         } else {
-            DIM
+            th().dim
         }))
-        .fill(if playing { PAD_COLOR } else { STRIP }),
+        .fill(if playing { PAD_COLOR } else { th().glass }),
     );
     let r = r.on_hover_text("Tom do pad (knob 7 da mesinha). Clique para ir à aba Pads.");
     if !learnable(ui, core, &r, Target::PadKnob) && r.clicked() {
@@ -1318,7 +1334,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     ui.label(
         RichText::new(pads::BANK_NAMES[core.cfg.pad_bank])
             .size(12.0)
-            .color(DIM),
+            .color(th().dim),
     );
     let stop = ui.add_sized(
         [inner.width(), if compact { 30.0 } else { 40.0 }],
@@ -1326,16 +1342,16 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
             RichText::new("PARAR")
                 .strong()
                 .size(15.0)
-                .color(if playing { BG } else { DIM }),
+                .color(if playing { th().ink } else { th().dim }),
         )
-        .fill(if playing { ORANGE } else { STRIP }),
+        .fill(if playing { ORANGE } else { th().glass }),
     );
     if !learnable(ui, core, &stop, Target::PadStop) && stop.clicked() {
         core.pad_stop();
     }
     let bank = ui.add_sized(
         [inner.width(), if compact { 24.0 } else { 28.0 }],
-        egui::Button::new(RichText::new("ESTILO").size(13.0).color(DIM)).fill(STRIP),
+        egui::Button::new(RichText::new("ESTILO").size(13.0).color(th().dim)).fill(th().glass),
     );
     let bank = bank.on_hover_text("Troca Escuro → Coral → Suave");
     if !learnable(ui, core, &bank, Target::PadBank) && bank.clicked() {
@@ -1348,7 +1364,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
         ui,
         Vec2::new(inner.width(), fader_h),
         core.cfg.pad_volume,
-        if playing { PAD_COLOR } else { DIM },
+        if playing { PAD_COLOR } else { th().dim },
         core.learn.active,
     );
     learnable(ui, core, &resp, Target::PadVolume);
@@ -1361,7 +1377,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
         let prev = ui
             .add_sized(
                 [w, if compact { 26.0 } else { 34.0 }],
-                egui::Button::new("◀").fill(STRIP),
+                egui::Button::new("◀").fill(th().glass),
             )
             .on_hover_text("Tom anterior");
         if !learnable(ui, core, &prev, Target::PadPrev) && prev.clicked() {
@@ -1370,7 +1386,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
         let next = ui
             .add_sized(
                 [w, if compact { 26.0 } else { 34.0 }],
-                egui::Button::new("▶").fill(STRIP),
+                egui::Button::new("▶").fill(th().glass),
             )
             .on_hover_text("Próximo tom");
         if !learnable(ui, core, &next, Target::PadNext) && next.clicked() {
@@ -1391,15 +1407,8 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
     let compact = compact_height(size.y);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 12, if layer.on { STRIP_HI } else { STRIP });
-    if audible {
-        painter.rect_stroke(
-            rect,
-            12,
-            Stroke::new(2.0, color.gamma_multiply(0.8)),
-            StrokeKind::Inside,
-        );
-    }
+    let _ = painter;
+    crate::theme::glass(ui.painter(), rect, 18, layer.on, audible.then_some(color));
     let inner = rect.shrink2(Vec2::new(8.0, if compact { 6.0 } else { 8.0 }));
     let mut child = ui.new_child(
         egui::UiBuilder::new()
@@ -1425,7 +1434,7 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
             Align2::CENTER_CENTER,
             format!("{}", i + 1),
             FontId::proportional(if compact { 14.0 } else { 17.0 }),
-            if audible { TEXT } else { DIM },
+            if audible { th().text } else { th().dim },
         );
     });
 
@@ -1446,16 +1455,16 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
         ui.label(
             RichText::new(format!("Reverb {:.0}%", layer.reverb * 100.0))
                 .size(12.0)
-                .color(DIM),
+                .color(th().dim),
         );
     }
 
     // Liga/desliga + Solo (lado a lado quando a tela é baixa)
     let (txt, fill, tc) = match (layer.on, compact) {
-        (true, false) => ("LIGADA", GREEN, BG),
-        (false, false) => ("DESLIGADA", STRIP, DIM),
-        (true, true) => ("LIGA", GREEN, BG),
-        (false, true) => ("DESL.", STRIP, DIM),
+        (true, false) => ("LIGADA", GREEN, th().ink),
+        (false, false) => ("DESLIGADA", th().glass, th().dim),
+        (true, true) => ("LIGA", GREEN, th().ink),
+        (false, true) => ("DESL.", th().glass, th().dim),
     };
     let toggle_btn = egui::Button::new(
         RichText::new(txt)
@@ -1464,14 +1473,20 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
             .color(tc),
     )
     .fill(fill)
-    .stroke(Stroke::new(1.0, if layer.on { GREEN } else { STRIP_HI }));
+    .stroke(Stroke::new(
+        1.0,
+        if layer.on { GREEN } else { th().glass_hi },
+    ));
     let solo_btn = egui::Button::new(
         RichText::new(if compact { "S" } else { "SOLO" })
             .size(13.0)
-            .color(if layer.solo { BG } else { DIM }),
+            .color(if layer.solo { th().ink } else { th().dim }),
     )
-    .fill(if layer.solo { YELLOW } else { STRIP })
-    .stroke(Stroke::new(1.0, if layer.solo { YELLOW } else { STRIP_HI }));
+    .fill(if layer.solo { YELLOW } else { th().glass })
+    .stroke(Stroke::new(
+        1.0,
+        if layer.solo { YELLOW } else { th().glass_hi },
+    ));
     let (t_resp, s_resp) = if compact {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
@@ -1499,13 +1514,13 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
     ui.label(
         RichText::new(format!("{:.0}%", layer.volume * 100.0))
             .monospace()
-            .color(if audible { TEXT } else { DIM }),
+            .color(if audible { th().text } else { th().dim }),
     );
     let (resp, newv) = fader(
         ui,
         Vec2::new(inner.width(), fader_h),
         layer.volume,
-        if audible { color } else { DIM },
+        if audible { color } else { th().dim },
         core.learn.active,
     );
     learnable(ui, core, &resp, Target::Volume(i));
@@ -1523,9 +1538,13 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
         egui::Button::new(
             RichText::new(&name)
                 .size(if compact { 12.0 } else { 13.0 })
-                .color(if layer.preset.is_some() { TEXT } else { DIM }),
+                .color(if layer.preset.is_some() {
+                    th().text
+                } else {
+                    th().dim
+                }),
         )
-        .fill(STRIP)
+        .fill(th().glass)
         .truncate()
         .min_size(Vec2::new(w, 0.0))
     };
@@ -1536,14 +1555,14 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
             ui.spacing_mut().button_padding = Vec2::new(2.0, 2.0);
             let aw = 22.0;
             if ui
-                .add_sized([aw, 28.0], egui::Button::new("◀").fill(STRIP))
+                .add_sized([aw, 28.0], egui::Button::new("◀").fill(th().glass))
                 .clicked()
             {
                 step = -1;
             }
             let r = ui.add_sized([inner.width() - 2.0 * aw - 4.0, 28.0], name_btn(0.0));
             if ui
-                .add_sized([aw, 28.0], egui::Button::new("▶").fill(STRIP))
+                .add_sized([aw, 28.0], egui::Button::new("▶").fill(th().glass))
                 .clicked()
             {
                 step = 1;
@@ -1557,14 +1576,14 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
         ui.horizontal(|ui| {
             let w = (inner.width() - ui.spacing().item_spacing.x) / 2.0;
             if ui
-                .add_sized([w, 22.0], egui::Button::new("◀").fill(STRIP))
+                .add_sized([w, 22.0], egui::Button::new("◀").fill(th().glass))
                 .on_hover_text("Timbre anterior")
                 .clicked()
             {
                 step = -1;
             }
             if ui
-                .add_sized([w, 22.0], egui::Button::new("▶").fill(STRIP))
+                .add_sized([w, 22.0], egui::Button::new("▶").fill(th().glass))
                 .on_hover_text("Próximo timbre")
                 .clicked()
             {
@@ -1587,7 +1606,7 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
 fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     let compact = compact_height(size.y);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    ui.painter_at(rect).rect_filled(rect, 12, PANEL);
+    crate::theme::glass(ui.painter(), rect, 18, false, None);
     let inner = rect.shrink2(Vec2::new(10.0, 8.0));
     let mut child = ui.new_child(
         egui::UiBuilder::new()
@@ -1603,13 +1622,13 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
 
     // Transpor
     if !compact {
-        ui.label(RichText::new("Transpor").size(12.0).color(DIM));
+        ui.label(RichText::new("Transpor").size(12.0).color(th().dim));
     }
     ui.horizontal(|ui| {
         let w = (inner.width() - 2.0 * ui.spacing().item_spacing.x) / 3.0;
         let down = ui.add_sized(
             [w, if compact { 26.0 } else { 32.0 }],
-            egui::Button::new("−").fill(STRIP_HI),
+            egui::Button::new("−").fill(th().glass_hi),
         );
         if !learnable(ui, core, &down, Target::TransposeDown) && down.clicked() {
             core.set_transpose(core.cfg.mix.transpose - 1);
@@ -1622,19 +1641,19 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
         };
         let r = ui.add_sized(
             [w, if compact { 26.0 } else { 32.0 }],
-            egui::Button::new(
-                RichText::new(tl)
-                    .strong()
-                    .color(if t == 0 { TEXT } else { ORANGE }),
-            )
-            .fill(STRIP),
+            egui::Button::new(RichText::new(tl).strong().color(if t == 0 {
+                th().text
+            } else {
+                ORANGE
+            }))
+            .fill(th().glass),
         );
         if r.on_hover_text("Clique para voltar a 0").clicked() {
             core.set_transpose(0);
         }
         let up = ui.add_sized(
             [w, if compact { 26.0 } else { 32.0 }],
-            egui::Button::new("+").fill(STRIP_HI),
+            egui::Button::new("+").fill(th().glass_hi),
         );
         if !learnable(ui, core, &up, Target::TransposeUp) && up.clicked() {
             core.set_transpose(core.cfg.mix.transpose + 1);
@@ -1680,13 +1699,13 @@ fn footer(ui: &mut Ui, core: &mut Core, stats: &Stats) {
                 ui.label(RichText::new(m).color(ORANGE));
             }
             None => {
-                ui.label(RichText::new("Setas ◀ ▶ trocam a cena  ·  F1–F8 cenas  ·  Esc pânico  ·  botão direito na cena: salvar/renomear").size(13.0).color(DIM));
+                ui.label(RichText::new("Setas ◀ ▶ trocam a cena  ·  F1–F8 cenas  ·  Esc pânico  ·  botão direito na cena: salvar/renomear").size(13.0).color(th().dim));
             }
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let peak = stats.peak_milli.load(Ordering::Relaxed) as f32 / 1000.0;
             meter(ui, peak);
-            ui.label(RichText::new(format!("{} vozes", stats.voices.load(Ordering::Relaxed))).size(13.0).color(DIM));
+            ui.label(RichText::new(format!("{} vozes", stats.voices.load(Ordering::Relaxed))).size(13.0).color(th().dim));
             let over = stats.overruns.load(Ordering::Relaxed);
             if over > 0 {
                 ui.label(RichText::new(format!("⚠ {over} engasgos")).size(13.0).color(YELLOW))
@@ -1699,7 +1718,7 @@ fn footer(ui: &mut Ui, core: &mut Core, stats: &Stats) {
 fn meter(ui: &mut Ui, level: f32) {
     let (r, _) = ui.allocate_exact_size(Vec2::new(140.0, 10.0), Sense::hover());
     let p = ui.painter();
-    p.rect_filled(r, 3, STRIP_HI);
+    p.rect_filled(r, 3, th().glass_hi);
     let w = r.width() * level.clamp(0.0, 1.0);
     let c = if level < 0.7 {
         GREEN
@@ -1733,7 +1752,7 @@ fn learn_outline(ui: &Ui, resp: &egui::Response, core: &Core, target: Target) {
     } else if linked {
         ORANGE.gamma_multiply(0.45)
     } else {
-        DIM.gamma_multiply(0.5)
+        th().dim.gamma_multiply(0.5)
     };
     let p = ui.painter();
     if selected {
@@ -1777,54 +1796,72 @@ fn fader(
             new = Some(0.8);
         }
     }
-    let v = new.unwrap_or(value);
+    let target = new.unwrap_or(value);
+    // Desliza macio até o valor (ex.: quando a mesinha pula de posição).
+    let v = if resp.dragged() {
+        ui.ctx().animate_value_with_time(resp.id, target, 0.0)
+    } else {
+        ui.ctx().animate_value_with_time(resp.id, target, 0.12)
+    };
     let p = ui.painter();
     let cx = rect.center().x;
     // marcas
     for k in 0..=10 {
         let y = bottom - travel * k as f32 / 10.0;
-        let w = if k % 5 == 0 { 14.0 } else { 8.0 };
+        let w = if k % 5 == 0 { 10.0 } else { 5.0 };
+        let c = th().dim.gamma_multiply(if k % 5 == 0 { 0.55 } else { 0.3 });
         p.line_segment(
-            [Pos2::new(cx - 18.0 - w, y), Pos2::new(cx - 18.0, y)],
-            Stroke::new(1.0, DIM.gamma_multiply(0.5)),
+            [Pos2::new(cx - 16.0 - w, y), Pos2::new(cx - 16.0, y)],
+            Stroke::new(1.0, c),
         );
         p.line_segment(
-            [Pos2::new(cx + 18.0, y), Pos2::new(cx + 18.0 + w, y)],
-            Stroke::new(1.0, DIM.gamma_multiply(0.5)),
+            [Pos2::new(cx + 16.0, y), Pos2::new(cx + 16.0 + w, y)],
+            Stroke::new(1.0, c),
         );
     }
-    // trilho
-    let track = Rect::from_min_max(Pos2::new(cx - 4.0, top), Pos2::new(cx + 4.0, bottom));
-    p.rect_filled(track, 4, Color32::from_rgb(0x0a, 0x0b, 0x0e));
+    // trilho de vidro
+    let track = Rect::from_min_max(Pos2::new(cx - 3.0, top), Pos2::new(cx + 3.0, bottom));
+    p.rect_filled(track, 3, Color32::from_black_alpha(110));
+    p.rect_stroke(track, 3, Stroke::new(1.0, th().edge), StrokeKind::Outside);
     let y = bottom - travel * v;
+    let fill = Rect::from_min_max(Pos2::new(cx - 3.0, y), Pos2::new(cx + 3.0, bottom));
+    p.rect_filled(fill, 3, color);
+    // brilho da parte cheia
     p.rect_filled(
-        Rect::from_min_max(Pos2::new(cx - 4.0, y), Pos2::new(cx + 4.0, bottom)),
-        4,
-        color.gamma_multiply(0.85),
+        fill.expand2(Vec2::new(3.0, 0.0)),
+        6,
+        color.gamma_multiply(0.18),
     );
-    // botão do fader
-    let cap_w = (rect.width() * 0.62).clamp(34.0, 64.0);
-    let cap = Rect::from_center_size(Pos2::new(cx, y), Vec2::new(cap_w, cap_h));
+    // botão do fader: "pílula" branca de vidro com sombra (estilo iPhone)
+    let cap_w = (rect.width() * 0.58).clamp(34.0, 60.0);
+    let cap = Rect::from_center_size(Pos2::new(cx, y), Vec2::new(cap_w, cap_h - 4.0));
     let hot = resp.dragged() || resp.hovered();
+    let shadow = egui::epaint::Shadow {
+        offset: [0, 3],
+        blur: 10,
+        spread: 0,
+        color: Color32::from_black_alpha(110),
+    };
+    p.add(shadow.as_shape(cap, CornerRadius::same(11)));
     p.rect_filled(
         cap,
-        5,
+        11,
         if hot {
-            Color32::from_rgb(0x5a, 0x62, 0x70)
+            Color32::from_rgb(0xff, 0xff, 0xff)
         } else {
-            Color32::from_rgb(0x44, 0x4a, 0x55)
+            Color32::from_rgb(0xec, 0xee, 0xf3)
         },
     );
     p.rect_stroke(
         cap,
-        5,
-        Stroke::new(1.0, Color32::from_rgb(0x70, 0x78, 0x86)),
+        11,
+        Stroke::new(1.0, Color32::from_white_alpha(200)),
         StrokeKind::Inside,
     );
     p.line_segment(
         [
-            Pos2::new(cap.left() + 5.0, y),
-            Pos2::new(cap.right() - 5.0, y),
+            Pos2::new(cap.left() + 8.0, y),
+            Pos2::new(cap.right() - 8.0, y),
         ],
         Stroke::new(2.0, color),
     );
@@ -1855,11 +1892,32 @@ fn knob(
             }
         }
     }
-    let v = new.unwrap_or(value);
+    let v = ui.ctx().animate_value_with_time(
+        resp.id,
+        new.unwrap_or(value),
+        if resp.dragged() { 0.0 } else { 0.12 },
+    );
     let p = ui.painter();
     let c = rect.center();
     let r = d / 2.0 - 3.0;
-    p.circle_filled(c, r, Color32::from_rgb(0x2c, 0x31, 0x3a));
+    // knob de vidro com sombra
+    let shadow = egui::epaint::Shadow {
+        offset: [0, 3],
+        blur: 12,
+        spread: 0,
+        color: Color32::from_black_alpha(90),
+    };
+    p.add(shadow.as_shape(
+        Rect::from_center_size(c, Vec2::splat(r * 1.6)),
+        CornerRadius::same((r * 0.8) as u8),
+    ));
+    p.circle_filled(c, r, th().glass_hi);
+    p.circle_filled(
+        c,
+        r * 0.62,
+        Color32::from_white_alpha(if resp.hovered() { 40 } else { 22 }),
+    );
+    p.circle_stroke(c, r, Stroke::new(1.0, th().edge));
     let start = std::f32::consts::PI * 0.75;
     let sweep = std::f32::consts::PI * 1.5;
     let arc = |from: f32, to: f32| -> Vec<Pos2> {
@@ -1873,7 +1931,7 @@ fn knob(
     };
     p.add(Shape::line(
         arc(0.0, 1.0),
-        Stroke::new(3.0, Color32::from_rgb(0x0a, 0x0b, 0x0e)),
+        Stroke::new(3.0, Color32::from_black_alpha(110)),
     ));
     if v > 0.005 {
         p.add(Shape::line(arc(0.0, v), Stroke::new(3.0, color)));
@@ -1881,10 +1939,10 @@ fn knob(
     let a = start + sweep * v;
     p.line_segment(
         [
-            c,
+            Pos2::new(c.x + a.cos() * (r * 0.25), c.y + a.sin() * (r * 0.25)),
             Pos2::new(c.x + a.cos() * (r - 6.0), c.y + a.sin() * (r - 6.0)),
         ],
-        Stroke::new(2.5, TEXT),
+        Stroke::new(2.5, Color32::WHITE),
     );
     (resp, new)
 }
@@ -1929,7 +1987,7 @@ fn preset_picker(ctx: &egui::Context, core: &mut Core, st: &mut UiState) {
             ui.label(
                 RichText::new(format!("{} timbres", list.len()))
                     .size(12.0)
-                    .color(DIM),
+                    .color(th().dim),
             );
             let row_h = 30.0;
             egui::ScrollArea::vertical().auto_shrink(false).show_rows(
@@ -1989,6 +2047,49 @@ fn settings_window(
         .default_size([560.0, 560.0])
         .show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.heading("Aparência");
+                let mut look = core.cfg.look.clone();
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("Fundo:");
+                    for (k, pal) in theme::PALETTES.iter().enumerate() {
+                        let sel = look.palette == k;
+                        let b = egui::Button::new(RichText::new(pal.name).color(if sel { th().ink } else { th().text }))
+                            .fill(if sel { Color32::from_rgb(0x0a, 0x84, 0xff) } else { th().glass });
+                        if ui.add(b).clicked() {
+                            look.palette = k;
+                        }
+                    }
+                });
+                egui::Grid::new("aparencia").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                    ui.label("Vidro (transparente ↔ fosco)");
+                    ui.add(egui::Slider::new(&mut look.frost, 0.0..=1.0).show_value(false));
+                    ui.end_row();
+                    ui.label("Brilho em volta do que está ligado");
+                    ui.add(egui::Slider::new(&mut look.glow, 0.0..=1.0).show_value(false));
+                    ui.end_row();
+                    ui.label("Tamanho da tela");
+                    ui.add(egui::Slider::new(&mut look.scale, 0.8..=1.3).custom_formatter(|v, _| format!("{:.0}%", v * 100.0)));
+                    ui.end_row();
+                });
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut look.motion, "Fundo em movimento");
+                    ui.checkbox(&mut look.stars, "Estrelas");
+                });
+                ui.label(
+                    RichText::new("Dica: no culto, se o computador ficar pesado, desligue \"Fundo em movimento\".")
+                        .size(13.0)
+                        .color(th().dim),
+                );
+                if look != core.cfg.look {
+                    core.cfg.look = look;
+                    core.dirty = true;
+                }
+                if ui.button("↺ Visual padrão").clicked() {
+                    core.cfg.look = Appearance::default();
+                    core.dirty = true;
+                }
+
+                ui.separator();
                 ui.heading("Som");
                 egui::Grid::new("som").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
                     ui.label("Saída");
@@ -2035,7 +2136,7 @@ fn settings_window(
                     });
                     ui.end_row();
                 });
-                ui.label(RichText::new("Menos atraso pesa mais no computador. Se ouvir estalos, aumente o buffer.").size(13.0).color(DIM));
+                ui.label(RichText::new("Menos atraso pesa mais no computador. Se ouvir estalos, aumente o buffer.").size(13.0).color(th().dim));
                 if let Some(e) = &audio.error {
                     ui.label(RichText::new(format!("⚠ {e}")).color(RED));
                 }
@@ -2044,7 +2145,7 @@ fn settings_window(
                 ui.heading("Aparelhos MIDI");
                 let ports = midi_status.lock().map(|s| s.ports.clone()).unwrap_or_default();
                 if ports.is_empty() {
-                    ui.label(RichText::new("Nenhum aparelho encontrado. Ligue o piano e a mesinha pelo cabo USB.").color(DIM));
+                    ui.label(RichText::new("Nenhum aparelho encontrado. Ligue o piano e a mesinha pelo cabo USB.").color(th().dim));
                 }
                 egui::Grid::new("midi").num_columns(3).spacing([12.0, 8.0]).show(ui, |ui| {
                     for p in &ports {
@@ -2094,7 +2195,7 @@ fn settings_window(
                     egui::Grid::new("maps").num_columns(3).striped(true).show(ui, |ui| {
                         for (k, m) in core.cfg.mappings.iter().enumerate() {
                             ui.label(m.target.label());
-                            ui.label(RichText::new(m.source.label()).color(DIM));
+                            ui.label(RichText::new(m.source.label()).color(th().dim));
                             if ui.small_button("✖").on_hover_text("Remover").clicked() {
                                 remove = Some(k);
                             }
@@ -2108,8 +2209,8 @@ fn settings_window(
                 });
 
                 ui.separator();
-                ui.label(RichText::new(format!("Configurações salvas em: {}", config_path.display())).size(12.0).color(DIM));
-                ui.label(RichText::new(concat!("Piano SF2 v", env!("CARGO_PKG_VERSION"))).size(12.0).color(DIM));
+                ui.label(RichText::new(format!("Configurações salvas em: {}", config_path.display())).size(12.0).color(th().dim));
+                ui.label(RichText::new(concat!("Piano SF2 v", env!("CARGO_PKG_VERSION"))).size(12.0).color(th().dim));
             });
         });
     if !open {

@@ -347,9 +347,40 @@ pub struct Config {
     pub pad_files: Vec<PadFile>,
     /// Aba aberta (0 = Sons SF2, 1 = Pads).
     pub tab: usize,
+    pub look: Appearance,
     /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
     #[serde(default)]
     pub mappings_version: u32,
+}
+
+/// Aparência da tela (Ajustes → Aparência).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Appearance {
+    /// Fundo: 0 Celestial, 1 Aurora, 2 Pôr do sol, 3 Grafite.
+    pub palette: usize,
+    /// Vidro: 0 = transparente, 1 = bem fosco.
+    pub frost: f32,
+    /// Brilho colorido em volta do que está ligado.
+    pub glow: f32,
+    /// Fundo que se mexe devagar (desligar = mais leve).
+    pub motion: bool,
+    pub stars: bool,
+    /// Tamanho da tela (zoom).
+    pub scale: f32,
+}
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            palette: 0,
+            frost: 0.45,
+            glow: 0.6,
+            motion: true,
+            stars: true,
+            scale: 1.0,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -378,6 +409,7 @@ impl Default for Config {
             pad_files: Vec::new(),
             tab: 0,
             mappings_version: MAPPINGS_VERSION,
+            look: Appearance::default(),
         }
     }
 }
@@ -411,6 +443,9 @@ impl Config {
         self.pad_volume = self.pad_volume.clamp(0.0, 1.0);
         self.pad_bank %= crate::pads::PAD_BANKS;
         self.tab = self.tab.min(1);
+        self.look.frost = self.look.frost.clamp(0.0, 1.0);
+        self.look.glow = self.look.glow.clamp(0.0, 1.0);
+        self.look.scale = self.look.scale.clamp(0.75, 1.5);
         self.pad_files
             .retain(|f| f.bank < crate::pads::PAD_BANKS && f.key < crate::pads::PAD_KEYS);
         // Nada pode apontar para camada que não existe mais (eram 8, agora são 6).
