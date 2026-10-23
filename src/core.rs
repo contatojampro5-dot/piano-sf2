@@ -110,6 +110,27 @@ pub struct Core {
 
 pub type SharedCore = Arc<Mutex<Core>>;
 
+/// Notas apertadas agora (piano de verdade ou teclado da tela), para acender as teclas na tela.
+static HELD: [AtomicU64; 2] = [AtomicU64::new(0), AtomicU64::new(0)];
+
+pub fn mark_note(key: u8, down: bool) {
+    let (i, bit) = ((key as usize >> 6) & 1, 1u64 << (key & 63));
+    if down {
+        HELD[i].fetch_or(bit, Ordering::Relaxed);
+    } else {
+        HELD[i].fetch_and(!bit, Ordering::Relaxed);
+    }
+}
+
+pub fn note_is_held(key: u8) -> bool {
+    HELD[(key as usize >> 6) & 1].load(Ordering::Relaxed) & (1u64 << (key & 63)) != 0
+}
+
+fn clear_held() {
+    HELD[0].store(0, Ordering::Relaxed);
+    HELD[1].store(0, Ordering::Relaxed);
+}
+
 impl Core {
     pub fn new(cfg: Config, tx: Sender<Cmd>) -> Self {
         Self {
@@ -421,7 +442,29 @@ impl Core {
         self.dirty = true;
     }
 
+    /// Teclado da tela: toca/solta uma nota como se viesse do piano.
+    pub fn note_on(&mut self, key: u8, vel: u8) {
+        mark_note(key, true);
+        self.send(Cmd::NoteOn {
+            key: key.min(127),
+            vel: vel.clamp(1, 127),
+        });
+    }
+
+    pub fn note_off(&mut self, key: u8) {
+        mark_note(key, false);
+        self.send(Cmd::NoteOff { key: key.min(127) });
+    }
+
+    pub fn sustain(&mut self, down: bool) {
+        self.send(Cmd::Cc {
+            num: 64,
+            val: if down { 127 } else { 0 },
+        });
+    }
+
     pub fn panic(&mut self) {
+        clear_held();
         self.send(Cmd::Panic);
         self.notify("Pânico: todas as notas cortadas");
     }

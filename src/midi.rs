@@ -188,9 +188,11 @@ fn piano_message(msg: &[u8], core: &SharedCore, tx: &Sender<Cmd>) {
     match status & 0xF0 {
         0x90 if d2 > 0 => {
             let _ = tx.send(Cmd::NoteOn { key: d1, vel: d2 });
+            crate::core::mark_note(d1, true);
         }
         0x90 | 0x80 => {
             let _ = tx.send(Cmd::NoteOff { key: d1 });
+            crate::core::mark_note(d1, false);
         }
         0xB0 => {
             let _ = tx.send(Cmd::Cc { num: d1, val: d2 });

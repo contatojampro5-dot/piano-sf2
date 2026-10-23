@@ -42,6 +42,14 @@ Piano (LINE OUT) ──► caixas / mesa da igreja
 4. Monte o som, clique numa cena (ex.: *F2*) e em **💾 Salvar cena**.
    Botão direito numa cena: **salvar aqui / renomear / apagar**.
 
+## Teclado de teste (sem o piano ligado)
+
+Na aba **Sons SF2**, o botão **🎹 Teclado** (ao lado de *Salvar cena*) mostra/esconde um piano na tela.
+- Clique nas teclas para tocar (mais embaixo na tecla = mais forte); arrastar faz glissando.
+- Teclado do computador: **A W S E D F T G Y H U J K** = notas, **Z / X** = oitava, **espaço** = pedal.
+- Botão **PEDAL** segura as notas.
+- Com o piano de verdade ligado, as teclas que você toca nele **acendem** na tela.
+
 ## Pads (aba 🎶 Pads)
 
 Lá em cima tem duas abas: **🎹 Sons SF2** (a mesa com as 8 camadas) e **🎶 Pads** (o fundo contínuo por tom).
@@ -126,6 +134,11 @@ Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B)
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.4 — teclado de teste na tela
+- Botão **🎹 Teclado**: piano na tela (mouse e teclado do computador), com pedal; abre e fecha com um clique.
+- As notas tocadas no piano de verdade acendem nesse teclado.
+- Canais ficam compactos quando a tela fica baixa (teclado aberto num notebook 1366×768).
 
 ### v0.3.1 — aviso no Aprender
 - Quando um mapeamento novo tira outro do lugar, a tela avisa (ex.: "esse controle deixou de fazer Liga/desliga camada 2").

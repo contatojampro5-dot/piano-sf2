@@ -50,6 +50,15 @@ struct UiState {
     /// Pedidos que só podem rodar com o `core` destravado (abrir arquivo trava a tela até escolher).
     open_sf2_dialog: bool,
     pad_file_dialog: Option<(usize, usize)>,
+    /// Teclado de piano na tela (abre/fecha com o botão "Teclado").
+    kb_open: bool,
+    /// Nota que o mouse está segurando.
+    kb_mouse: Option<u8>,
+    /// Teclas do computador seguradas → nota que tocaram.
+    kb_keys: Vec<(Key, u8)>,
+    /// Oitava das teclas do computador (A = Dó dessa oitava).
+    kb_octave: i32,
+    kb_sustain: bool,
 }
 
 pub struct PianoApp {
@@ -120,6 +129,11 @@ impl PianoApp {
                 audio_devices: Vec::new(),
                 open_sf2_dialog: false,
                 pad_file_dialog: None,
+                kb_open: false,
+                kb_mouse: None,
+                kb_keys: Vec::new(),
+                kb_octave: 4,
+                kb_sustain: false,
             },
             last_save: Instant::now(),
             audio_retry: None,
@@ -209,6 +223,17 @@ impl eframe::App for PianoApp {
                     .inner_margin(egui::Margin::symmetric(14, 5)),
             )
             .show(ui, |ui| footer(ui, &mut core, &self.stats));
+        if core.cfg.tab == 0 && self.ui.kb_open {
+            egui::Panel::bottom("teclado")
+                .frame(
+                    egui::Frame::new()
+                        .fill(PANEL)
+                        .inner_margin(egui::Margin::symmetric(14, 8)),
+                )
+                .show(ui, |ui| piano_keyboard(ui, &mut core, &mut self.ui));
+        } else {
+            release_keyboard(&mut core, &mut self.ui);
+        }
         egui::CentralPanel::no_frame()
             .frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin {
                 left: 14,
@@ -268,7 +293,8 @@ impl eframe::App for PianoApp {
             .lock()
             .map(|c| c.loading.is_some())
             .unwrap_or(false);
-        ctx.request_repaint_after(Duration::from_millis(if busy { 100 } else { 250 }));
+        let fast = busy || self.ui.kb_open;
+        ctx.request_repaint_after(Duration::from_millis(if fast { 60 } else { 250 }));
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -318,6 +344,9 @@ fn keyboard(ctx: &egui::Context, core: &mut Core, st: &mut UiState) {
     if ctx.egui_wants_keyboard_input() {
         return;
     }
+    if st.kb_open && core.cfg.tab == 0 {
+        computer_keys(ctx, core, st);
+    }
     ctx.input_mut(|i| {
         if i.consume_key(egui::Modifiers::NONE, Key::ArrowLeft) {
             core.step_scene(-1);
@@ -351,6 +380,249 @@ fn keyboard(ctx: &egui::Context, core: &mut Core, st: &mut UiState) {
             }
         }
     });
+}
+
+// ---------- Teclado de piano na tela ----------
+
+const KB_LOW: u8 = 36; // C2
+const KB_HIGH: u8 = 96; // C7
+
+fn is_black(n: u8) -> bool {
+    matches!(n % 12, 1 | 3 | 6 | 8 | 10)
+}
+
+fn note_name(n: u8) -> String {
+    format!(
+        "{}{}",
+        pads::KEY_NAMES[(n % 12) as usize],
+        n as i32 / 12 - 1
+    )
+}
+
+/// Letras do computador → semitom a partir do Dó (linha do meio = brancas, linha de cima = pretas).
+const KEYMAP: [(Key, i32); 17] = [
+    (Key::A, 0),
+    (Key::W, 1),
+    (Key::S, 2),
+    (Key::E, 3),
+    (Key::D, 4),
+    (Key::F, 5),
+    (Key::T, 6),
+    (Key::G, 7),
+    (Key::Y, 8),
+    (Key::H, 9),
+    (Key::U, 10),
+    (Key::J, 11),
+    (Key::K, 12),
+    (Key::O, 13),
+    (Key::L, 14),
+    (Key::P, 15),
+    (Key::Semicolon, 16),
+];
+
+fn computer_keys(ctx: &egui::Context, core: &mut Core, st: &mut UiState) {
+    let events = ctx.input(|i| i.events.clone());
+    for ev in events {
+        let egui::Event::Key {
+            key,
+            pressed,
+            repeat,
+            modifiers,
+            ..
+        } = ev
+        else {
+            continue;
+        };
+        if repeat || modifiers.ctrl || modifiers.alt {
+            continue;
+        }
+        if pressed && key == Key::Z {
+            st.kb_octave = (st.kb_octave - 1).max(1);
+            continue;
+        }
+        if pressed && key == Key::X {
+            st.kb_octave = (st.kb_octave + 1).min(7);
+            continue;
+        }
+        if key == Key::Space {
+            st.kb_sustain = pressed;
+            core.sustain(pressed);
+            continue;
+        }
+        let Some(&(_, semi)) = KEYMAP.iter().find(|(k, _)| *k == key) else {
+            continue;
+        };
+        if pressed {
+            if st.kb_keys.iter().any(|(k, _)| *k == key) {
+                continue;
+            }
+            let n = (12 * (st.kb_octave + 1) + semi).clamp(0, 127) as u8;
+            st.kb_keys.push((key, n));
+            core.note_on(n, 100);
+        } else if let Some(pos) = st.kb_keys.iter().position(|(k, _)| *k == key) {
+            let (_, n) = st.kb_keys.remove(pos);
+            core.note_off(n);
+        }
+    }
+}
+
+/// Solta tudo que o teclado da tela estava segurando (ao fechar o teclado ou trocar de aba).
+fn release_keyboard(core: &mut Core, st: &mut UiState) {
+    if let Some(n) = st.kb_mouse.take() {
+        core.note_off(n);
+    }
+    for (_, n) in std::mem::take(&mut st.kb_keys) {
+        core.note_off(n);
+    }
+    if st.kb_sustain {
+        st.kb_sustain = false;
+        core.sustain(false);
+    }
+}
+
+fn piano_keyboard(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("🎹 Teclado de teste").strong());
+        ui.label(
+            RichText::new("clique nas teclas (mais embaixo = mais forte) · computador: A W S E D F T G Y H U J K = notas · Z / X = oitava · espaço = pedal")
+                .size(13.0)
+                .color(DIM),
+        );
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            let ped = egui::Button::new(RichText::new("PEDAL").strong().color(if st.kb_sustain { BG } else { TEXT }))
+                .fill(if st.kb_sustain { YELLOW } else { STRIP_HI });
+            if ui.add(ped).on_hover_text("Segura as notas (como o pedal do piano)").clicked() {
+                st.kb_sustain = !st.kb_sustain;
+                core.sustain(st.kb_sustain);
+            }
+            ui.label(RichText::new(format!("teclas do PC: C{}", st.kb_octave)).size(13.0).color(DIM));
+        });
+    });
+    ui.add_space(4.0);
+
+    let h = 112.0;
+    let (rect, resp) =
+        ui.allocate_exact_size(Vec2::new(ui.available_width(), h), Sense::click_and_drag());
+    let whites: Vec<u8> = (KB_LOW..=KB_HIGH).filter(|n| !is_black(*n)).collect();
+    let ww = rect.width() / whites.len() as f32;
+    let bw = ww * 0.62;
+    let bh = h * 0.62;
+    let white_x =
+        |n: u8| whites.iter().position(|w| *w == n).unwrap_or(0) as f32 * ww + rect.left();
+    let key_rect = |n: u8| -> Rect {
+        if is_black(n) {
+            let x = white_x(n - 1) + ww - bw / 2.0;
+            Rect::from_min_size(Pos2::new(x, rect.top()), Vec2::new(bw, bh))
+        } else {
+            Rect::from_min_size(Pos2::new(white_x(n), rect.top()), Vec2::new(ww, h))
+        }
+    };
+    let hit = |p: Pos2| -> Option<u8> {
+        if !rect.contains(p) {
+            return None;
+        }
+        (KB_LOW..=KB_HIGH)
+            .filter(|n| is_black(*n))
+            .find(|n| key_rect(*n).contains(p))
+            .or_else(|| whites.iter().copied().find(|n| key_rect(*n).contains(p)))
+    };
+
+    // Mouse: segurar toca; arrastar faz glissando; soltar para.
+    let pointer = ui.input(|i| i.pointer.interact_pos());
+    let down = resp.is_pointer_button_down_on() || (resp.dragged() && st.kb_mouse.is_some());
+    let want = if down { pointer.and_then(hit) } else { None };
+    if want != st.kb_mouse {
+        if let Some(old) = st.kb_mouse.take() {
+            core.note_off(old);
+        }
+        if let (Some(n), Some(p)) = (want, pointer) {
+            let kr = key_rect(n);
+            let depth = ((p.y - kr.top()) / kr.height()).clamp(0.0, 1.0);
+            let vel = (45.0 + depth * 82.0) as u8;
+            core.note_on(n, vel);
+            st.kb_mouse = Some(n);
+        }
+    }
+
+    let p = ui.painter_at(rect);
+    let lit = |n: u8| {
+        crate::core::note_is_held(n)
+            || st.kb_mouse == Some(n)
+            || st.kb_keys.iter().any(|(_, k)| *k == n)
+    };
+    for &n in &whites {
+        let r = key_rect(n).shrink2(Vec2::new(0.5, 0.0));
+        let on = lit(n);
+        p.rect_filled(
+            r,
+            CornerRadius {
+                nw: 0,
+                ne: 0,
+                sw: 5,
+                se: 5,
+            },
+            if on {
+                LAYER_COLORS[0]
+            } else {
+                Color32::from_rgb(0xec, 0xee, 0xf1)
+            },
+        );
+        p.rect_stroke(
+            r,
+            CornerRadius {
+                nw: 0,
+                ne: 0,
+                sw: 5,
+                se: 5,
+            },
+            Stroke::new(1.0, Color32::from_rgb(0x55, 0x5b, 0x66)),
+            StrokeKind::Inside,
+        );
+        if n % 12 == 0 {
+            p.text(
+                Pos2::new(r.center().x, r.bottom() - 10.0),
+                Align2::CENTER_CENTER,
+                note_name(n),
+                FontId::proportional(11.0),
+                if on {
+                    BG
+                } else {
+                    Color32::from_rgb(0x70, 0x76, 0x80)
+                },
+            );
+        }
+    }
+    for n in (KB_LOW..=KB_HIGH).filter(|n| is_black(*n)) {
+        let r = key_rect(n);
+        let on = lit(n);
+        p.rect_filled(
+            r,
+            CornerRadius {
+                nw: 0,
+                ne: 0,
+                sw: 4,
+                se: 4,
+            },
+            if on {
+                LAYER_COLORS[0].gamma_multiply(0.85)
+            } else {
+                Color32::from_rgb(0x16, 0x18, 0x1d)
+            },
+        );
+    }
+    // Marca onde está a oitava das teclas do computador.
+    let base = (12 * (st.kb_octave + 1)).clamp(0, 127) as u8;
+    if (KB_LOW..=KB_HIGH).contains(&base) {
+        let r = key_rect(base);
+        p.rect_filled(
+            Rect::from_min_size(
+                Pos2::new(r.left() + 3.0, r.bottom() - 4.0),
+                Vec2::new(r.width() - 6.0, 3.0),
+            ),
+            1,
+            ORANGE,
+        );
+    }
 }
 
 // ---------- Barra de cima ----------
@@ -865,8 +1137,9 @@ fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: 
 fn scenes_bar(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     ui.horizontal(|ui| {
         let save_w = 150.0;
+        let kb_w = 120.0;
         let gap = ui.spacing().item_spacing.x;
-        let w = ((ui.available_width() - save_w - gap * SCENES as f32) / SCENES as f32).max(60.0);
+        let w = ((ui.available_width() - save_w - kb_w - gap * (SCENES + 1) as f32) / SCENES as f32).max(60.0);
         for n in 0..SCENES {
             let current = core.cfg.current_scene == Some(n);
             let filled = core.cfg.scenes[n].mix.is_some();
@@ -915,6 +1188,19 @@ fn scenes_bar(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                     core.save_scene(free);
                 }
             }
+        }
+        let kb = egui::Button::new(
+            RichText::new("🎹 Teclado")
+                .size(15.0)
+                .color(if st.kb_open { BG } else { TEXT }),
+        )
+        .fill(if st.kb_open { LAYER_COLORS[0] } else { STRIP_HI });
+        if ui
+            .add_sized([kb_w, 44.0], kb)
+            .on_hover_text("Mostra/esconde um piano na tela para testar os sons sem o teclado ligado")
+            .clicked()
+        {
+            st.kb_open = !st.kb_open;
         }
     });
 }
@@ -974,6 +1260,7 @@ fn mixer(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
 /// Canal 7: o pad (volume, tom, estilo e parar) sem precisar ir para a aba Pads.
 fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     let playing = core.pad_active.is_some();
+    let compact = compact_height(size.y);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 12, if playing { STRIP_HI } else { STRIP });
@@ -992,8 +1279,14 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
             .layout(Layout::top_down(Align::Center)),
     );
     let ui = &mut child;
+    if compact {
+        ui.spacing_mut().item_spacing.y = 4.0;
+    }
     ui.horizontal(|ui| {
-        let (r, _) = ui.allocate_exact_size(Vec2::new(inner.width(), 22.0), Sense::hover());
+        let (r, _) = ui.allocate_exact_size(
+            Vec2::new(inner.width(), if compact { 16.0 } else { 22.0 }),
+            Sense::hover(),
+        );
         ui.painter().rect_filled(
             Rect::from_min_size(r.min, Vec2::new(r.width(), 4.0)),
             2,
@@ -1010,7 +1303,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     // Tom atual (grande) — o knob 7 da mesinha escolhe o tom.
     let key = core.pad_active.map(|k| pads::KEY_NAMES[k]).unwrap_or("—");
     let r = ui.add_sized(
-        [inner.width(), 50.0],
+        [inner.width(), if compact { 34.0 } else { 50.0 }],
         egui::Button::new(RichText::new(key).size(26.0).strong().color(if playing {
             BG
         } else {
@@ -1028,7 +1321,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
             .color(DIM),
     );
     let stop = ui.add_sized(
-        [inner.width(), 40.0],
+        [inner.width(), if compact { 30.0 } else { 40.0 }],
         egui::Button::new(
             RichText::new("PARAR")
                 .strong()
@@ -1041,15 +1334,15 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
         core.pad_stop();
     }
     let bank = ui.add_sized(
-        [inner.width(), 28.0],
+        [inner.width(), if compact { 24.0 } else { 28.0 }],
         egui::Button::new(RichText::new("ESTILO").size(13.0).color(DIM)).fill(STRIP),
     );
     let bank = bank.on_hover_text("Troca Escuro → Coral → Suave");
     if !learnable(ui, core, &bank, Target::PadBank) && bank.clicked() {
         core.set_pad_bank(core.cfg.pad_bank + 1);
     }
-    let preset_h = 84.0;
-    let fader_h = (ui.available_height() - preset_h - 22.0).max(90.0);
+    let preset_h = if compact { 34.0 } else { 84.0 };
+    let fader_h = (ui.available_height() - preset_h - 22.0).max(60.0);
     ui.label(RichText::new(format!("{:.0}%", core.cfg.pad_volume * 100.0)).monospace());
     let (resp, newv) = fader(
         ui,
@@ -1066,13 +1359,19 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     ui.horizontal(|ui| {
         let w = (inner.width() - ui.spacing().item_spacing.x) / 2.0;
         let prev = ui
-            .add_sized([w, 34.0], egui::Button::new("◀").fill(STRIP))
+            .add_sized(
+                [w, if compact { 26.0 } else { 34.0 }],
+                egui::Button::new("◀").fill(STRIP),
+            )
             .on_hover_text("Tom anterior");
         if !learnable(ui, core, &prev, Target::PadPrev) && prev.clicked() {
             core.pad_step(-1);
         }
         let next = ui
-            .add_sized([w, 34.0], egui::Button::new("▶").fill(STRIP))
+            .add_sized(
+                [w, if compact { 26.0 } else { 34.0 }],
+                egui::Button::new("▶").fill(STRIP),
+            )
             .on_hover_text("Próximo tom");
         if !learnable(ui, core, &next, Target::PadNext) && next.clicked() {
             core.pad_step(1);
@@ -1080,10 +1379,16 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     });
 }
 
+/// Tela baixa (ex.: teclado aberto num notebook 1366×768): canal mais enxuto.
+fn compact_height(h: f32) -> bool {
+    h < 470.0
+}
+
 fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
     let color = LAYER_COLORS[i];
     let layer = core.cfg.mix.layers[i].clone();
     let audible = core.cfg.mix.audible(i);
+    let compact = compact_height(size.y);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 12, if layer.on { STRIP_HI } else { STRIP });
@@ -1095,76 +1400,102 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
             StrokeKind::Inside,
         );
     }
-    let inner = rect.shrink2(Vec2::new(8.0, 8.0));
+    let inner = rect.shrink2(Vec2::new(8.0, if compact { 6.0 } else { 8.0 }));
     let mut child = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(inner)
             .layout(Layout::top_down(Align::Center)),
     );
     let ui = &mut child;
+    if compact {
+        ui.spacing_mut().item_spacing.y = 4.0;
+    }
 
     // Número + cor do canal
     ui.horizontal(|ui| {
-        let (r, _) = ui.allocate_exact_size(Vec2::new(inner.width(), 22.0), Sense::hover());
+        let hh = if compact { 16.0 } else { 22.0 };
+        let (r, _) = ui.allocate_exact_size(Vec2::new(inner.width(), hh), Sense::hover());
         ui.painter().rect_filled(
             Rect::from_min_size(r.min, Vec2::new(r.width(), 4.0)),
             2,
             color,
         );
         ui.painter().text(
-            r.center() + Vec2::new(0.0, 4.0),
+            r.center() + Vec2::new(0.0, 3.0),
             Align2::CENTER_CENTER,
             format!("{}", i + 1),
-            FontId::proportional(17.0),
+            FontId::proportional(if compact { 14.0 } else { 17.0 }),
             if audible { TEXT } else { DIM },
         );
     });
 
     // Knob (reverb)
-    let (resp, newv) = knob(ui, 50.0, layer.reverb, color, core.learn.active);
+    let (resp, newv) = knob(
+        ui,
+        if compact { 38.0 } else { 50.0 },
+        layer.reverb,
+        color,
+        core.learn.active,
+    );
+    let resp = resp.on_hover_text(format!("Reverb {:.0}%", layer.reverb * 100.0));
     learnable(ui, core, &resp, Target::Reverb(i));
     if let Some(v) = newv {
         core.set_reverb(i, v);
     }
-    ui.label(
-        RichText::new(format!("Reverb {:.0}%", layer.reverb * 100.0))
-            .size(12.0)
-            .color(DIM),
-    );
+    if !compact {
+        ui.label(
+            RichText::new(format!("Reverb {:.0}%", layer.reverb * 100.0))
+                .size(12.0)
+                .color(DIM),
+        );
+    }
 
-    // Liga/desliga
-    let (txt, fill, tc) = if layer.on {
-        ("LIGADA", GREEN, BG)
-    } else {
-        ("DESLIGADA", STRIP, DIM)
+    // Liga/desliga + Solo (lado a lado quando a tela é baixa)
+    let (txt, fill, tc) = match (layer.on, compact) {
+        (true, false) => ("LIGADA", GREEN, BG),
+        (false, false) => ("DESLIGADA", STRIP, DIM),
+        (true, true) => ("LIGA", GREEN, BG),
+        (false, true) => ("DESL.", STRIP, DIM),
     };
-    let resp = ui.add_sized(
-        [inner.width(), 40.0],
-        egui::Button::new(RichText::new(txt).strong().size(15.0).color(tc))
-            .fill(fill)
-            .stroke(Stroke::new(1.0, if layer.on { GREEN } else { STRIP_HI })),
-    );
-    if !learnable(ui, core, &resp, Target::Toggle(i)) && resp.clicked() {
+    let toggle_btn = egui::Button::new(
+        RichText::new(txt)
+            .strong()
+            .size(if compact { 13.0 } else { 15.0 })
+            .color(tc),
+    )
+    .fill(fill)
+    .stroke(Stroke::new(1.0, if layer.on { GREEN } else { STRIP_HI }));
+    let solo_btn = egui::Button::new(
+        RichText::new(if compact { "S" } else { "SOLO" })
+            .size(13.0)
+            .color(if layer.solo { BG } else { DIM }),
+    )
+    .fill(if layer.solo { YELLOW } else { STRIP })
+    .stroke(Stroke::new(1.0, if layer.solo { YELLOW } else { STRIP_HI }));
+    let (t_resp, s_resp) = if compact {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            let tw = (inner.width() - 4.0) * 0.66;
+            let t = ui.add_sized([tw, 32.0], toggle_btn);
+            let s = ui.add_sized([inner.width() - 4.0 - tw, 32.0], solo_btn);
+            (t, s)
+        })
+        .inner
+    } else {
+        let t = ui.add_sized([inner.width(), 40.0], toggle_btn);
+        let s = ui.add_sized([inner.width(), 28.0], solo_btn);
+        (t, s)
+    };
+    if !learnable(ui, core, &t_resp, Target::Toggle(i)) && t_resp.clicked() {
         core.toggle(i);
     }
-    // Solo
-    let resp = ui.add_sized(
-        [inner.width(), 28.0],
-        egui::Button::new(RichText::new("SOLO").size(13.0).color(if layer.solo {
-            BG
-        } else {
-            DIM
-        }))
-        .fill(if layer.solo { YELLOW } else { STRIP })
-        .stroke(Stroke::new(1.0, if layer.solo { YELLOW } else { STRIP_HI })),
-    );
-    if !learnable(ui, core, &resp, Target::Solo(i)) && resp.clicked() {
+    if !learnable(ui, core, &s_resp, Target::Solo(i)) && s_resp.clicked() {
         core.toggle_solo(i);
     }
 
     // Fader (usa o espaço que sobra, deixando lugar para o timbre)
-    let preset_h = 84.0;
-    let fader_h = (ui.available_height() - preset_h - 22.0).max(90.0);
+    let preset_h = if compact { 34.0 } else { 84.0 };
+    let fader_h = (ui.available_height() - preset_h - 22.0).max(60.0);
     ui.label(
         RichText::new(format!("{:.0}%", layer.volume * 100.0))
             .monospace()
@@ -1183,48 +1514,78 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
     }
 
     // Timbre
-    ui.add_space(4.0);
     let name = layer
         .preset
         .as_ref()
         .map(|p| p.name.clone())
         .unwrap_or_else(|| "— escolher —".into());
-    let resp = ui.add_sized(
-        [inner.width(), 34.0],
+    let name_btn = |w: f32| {
         egui::Button::new(
             RichText::new(&name)
-                .size(13.0)
+                .size(if compact { 12.0 } else { 13.0 })
                 .color(if layer.preset.is_some() { TEXT } else { DIM }),
         )
         .fill(STRIP)
-        .truncate(),
-    );
+        .truncate()
+        .min_size(Vec2::new(w, 0.0))
+    };
+    let mut step = 0;
+    let resp = if compact {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 2.0;
+            ui.spacing_mut().button_padding = Vec2::new(2.0, 2.0);
+            let aw = 22.0;
+            if ui
+                .add_sized([aw, 28.0], egui::Button::new("◀").fill(STRIP))
+                .clicked()
+            {
+                step = -1;
+            }
+            let r = ui.add_sized([inner.width() - 2.0 * aw - 4.0, 28.0], name_btn(0.0));
+            if ui
+                .add_sized([aw, 28.0], egui::Button::new("▶").fill(STRIP))
+                .clicked()
+            {
+                step = 1;
+            }
+            r
+        })
+        .inner
+    } else {
+        ui.add_space(4.0);
+        let r = ui.add_sized([inner.width(), 34.0], name_btn(inner.width()));
+        ui.horizontal(|ui| {
+            let w = (inner.width() - ui.spacing().item_spacing.x) / 2.0;
+            if ui
+                .add_sized([w, 22.0], egui::Button::new("◀").fill(STRIP))
+                .on_hover_text("Timbre anterior")
+                .clicked()
+            {
+                step = -1;
+            }
+            if ui
+                .add_sized([w, 22.0], egui::Button::new("▶").fill(STRIP))
+                .on_hover_text("Próximo timbre")
+                .clicked()
+            {
+                step = 1;
+            }
+        });
+        r
+    };
+    if step != 0 {
+        core.step_preset(i, step);
+    }
     let resp = resp.on_hover_text(format!("{name}\nClique para escolher o timbre"));
     if resp.clicked() && !core.learn.active {
         st.picker = Some(i);
         st.picker_search.clear();
         st.picker_focus = true;
     }
-    ui.horizontal(|ui| {
-        let w = (inner.width() - ui.spacing().item_spacing.x) / 2.0;
-        if ui
-            .add_sized([w, 22.0], egui::Button::new("◀").fill(STRIP))
-            .on_hover_text("Timbre anterior")
-            .clicked()
-        {
-            core.step_preset(i, -1);
-        }
-        if ui
-            .add_sized([w, 22.0], egui::Button::new("▶").fill(STRIP))
-            .on_hover_text("Próximo timbre")
-            .clicked()
-        {
-            core.step_preset(i, 1);
-        }
-    });
 }
 
 fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
+    let compact = compact_height(size.y);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     ui.painter_at(rect).rect_filled(rect, 12, PANEL);
     let inner = rect.shrink2(Vec2::new(10.0, 8.0));
@@ -1234,14 +1595,22 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
             .layout(Layout::top_down(Align::Center)),
     );
     let ui = &mut child;
+    if compact {
+        ui.spacing_mut().item_spacing.y = 4.0;
+    }
     ui.label(RichText::new("8 · GERAL").strong().size(16.0));
     ui.add_space(4.0);
 
     // Transpor
-    ui.label(RichText::new("Transpor").size(12.0).color(DIM));
+    if !compact {
+        ui.label(RichText::new("Transpor").size(12.0).color(DIM));
+    }
     ui.horizontal(|ui| {
         let w = (inner.width() - 2.0 * ui.spacing().item_spacing.x) / 3.0;
-        let down = ui.add_sized([w, 32.0], egui::Button::new("−").fill(STRIP_HI));
+        let down = ui.add_sized(
+            [w, if compact { 26.0 } else { 32.0 }],
+            egui::Button::new("−").fill(STRIP_HI),
+        );
         if !learnable(ui, core, &down, Target::TransposeDown) && down.clicked() {
             core.set_transpose(core.cfg.mix.transpose - 1);
         }
@@ -1252,7 +1621,7 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
             format!("{t:+}")
         };
         let r = ui.add_sized(
-            [w, 32.0],
+            [w, if compact { 26.0 } else { 32.0 }],
             egui::Button::new(
                 RichText::new(tl)
                     .strong()
@@ -1263,15 +1632,18 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
         if r.on_hover_text("Clique para voltar a 0").clicked() {
             core.set_transpose(0);
         }
-        let up = ui.add_sized([w, 32.0], egui::Button::new("+").fill(STRIP_HI));
+        let up = ui.add_sized(
+            [w, if compact { 26.0 } else { 32.0 }],
+            egui::Button::new("+").fill(STRIP_HI),
+        );
         if !learnable(ui, core, &up, Target::TransposeUp) && up.clicked() {
             core.set_transpose(core.cfg.mix.transpose + 1);
         }
     });
 
-    ui.add_space(8.0);
+    ui.add_space(if compact { 2.0 } else { 8.0 });
     ui.label(RichText::new(format!("{:.0}%", core.cfg.master * 100.0)).monospace());
-    let fader_h = (ui.available_height() - 64.0).max(90.0);
+    let fader_h = (ui.available_height() - if compact { 48.0 } else { 64.0 }).max(60.0);
     let (resp, newv) = fader(
         ui,
         Vec2::new(inner.width(), fader_h),
@@ -1283,9 +1655,9 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     if let Some(v) = newv {
         core.set_master(v);
     }
-    ui.add_space(6.0);
+    ui.add_space(if compact { 2.0 } else { 6.0 });
     let panic = ui.add_sized(
-        [inner.width(), 48.0],
+        [inner.width(), if compact { 36.0 } else { 48.0 }],
         egui::Button::new(
             RichText::new("■ PÂNICO")
                 .strong()

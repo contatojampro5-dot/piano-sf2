@@ -405,3 +405,14 @@ fn big_sf2_loads_through_shared_core() {
         break;
     }
 }
+
+#[test]
+fn screen_keyboard_plays_and_lights_keys() {
+    let mut r = rig();
+    r.render(256);
+    r.core.note_on(64, 100);
+    assert!(crate::core::note_is_held(64));
+    assert!(rms(&r.render(4800)) > 0.01, "nota do teclado da tela soa");
+    r.core.note_off(64);
+    assert!(!crate::core::note_is_held(64));
+}
