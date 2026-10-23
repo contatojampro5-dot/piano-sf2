@@ -1,0 +1,49 @@
+# Monta o PianoSF2.exe no Windows a cada atualização em main e publica em "Releases".
+name: Windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Testes do motor
+        run: cargo test --no-default-features
+
+      - name: Compilar
+        run: cargo build --release
+
+      - name: Separar o programa
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force saida | Out-Null
+          Copy-Item target/release/piano-sf2.exe saida/PianoSF2.exe
+          "Tamanho: {0:N1} MB" -f ((Get-Item saida/PianoSF2.exe).Length / 1MB)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PianoSF2-windows
+          path: saida/PianoSF2.exe
+
+      - name: Publicar em Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.${{ github.run_number }}
+          name: Piano SF2 v0.1.${{ github.run_number }}
+          make_latest: true
+          files: saida/PianoSF2.exe
+          body: |
+            Baixe o **PianoSF2.exe** abaixo, salve numa pasta (ex.: Documentos) e abra com dois cliques.
+            Se o Windows mostrar "O Windows protegeu o computador", clique em **Mais informações → Executar assim mesmo**.

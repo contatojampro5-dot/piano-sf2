@@ -1,0 +1,36 @@
+[package]
+name = "piano-sf2"
+version = "0.1.0"
+edition = "2021"
+description = "Programa leve para tocar SF2 ao vivo com piano MIDI e mesinha M-Vave SMC-Mixer"
+license = "MIT"
+
+[features]
+default = ["app"]
+# "app" = programa completo (tela, áudio, MIDI). Sem ele sobra só o núcleo (testes no Linux).
+app = ["dep:eframe", "dep:egui", "dep:cpal", "dep:midir", "dep:rfd"]
+
+[dependencies]
+rustysynth = { path = "vendor/rustysynth" }
+crossbeam-channel = "0.5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts"], optional = true }
+egui = { version = "0.37", default-features = false, features = ["monochrome_emoji_fonts"], optional = true }
+cpal = { version = "0.18", optional = true }
+midir = { version = "0.11", optional = true }
+rfd = { version = "0.17", default-features = false, optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+eframe = { version = "0.37", default-features = false, features = ["x11"], optional = true }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"], optional = true }
+
+[target.'cfg(windows)'.dependencies]
+cpal = { version = "0.18", features = ["realtime"], optional = true }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
