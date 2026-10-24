@@ -94,6 +94,15 @@ Lá em cima tem duas abas: **🎹 Sons SF2** (a mesa com as 8 camadas) e **🎶 
 - Tudo pode ir para a mesinha com **Aprender**: cada tom, volume do pad, parar, anterior/próximo e trocar Escuro/Coral.
   (Ex.: clique em Aprender → clique no botão "C" da tela → aperte um botão da mesinha.)
 
+### Ajuda de escala (para quem está começando)
+
+Quando um tom do pad está tocando, aparece embaixo dos botões:
+- **Escala** do tom (ex.: F → F G A **Bb** C D E), com o nome em português embaixo (Fá, Sol, Lá, Sib...).
+- **Pentatônica** (5 notas) e **Acordes do tom** (ex.: F Gm Am Bb C Dm E°).
+- Botões **Maior / Menor** (o pad serve para os dois) e um tecladinho com as notas da escala marcadas.
+- Na barra de baixo (em qualquer aba) aparece o lembrete da escala, e no **🎹 Teclado** de teste as notas da escala
+  ganham bolinhas (a laranja é a nota do tom). Dá para tirar no ✏ Editar → "Ajuda de escala".
+
 ### Pads Vivos ✨ (motor granular)
 
 Os estilos **Vivo · Coro**, **Vivo · Cordas** e **Vivo · Cristal** não são arquivos em loop: o programa pega uma
@@ -172,6 +181,10 @@ Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B)
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.10 — ajuda de escala
+- Tom do pad mostra escala (nomes certos, com sustenidos/bemóis), pentatônica, acordes do tom e tecladinho.
+- Maior/Menor; lembrete na barra de baixo; notas da escala marcadas no teclado de teste.
 
 ### v0.9 — Pads Vivos (granular) e reverb de igreja
 - Motor granular novo: 3 texturas (Coro, Cordas, Cristal) que viram pad em qualquer tom, com Brilho/Shimmer/Movimento.

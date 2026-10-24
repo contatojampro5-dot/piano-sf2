@@ -650,6 +650,28 @@ fn piano_keyboard(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             },
         );
     }
+    // Pad tocando: bolinhas nas notas da escala (a tônica em destaque).
+    if let Some(key) = core
+        .pad_active
+        .filter(|_| !core.cfg.is_hidden("scale_help"))
+    {
+        let minor = core.cfg.scale_minor;
+        let tonic = pads::key_midi(key) % 12;
+        for n in KB_LOW..=KB_HIGH {
+            if crate::teoria::in_scale(key, minor, n % 12) {
+                let r = key_rect(n);
+                let c = Pos2::new(
+                    r.center().x,
+                    r.bottom() - if is_black(n) { 9.0 } else { 22.0 },
+                );
+                p.circle_filled(
+                    c,
+                    if n % 12 == tonic { 4.5 } else { 3.0 },
+                    if n % 12 == tonic { ORANGE } else { PAD_COLOR },
+                );
+            }
+        }
+    }
     // Marca onde está a oitava das teclas do computador.
     let base = (12 * (st.kb_octave + 1)).clamp(0, 127) as u8;
     if (KB_LOW..=KB_HIGH).contains(&base) {
@@ -1118,7 +1140,9 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     ui.add_space(8.0);
 
     let grid_w = avail.x - side_w - gap;
-    let rows_h = ui.available_height() - 30.0;
+    let show_scale = !core.cfg.is_hidden("scale_help");
+    let scale_h = if show_scale { 168.0 } else { 0.0 };
+    let rows_h = ui.available_height() - 30.0 - scale_h;
     // Escolhe a grade (6×2, 4×3 ou 3×4) que deixa os quadrados maiores na tela.
     let (cols, rows, cell) = [(6usize, 2usize), (4, 3), (3, 4)]
         .iter()
@@ -1144,11 +1168,16 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                     }
                 });
             }
-            ui.label(
-                RichText::new("Clique num tom para tocar · clique de novo para parar · trocar de tom faz a passagem suave · botão direito: usar o seu próprio arquivo")
-                    .size(13.0)
-                    .color(th().dim),
-            );
+            if show_scale {
+                let w = cols as f32 * cell + (cols as f32 - 1.0) * gap;
+                scale_panel(ui, core, Vec2::new(w, scale_h - gap));
+            } else {
+                ui.label(
+                    RichText::new("Clique num tom para tocar · clique de novo para parar · trocar de tom faz a passagem suave")
+                        .size(13.0)
+                        .color(th().dim),
+                );
+            }
         });
 
         // Coluna da direita: volume, anterior/próximo, parar
@@ -2071,6 +2100,209 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     }
 }
 
+/// Quadro de ajuda: escala, pentatônica e acordes do tom do pad (para quem está começando).
+fn scale_panel(ui: &mut Ui, core: &mut Core, size: Vec2) {
+    use crate::teoria;
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    theme::glass(ui.painter(), rect, 18, false, None);
+    let inner = rect.shrink2(Vec2::new(16.0, 10.0));
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(inner)
+            .layout(Layout::top_down(Align::Min)),
+    );
+    let ui = &mut child;
+    let Some(key) = core.pad_active else {
+        ui.add_space(14.0);
+        ui.label(RichText::new("🎵 Toque um tom do pad e a escala aparece aqui (notas, pentatônica e acordes do tom).").size(16.0).color(th().dim));
+        ui.add_space(6.0);
+        ui.label(RichText::new("Clique num tom para tocar · clique de novo para parar · trocar de tom faz a passagem suave").size(13.0).color(th().dim));
+        return;
+    };
+    let minor = core.cfg.scale_minor;
+    let scale = teoria::scale(key, minor);
+    let penta = teoria::pentatonic(key, minor);
+    let chords = teoria::chords(key, minor);
+    let kb_w = 210.0;
+
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(format!("Tom: {}", teoria::key_name(key, minor)))
+                .size(22.0)
+                .strong(),
+        );
+        if pads::KEY_NAMES[key].contains('#') && !teoria::key_name(key, minor).contains('#') {
+            ui.label(
+                RichText::new(format!("(= {} no botão)", pads::KEY_NAMES[key]))
+                    .size(12.0)
+                    .color(th().dim),
+            );
+        }
+        ui.add_space(10.0);
+        for (lbl, m) in [("Maior", false), ("Menor", true)] {
+            let sel = minor == m;
+            let b =
+                egui::Button::new(RichText::new(lbl).color(if sel { th().ink } else { th().text }))
+                    .fill(if sel { PAD_COLOR } else { th().glass_hi });
+            if ui.add(b).clicked() && !sel {
+                core.cfg.scale_minor = m;
+                core.dirty = true;
+            }
+        }
+        ui.label(
+            RichText::new("o pad serve para os dois")
+                .size(12.0)
+                .color(th().dim),
+        );
+    });
+    ui.add_space(4.0);
+    let text_w = (inner.width() - kb_w - 16.0).max(200.0);
+    ui.horizontal_top(|ui| {
+        ui.vertical(|ui| {
+            ui.set_width(text_w);
+            // Escala: uma "pastilha" por nota, com o nome em português embaixo.
+            ui.horizontal(|ui| {
+                ui.add_sized(
+                    [96.0, 40.0],
+                    egui::Label::new(RichText::new("Escala").color(th().dim)),
+                );
+                for (i, n) in scale.iter().enumerate() {
+                    let (r, _) = ui.allocate_exact_size(Vec2::new(52.0, 42.0), Sense::hover());
+                    let p = ui.painter();
+                    p.rect_filled(
+                        r,
+                        10,
+                        if i == 0 {
+                            PAD_COLOR.gamma_multiply(0.85)
+                        } else {
+                            th().glass_hi
+                        },
+                    );
+                    p.text(
+                        r.center() - Vec2::new(0.0, 7.0),
+                        Align2::CENTER_CENTER,
+                        &n.name,
+                        FontId::proportional(18.0),
+                        if i == 0 { th().ink } else { th().text },
+                    );
+                    p.text(
+                        r.center() + Vec2::new(0.0, 12.0),
+                        Align2::CENTER_CENTER,
+                        &n.solfejo,
+                        FontId::proportional(11.0),
+                        if i == 0 { th().ink } else { th().dim },
+                    );
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.add_sized(
+                    [96.0, 22.0],
+                    egui::Label::new(RichText::new("Pentatônica").color(th().dim)),
+                );
+                let t = penta
+                    .iter()
+                    .map(|n| n.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join("   ");
+                ui.label(RichText::new(t).size(17.0).strong());
+            });
+            ui.horizontal(|ui| {
+                ui.add_sized(
+                    [96.0, 22.0],
+                    egui::Label::new(RichText::new("Acordes do tom").color(th().dim)),
+                );
+                ui.label(
+                    RichText::new(chords.join("   "))
+                        .size(17.0)
+                        .color(LAYER_COLORS[0]),
+                );
+            });
+        });
+        // Tecladinho de uma oitava com as notas da escala marcadas.
+        let (r, _) = ui.allocate_exact_size(Vec2::new(kb_w, 96.0), Sense::hover());
+        mini_keyboard(
+            ui.painter(),
+            r,
+            |pc| teoria::in_scale(key, minor, pc),
+            pads::key_midi(key) % 12,
+        );
+    });
+}
+
+/// Uma oitava de teclado (Dó a Si) com as notas `mark(pc)` acesas; `tonic` em destaque.
+fn mini_keyboard(p: &egui::Painter, r: Rect, mark: impl Fn(u8) -> bool, tonic: u8) {
+    let whites: [u8; 7] = [0, 2, 4, 5, 7, 9, 11];
+    let ww = r.width() / 7.0;
+    for (i, &pc) in whites.iter().enumerate() {
+        let k = Rect::from_min_size(
+            Pos2::new(r.left() + i as f32 * ww, r.top()),
+            Vec2::new(ww - 1.0, r.height()),
+        );
+        let on = mark(pc);
+        let fill = if pc == tonic {
+            PAD_COLOR
+        } else if on {
+            Color32::from_rgb(0xd9, 0xcc, 0xff)
+        } else {
+            Color32::from_rgb(0xe8, 0xea, 0xee)
+        };
+        p.rect_filled(
+            k,
+            CornerRadius {
+                nw: 0,
+                ne: 0,
+                sw: 4,
+                se: 4,
+            },
+            if on || pc == tonic {
+                fill
+            } else {
+                fill.gamma_multiply(0.55)
+            },
+        );
+        if on {
+            p.circle_filled(
+                Pos2::new(k.center().x, k.bottom() - 10.0),
+                4.0,
+                if pc == tonic {
+                    Color32::WHITE
+                } else {
+                    PAD_COLOR
+                },
+            );
+        }
+    }
+    for (after, pc) in [(0usize, 1u8), (1, 3), (3, 6), (4, 8), (5, 10)] {
+        let x = r.left() + (after as f32 + 1.0) * ww - ww * 0.3;
+        let k = Rect::from_min_size(Pos2::new(x, r.top()), Vec2::new(ww * 0.6, r.height() * 0.6));
+        let on = mark(pc);
+        let fill = if pc == tonic {
+            PAD_COLOR
+        } else if on {
+            Color32::from_rgb(0x6d, 0x55, 0xc8)
+        } else {
+            Color32::from_rgb(0x18, 0x1a, 0x20)
+        };
+        p.rect_filled(
+            k,
+            CornerRadius {
+                nw: 0,
+                ne: 0,
+                sw: 3,
+                se: 3,
+            },
+            fill,
+        );
+        if on {
+            p.circle_filled(
+                Pos2::new(k.center().x, k.bottom() - 8.0),
+                3.5,
+                Color32::WHITE,
+            );
+        }
+    }
+}
+
 fn footer(ui: &mut Ui, core: &mut Core, stats: &Stats) {
     ui.horizontal(|ui| {
         let toast = core.toast.as_ref().filter(|(_, t)| t.elapsed() < Duration::from_secs(7)).map(|(m, _)| m.clone());
@@ -2078,9 +2310,21 @@ fn footer(ui: &mut Ui, core: &mut Core, stats: &Stats) {
             Some(m) => {
                 ui.label(RichText::new(m).color(ORANGE));
             }
-            None => {
-                ui.label(RichText::new("Setas ◀ ▶ trocam a cena  ·  F1–F8 cenas  ·  Esc pânico  ·  botão direito na cena: salvar/renomear").size(13.0).color(th().dim));
-            }
+            None => match core.pad_active.filter(|_| !core.cfg.is_hidden("scale_help")) {
+                // Pad tocando: lembrete da escala sempre à vista, em qualquer aba.
+                Some(k) => {
+                    use crate::teoria;
+                    let m = core.cfg.scale_minor;
+                    let names = |v: Vec<teoria::Note>| v.iter().map(|n| n.name.clone()).collect::<Vec<_>>().join(" ");
+                    ui.label(RichText::new(format!("🎵 Tom {}", teoria::key_name(k, m))).strong().color(PAD_COLOR));
+                    ui.label(RichText::new(format!("Escala: {}", names(teoria::scale(k, m)))).size(14.0));
+                    ui.label(RichText::new(format!("·  Pentatônica: {}", names(teoria::pentatonic(k, m)))).size(14.0).color(th().dim));
+                    ui.label(RichText::new(format!("·  Acordes: {}", teoria::chords(k, m).join(" "))).size(14.0).color(th().dim));
+                }
+                None => {
+                    ui.label(RichText::new("Setas ◀ ▶ trocam a cena  ·  F1–F8 cenas  ·  Esc pânico  ·  botão direito na cena: salvar/renomear").size(13.0).color(th().dim));
+                }
+            },
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let peak = stats.peak_milli.load(Ordering::Relaxed) as f32 / 1000.0;

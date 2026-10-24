@@ -197,7 +197,7 @@ pub struct Mapping {
 
 /// O que dá para tirar/colocar da tela no modo Editar: (id, nome mostrado).
 /// Camadas são "layer0".."layer5". Ajustes, Editar, GERAL e Pânico nunca saem (para sempre dar para voltar).
-pub const EDITABLE: [(&str, &str); 13] = [
+pub const EDITABLE: [(&str, &str); 14] = [
     ("layer0", "Camada 1"),
     ("layer1", "Camada 2"),
     ("layer2", "Camada 3"),
@@ -211,6 +211,7 @@ pub const EDITABLE: [(&str, &str); 13] = [
     ("bt_button", "Botão Bluetooth"),
     ("wizard_button", "Botão Configurar mesinha"),
     ("learn_button", "Botão Aprender"),
+    ("scale_help", "Ajuda de escala (pads)"),
 ];
 
 pub fn layer_id(i: usize) -> String {
@@ -377,6 +378,8 @@ pub struct Config {
     /// Coisas tiradas da tela no modo Editar (ids de `EDITABLE`).
     pub hidden: Vec<String>,
     pub vivo: VivoCfg,
+    /// Ajuda de escala: mostrar o tom do pad como menor (o pad serve para maior e menor).
+    pub scale_minor: bool,
     /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
     #[serde(default)]
     pub mappings_version: u32,
@@ -477,6 +480,7 @@ impl Default for Config {
             bt_devices: Vec::new(),
             hidden: Vec::new(),
             vivo: VivoCfg::default(),
+            scale_minor: false,
         }
     }
 }

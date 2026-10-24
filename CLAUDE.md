@@ -21,6 +21,7 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   por uma thread (`start_pad_loader`) e tocados no motor com crossfade (`Cmd::PadPlay`). Gerador: `tools/gerar_pads.py`.
 - Pad Vivo (v0.9): `src/granular.rs` (GranularVoice + ChurchReverb FDN), bancos 3..5 (`pads::is_vivo`), texturas em
   `assets/texturas/` (C3, geradas por `tools/gerar_texturas.py`), ajustes em `cfg.vivo`. Prévia WAV: teste `preview` (ignored).
+- Ajuda de escala (v0.10): `src/teoria.rs` (escala/pentatônica/acordes com grafia certa), `scale_panel` no app, `cfg.scale_minor`.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.
