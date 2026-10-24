@@ -470,7 +470,7 @@ impl Core {
     }
 
     pub fn load_scene(&mut self, n: usize) {
-        if n >= SCENES {
+        if n >= self.cfg.scenes.len() {
             return;
         }
         match self.cfg.scenes[n].mix.clone() {
@@ -493,7 +493,7 @@ impl Core {
     }
 
     pub fn save_scene(&mut self, n: usize) {
-        if n >= SCENES {
+        if n >= self.cfg.scenes.len() {
             return;
         }
         self.cfg.scenes[n].mix = Some(self.cfg.mix.clone());
@@ -502,13 +502,69 @@ impl Core {
         self.notify(format!("Salvo em {}", self.cfg.scenes[n].name));
     }
 
+    // ---------- Modo Editar ----------
+
+    /// Cria uma cena nova (vazia) no fim.
+    pub fn add_scene(&mut self) {
+        if self.cfg.scenes.len() >= MAX_SCENES {
+            self.notify(format!("Máximo de {MAX_SCENES} cenas"));
+            return;
+        }
+        let n = self.cfg.scenes.len();
+        self.cfg.scenes.push(Scene {
+            name: format!("Cena {}", n + 1),
+            mix: None,
+        });
+        self.dirty = true;
+    }
+
+    /// Apaga uma cena; as de depois sobem uma posição (e o que a mesinha chamava acompanha).
+    pub fn delete_scene(&mut self, n: usize) {
+        if n >= self.cfg.scenes.len() || self.cfg.scenes.len() <= 1 {
+            return;
+        }
+        let name = self.cfg.scenes.remove(n).name;
+        self.cfg.current_scene = match self.cfg.current_scene {
+            Some(c) if c == n => None,
+            Some(c) if c > n => Some(c - 1),
+            other => other,
+        };
+        self.cfg.mappings.retain(|m| m.target != Target::Scene(n));
+        for m in &mut self.cfg.mappings {
+            if let Target::Scene(k) = m.target {
+                if k > n {
+                    m.target = Target::Scene(k - 1);
+                }
+            }
+        }
+        self.dirty = true;
+        self.notify(format!("\"{name}\" apagada"));
+    }
+
+    /// Tira/coloca algo da tela. Camada tirada também para de tocar.
+    pub fn set_hidden(&mut self, id: &str, hidden: bool) {
+        self.cfg.set_hidden(id, hidden);
+        if hidden {
+            if let Some(i) = (0..LAYERS).find(|i| layer_id(*i) == id) {
+                if self.cfg.mix.layers[i].on || self.cfg.mix.layers[i].solo {
+                    self.cfg.mix.layers[i].solo = false;
+                    self.set_on(i, false);
+                }
+            }
+            if id == "tab_pads" && self.cfg.tab == 1 {
+                self.cfg.tab = 0;
+            }
+        }
+        self.dirty = true;
+    }
+
     pub fn step_scene(&mut self, delta: i32) {
         let cur = self
             .cfg
             .current_scene
             .map(|c| c as i32)
             .unwrap_or(if delta > 0 { -1 } else { 0 });
-        let next = (cur + delta).rem_euclid(SCENES as i32) as usize;
+        let next = (cur + delta).rem_euclid(self.cfg.scenes.len().max(1) as i32) as usize;
         self.load_scene(next);
     }
 
@@ -602,7 +658,7 @@ impl Core {
             0x90 | 0x80 => self.send(Cmd::NoteOff { key: d1 }),
             0xB0 => self.send(Cmd::Cc { num: d1, val: d2 }),
             0xE0 => self.send(Cmd::PitchBend { lsb: d1, msb: d2 }),
-            0xC0 if self.cfg.program_change_scenes && (d1 as usize) < SCENES => {
+            0xC0 if self.cfg.program_change_scenes && (d1 as usize) < self.cfg.scenes.len() => {
                 self.load_scene(d1 as usize);
                 self.request_repaint();
             }
@@ -1312,5 +1368,48 @@ mod tests {
         c.handle_controller(&[0x90, 1, 127]);
         let msg = c.toast.as_ref().unwrap().0.clone();
         assert!(msg.contains("deixou de fazer"), "{msg}");
+    }
+
+    #[test]
+    fn edit_mode_scenes_and_hidden_layers() {
+        let (mut c, _rx) = core();
+        assert_eq!(c.cfg.scenes.len(), SCENES);
+        c.add_scene();
+        assert_eq!(c.cfg.scenes.len(), SCENES + 1);
+        // Botão da mesinha que chamava a cena 4 passa a chamar a 3 quando a 2 é apagada.
+        c.cfg.mappings.push(Mapping {
+            source: Source::Note { ch: 1, num: 1 },
+            target: Target::Scene(4),
+        });
+        c.cfg.mappings.push(Mapping {
+            source: Source::Note { ch: 1, num: 2 },
+            target: Target::Scene(2),
+        });
+        c.cfg.current_scene = Some(5);
+        c.delete_scene(2);
+        assert_eq!(c.cfg.scenes.len(), SCENES);
+        assert_eq!(c.cfg.current_scene, Some(4));
+        assert!(c
+            .cfg
+            .mappings
+            .iter()
+            .any(|m| m.target == Target::Scene(3) && m.source == Source::Note { ch: 1, num: 1 }));
+        assert!(!c
+            .cfg
+            .mappings
+            .iter()
+            .any(|m| m.source == Source::Note { ch: 1, num: 2 }));
+        // Nunca fica sem cena nenhuma.
+        for _ in 0..30 {
+            c.delete_scene(0);
+        }
+        assert_eq!(c.cfg.scenes.len(), 1);
+        // Tirar uma camada também desliga ela.
+        c.toggle(2);
+        assert!(c.cfg.mix.layers[2].on);
+        c.set_hidden(&layer_id(2), true);
+        assert!(!c.cfg.mix.layers[2].on && c.cfg.is_hidden("layer2"));
+        c.set_hidden(&layer_id(2), false);
+        assert!(!c.cfg.is_hidden("layer2"));
     }
 }

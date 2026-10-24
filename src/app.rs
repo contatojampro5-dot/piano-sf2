@@ -40,6 +40,8 @@ struct UiState {
     picker_search: String,
     picker_focus: bool,
     settings: bool,
+    /// Modo Editar: tirar/colocar coisas da tela.
+    editing: bool,
     /// Janela "Bluetooth" aberta (e se já mandou procurar).
     bt_open: bool,
     bt_was_open: bool,
@@ -133,6 +135,7 @@ impl PianoApp {
                 picker_search: String::new(),
                 picker_focus: false,
                 settings: false,
+                editing: false,
                 bt_open: false,
                 bt_was_open: false,
                 rename: None,
@@ -226,7 +229,7 @@ impl eframe::App for PianoApp {
                 bottom: 0,
             }))
             .show(ui, |ui| tabs_bar(ui, &mut core));
-        if core.cfg.tab == 0 {
+        if core.cfg.tab == 0 && (!core.cfg.is_hidden("scenes") || self.ui.editing) {
             egui::Panel::top("cenas")
                 .frame(egui::Frame::new().inner_margin(egui::Margin {
                     left: 14,
@@ -713,6 +716,26 @@ fn top_bar(
                 st.settings = !st.settings;
                 st.audio_devices = audio::device_names();
             }
+            let edit = egui::Button::new(
+                RichText::new(if st.editing {
+                    "✔ Concluir"
+                } else {
+                    "✏ Editar"
+                })
+                .color(if st.editing { th().ink } else { th().text }),
+            )
+            .fill(if st.editing {
+                Color32::from_rgb(0x0a, 0x84, 0xff)
+            } else {
+                th().glass_hi
+            });
+            if ui
+                .add(edit)
+                .on_hover_text("Tirar ou colocar coisas na tela, criar e apagar cenas")
+                .clicked()
+            {
+                st.editing = !st.editing;
+            }
             let learn_txt = if core.learn.active {
                 "Aprendendo..."
             } else {
@@ -729,28 +752,31 @@ fn top_bar(
                 } else {
                     th().glass_hi
                 });
-            if ui
-                .add(learn_btn)
-                .on_hover_text("Ligar um controle da mesinha a um controle da tela")
-                .clicked()
+            if !core.cfg.is_hidden("learn_button")
+                && ui
+                    .add(learn_btn)
+                    .on_hover_text("Ligar um controle da mesinha a um controle da tela")
+                    .clicked()
             {
                 core.learn.active = !core.learn.active;
                 core.learn.target = None;
             }
-            if ui
-                .add(egui::Button::new("Bluetooth").fill(th().glass_hi))
-                .on_hover_text("Procurar e conectar a mesinha pelo Bluetooth")
-                .clicked()
+            if !core.cfg.is_hidden("bt_button")
+                && ui
+                    .add(egui::Button::new("Bluetooth").fill(th().glass_hi))
+                    .on_hover_text("Procurar e conectar a mesinha pelo Bluetooth")
+                    .clicked()
             {
                 st.bt_open = true;
             }
             let wiz = egui::Button::new("Configurar mesinha").fill(th().glass_hi);
-            if ui
-                .add(wiz)
-                .on_hover_text(
-                    "Mexa os faders e knobs na ordem pedida: o programa aprende tudo sozinho",
-                )
-                .clicked()
+            if !core.cfg.is_hidden("wizard_button")
+                && ui
+                    .add(wiz)
+                    .on_hover_text(
+                        "Mexa os faders e knobs na ordem pedida: o programa aprende tudo sozinho",
+                    )
+                    .clicked()
             {
                 core.wizard_start();
             }
@@ -823,6 +849,9 @@ fn top_bar(
             );
         });
     });
+    if st.editing {
+        edit_banner(ui, core, st);
+    }
     if let Some(w) = &core.wizard {
         let (step, total) = (w.step + 1, w.steps.len());
         let (target, control) = w.current().unwrap_or((Target::Master, ""));
@@ -916,6 +945,9 @@ fn tabs_bar(ui: &mut Ui, core: &mut Core) {
             (format!("🎶  Pads{pad_tag}"), core.pad_active.is_some()),
         ];
         for (i, (label, live)) in tabs.iter().enumerate() {
+            if i == 1 && core.cfg.is_hidden("tab_pads") {
+                continue;
+            }
             let active = core.cfg.tab == i;
             let (rect, resp) = ui.allocate_exact_size(Vec2::new(210.0, 38.0), Sense::click());
             let radius = CornerRadius {
@@ -1305,18 +1337,27 @@ fn scenes_bar(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         let save_w = 150.0;
         let kb_w = 120.0;
         let gap = ui.spacing().item_spacing.x;
-        let w = ((ui.available_width() - save_w - kb_w - gap * (SCENES + 1) as f32) / SCENES as f32).max(60.0);
-        for n in 0..SCENES {
+        let count = core.cfg.scenes.len();
+        let kb_w = if core.cfg.is_hidden("kb_button") { 0.0 } else { kb_w };
+        let add_w = if st.editing && count < MAX_SCENES { 56.0 } else { 0.0 };
+        let slots = count as f32 + if kb_w > 0.0 { 1.0 } else { 0.0 } + if add_w > 0.0 { 1.0 } else { 0.0 };
+        let w = ((ui.available_width() - save_w - kb_w - add_w - gap * slots) / count.max(1) as f32).clamp(44.0, 220.0);
+        let mut delete: Option<usize> = None;
+        for n in 0..count {
             let current = core.cfg.current_scene == Some(n);
             let filled = core.cfg.scenes[n].mix.is_some();
             let name = core.cfg.scenes[n].name.clone();
-            let text = RichText::new(format!("F{}  {}", n + 1, name))
+            let label = if n < 8 { format!("F{}  {}", n + 1, name) } else { name.clone() };
+            let text = RichText::new(label)
                 .size(15.0)
                 .color(if current { th().ink } else if filled { th().text } else { th().dim });
             let btn = egui::Button::new(text)
                 .fill(if current { GREEN } else if filled { th().glass_hi } else { th().glass })
                 .stroke(if current { Stroke::NONE } else { Stroke::new(1.0, th().glass_hi) });
-            let resp = ui.add_sized([w, 44.0], btn);
+            let resp = ui.add_sized([w, 44.0], btn.truncate());
+            if st.editing && count > 1 && remove_x(ui, resp.rect, ("cena", n)) {
+                delete = Some(n);
+            }
             if core.learn.active {
                 learn_outline(ui, &resp, core, Target::Scene(n));
                 if resp.clicked() {
@@ -1354,6 +1395,20 @@ fn scenes_bar(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                     core.save_scene(free);
                 }
             }
+        }
+        if add_w > 0.0
+            && ui
+                .add_sized([add_w, 44.0], egui::Button::new(RichText::new("+").size(22.0)).fill(th().glass_hi))
+                .on_hover_text("Nova cena")
+                .clicked()
+        {
+            core.add_scene();
+        }
+        if let Some(n) = delete {
+            core.delete_scene(n);
+        }
+        if kb_w == 0.0 {
+            return;
         }
         let kb = egui::Button::new(
             RichText::new("🎹 Teclado")
@@ -1410,21 +1465,107 @@ fn mixer(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     let gap = 8.0;
     let master_w = 150.0;
     // Como na SMC-Mixer: canais 1..6 = camadas, 7 = PAD, 8 = GERAL.
-    let strip_w =
-        ((avail.x - master_w - gap * (LAYERS + 1) as f32) / (LAYERS + 1) as f32).clamp(84.0, 190.0);
+    let layers: Vec<usize> = (0..LAYERS)
+        .filter(|i| !core.cfg.is_hidden(&layer_id(*i)))
+        .collect();
+    let show_pad = !core.cfg.is_hidden("pad_strip");
+    let n = layers.len() + usize::from(show_pad);
+    let strip_w = ((avail.x - master_w - gap * n as f32) / n.max(1) as f32).clamp(84.0, 220.0);
     let h = avail.y.max(360.0);
+    let mut remove: Option<String> = None;
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
-        for i in 0..LAYERS {
-            strip(ui, core, st, i, Vec2::new(strip_w, h));
+        for &i in &layers {
+            let r = strip(ui, core, st, i, Vec2::new(strip_w, h));
+            if st.editing && remove_x(ui, r, ("camada", i)) {
+                remove = Some(layer_id(i));
+            }
         }
-        pad_strip(ui, core, Vec2::new(strip_w, h));
+        if show_pad {
+            let r = pad_strip(ui, core, Vec2::new(strip_w, h));
+            if st.editing && remove_x(ui, r, ("pad", 0)) {
+                remove = Some("pad_strip".into());
+            }
+        }
         master_strip(ui, core, Vec2::new(master_w, h));
     });
+    if let Some(id) = remove {
+        core.set_hidden(&id, true);
+    }
+}
+
+/// Botãozinho ✕ no canto de algo (modo Editar). Devolve true se clicado.
+fn remove_x(ui: &mut Ui, rect: Rect, id: impl std::hash::Hash + std::fmt::Debug) -> bool {
+    let c = Pos2::new(rect.right() - 13.0, rect.top() + 13.0);
+    let hit = Rect::from_center_size(c, Vec2::splat(24.0));
+    let resp = ui.interact(hit, egui::Id::unique(("remover", id)), Sense::click());
+    let p = ui.painter();
+    p.circle_filled(c, if resp.hovered() { 12.0 } else { 11.0 }, RED);
+    p.circle_stroke(c, 11.0, Stroke::new(1.5, Color32::WHITE));
+    let d = 4.5;
+    let x = Stroke::new(2.0, Color32::WHITE);
+    p.line_segment([c + Vec2::new(-d, -d), c + Vec2::new(d, d)], x);
+    p.line_segment([c + Vec2::new(-d, d), c + Vec2::new(d, -d)], x);
+    resp.on_hover_text("Tirar da tela").clicked()
+}
+
+/// Faixa azul do modo Editar: o que está escondido volta pelo "+ Adicionar".
+fn edit_banner(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
+    ui.add_space(4.0);
+    egui::Frame::new()
+        .fill(Color32::from_rgb(0x0a, 0x84, 0xff))
+        .corner_radius(6)
+        .inner_margin(egui::Margin::symmetric(10, 4))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new("EDITANDO — clique na bolinha vermelha para tirar.")
+                        .color(Color32::WHITE)
+                        .strong(),
+                );
+                let hidden: Vec<(&str, &str)> = EDITABLE
+                    .iter()
+                    .copied()
+                    .filter(|(id, _)| core.cfg.is_hidden(id))
+                    .collect();
+                ui.menu_button(RichText::new("+ Adicionar").strong(), |ui| {
+                    if core.cfg.scenes.len() < MAX_SCENES && ui.button("Nova cena").clicked() {
+                        core.add_scene();
+                        ui.close();
+                    }
+                    if hidden.is_empty() {
+                        ui.label(RichText::new("Nada escondido.").color(th().dim));
+                    }
+                    for (id, name) in &hidden {
+                        if ui.button(format!("Colocar de volta: {name}")).clicked() {
+                            core.set_hidden(id, false);
+                            ui.close();
+                        }
+                    }
+                });
+                ui.menu_button(RichText::new("− Tirar").strong(), |ui| {
+                    let others = [
+                        ("scenes", "Barra de cenas"),
+                        ("tab_pads", "Aba Pads"),
+                        ("kb_button", "Botão Teclado"),
+                        ("bt_button", "Botão Bluetooth"),
+                        ("wizard_button", "Botão Configurar mesinha"),
+                        ("learn_button", "Botão Aprender"),
+                    ];
+                    for (id, label) in others {
+                        if !core.cfg.is_hidden(id) && ui.button(label).clicked() {
+                            core.set_hidden(id, true);
+                            ui.close();
+                        }
+                    }
+                });
+                let _ = &st;
+            });
+        });
 }
 
 /// Canal 7: o pad (volume, tom, estilo e parar) sem precisar ir para a aba Pads.
-fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
+fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) -> Rect {
     let playing = core.pad_active.is_some();
     let compact = compact_height(size.y);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
@@ -1542,6 +1683,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
             core.pad_step(1);
         }
     });
+    rect
 }
 
 /// Tela baixa (ex.: teclado aberto num notebook 1366×768): canal mais enxuto.
@@ -1549,7 +1691,7 @@ fn compact_height(h: f32) -> bool {
     h < 470.0
 }
 
-fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
+fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) -> Rect {
     let color = LAYER_COLORS[i];
     let layer = core.cfg.mix.layers[i].clone();
     let audible = core.cfg.mix.audible(i);
@@ -1750,6 +1892,7 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) {
         st.picker_search.clear();
         st.picker_focus = true;
     }
+    rect
 }
 
 fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {

@@ -61,6 +61,15 @@ Visual de vidro (estilo iPhone) sobre um fundo celestial que respira devagar.
 - **Tamanho da tela** (80% a 130%), **Fundo em movimento** e **Estrelas**.
 - No culto, se o computador ficar pesado, desligue **Fundo em movimento** (a tela fica parada e quase não gasta nada).
 
+## Editar a tela (✏ Editar)
+
+Clique em **✏ Editar** (lá em cima). Aparece uma bolinha vermelha em cada coisa que dá para tirar:
+- **Camadas** e o **canal do PAD**: clique na bolinha para tirar (a camada tirada também para de tocar).
+- **Cenas**: bolinha apaga a cena; o botão **+** cria uma nova (até 16).
+- **− Tirar**: barra de cenas, aba Pads, botões Teclado/Bluetooth/Configurar mesinha/Aprender.
+- **+ Adicionar**: coloca de volta o que foi tirado e cria cena nova.
+- **✔ Concluir** sai do modo editar. *GERAL*, *Pânico*, *Editar* e *Ajustes* nunca saem (para sempre dar para voltar).
+
 ## Teclado de teste (sem o piano ligado)
 
 Na aba **Sons SF2**, o botão **🎹 Teclado** (ao lado de *Salvar cena*) mostra/esconde um piano na tela.
@@ -153,6 +162,10 @@ Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B)
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.8 — modo Editar
+- Botão **✏ Editar**: tirar/colocar camadas, canal do PAD, barra de cenas, aba Pads e botões de cima.
+- Cenas: apagar e criar novas (1 a 16); o que a mesinha chamava acompanha a mudança.
 
 ### v0.7 — Bluetooth direto (janela "Procurar mesinha")
 - Botão **Bluetooth**: procura aparelhos por perto e conecta a mesinha direto (BLE-MIDI pelo GATT), sem driver.

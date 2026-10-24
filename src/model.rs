@@ -4,8 +4,10 @@ use serde::{Deserialize, Serialize};
 
 /// Número de camadas (uma por fader da SMC-Mixer).
 pub const LAYERS: usize = 6;
-/// Número de cenas salvas.
+/// Cenas que vêm de fábrica.
 pub const SCENES: usize = 8;
+/// Máximo de cenas (o Theo pode criar/apagar no modo Editar).
+pub const MAX_SCENES: usize = 16;
 
 /// Timbre escolhido dentro do SF2 (banco + programa, como no MIDI).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -193,6 +195,28 @@ pub struct Mapping {
     pub target: Target,
 }
 
+/// O que dá para tirar/colocar da tela no modo Editar: (id, nome mostrado).
+/// Camadas são "layer0".."layer5". Ajustes, Editar, GERAL e Pânico nunca saem (para sempre dar para voltar).
+pub const EDITABLE: [(&str, &str); 13] = [
+    ("layer0", "Camada 1"),
+    ("layer1", "Camada 2"),
+    ("layer2", "Camada 3"),
+    ("layer3", "Camada 4"),
+    ("layer4", "Camada 5"),
+    ("layer5", "Camada 6"),
+    ("pad_strip", "Canal do PAD (7)"),
+    ("scenes", "Barra de cenas"),
+    ("tab_pads", "Aba Pads"),
+    ("kb_button", "Botão Teclado"),
+    ("bt_button", "Botão Bluetooth"),
+    ("wizard_button", "Botão Configurar mesinha"),
+    ("learn_button", "Botão Aprender"),
+];
+
+pub fn layer_id(i: usize) -> String {
+    format!("layer{i}")
+}
+
 /// Versão do mapeamento padrão (sobe quando o padrão muda; configs antigas são migradas).
 pub const MAPPINGS_VERSION: u32 = 2;
 
@@ -350,6 +374,8 @@ pub struct Config {
     pub look: Appearance,
     /// Aparelhos Bluetooth conectados direto (ver `ble.rs`).
     pub bt_devices: Vec<BtDevice>,
+    /// Coisas tiradas da tela no modo Editar (ids de `EDITABLE`).
+    pub hidden: Vec<String>,
     /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
     #[serde(default)]
     pub mappings_version: u32,
@@ -420,6 +446,7 @@ impl Default for Config {
             mappings_version: MAPPINGS_VERSION,
             look: Appearance::default(),
             bt_devices: Vec::new(),
+            hidden: Vec::new(),
         }
     }
 }
@@ -437,7 +464,10 @@ impl Config {
     pub fn normalize(&mut self) {
         self.mix.normalize();
         self.master = self.master.clamp(0.0, 1.0);
-        self.scenes.resize(SCENES, Scene::default());
+        self.scenes.truncate(MAX_SCENES);
+        if self.scenes.is_empty() {
+            self.scenes.push(Scene::default());
+        }
         for (i, s) in self.scenes.iter_mut().enumerate() {
             if s.name.trim().is_empty() {
                 s.name = format!("Cena {}", i + 1);
@@ -446,7 +476,7 @@ impl Config {
                 m.normalize();
             }
         }
-        if self.current_scene.is_some_and(|c| c >= SCENES) {
+        if self.current_scene.is_some_and(|c| c >= self.scenes.len()) {
             self.current_scene = None;
         }
         self.polyphony = self.polyphony.clamp(16, 256);
@@ -463,7 +493,7 @@ impl Config {
             Target::Volume(i) | Target::Reverb(i) | Target::Toggle(i) | Target::Solo(i) => {
                 i < LAYERS
             }
-            Target::Scene(n) => n < SCENES,
+            Target::Scene(n) => n < MAX_SCENES,
             Target::Pad(k) => k < crate::pads::PAD_KEYS,
             _ => true,
         });
@@ -477,6 +507,17 @@ impl Config {
                 }
             }
             self.mappings_version = MAPPINGS_VERSION;
+        }
+    }
+
+    pub fn is_hidden(&self, id: &str) -> bool {
+        self.hidden.iter().any(|h| h == id)
+    }
+
+    pub fn set_hidden(&mut self, id: &str, hidden: bool) {
+        self.hidden.retain(|h| h != id);
+        if hidden {
+            self.hidden.push(id.to_string());
         }
     }
 
