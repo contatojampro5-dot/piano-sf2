@@ -329,10 +329,11 @@ fn pad_plays_without_sf2_and_stops_with_fade() {
     assert_eq!(core.pad_active, None);
     let fading = render_secs(&mut engine, 0.5);
     assert!(rms(&fading) > 0.005, "some devagar, não corta seco");
-    render_secs(&mut engine, 3.0);
+    // fade (3 s) + cauda do reverb de igreja (~4 s)
+    render_secs(&mut engine, 9.0);
     assert!(
         rms(&render_secs(&mut engine, 0.5)) < 1e-4,
-        "depois do fade fica mudo"
+        "depois do fade e da cauda do reverb fica mudo"
     );
 }
 
@@ -415,4 +416,50 @@ fn screen_keyboard_plays_and_lights_keys() {
     assert!(rms(&r.render(4800)) > 0.01, "nota do teclado da tela soa");
     r.core.note_off(64);
     assert!(!crate::core::note_is_held(64));
+}
+
+#[test]
+fn vivo_pad_plays_in_key_and_switches_from_loop() {
+    let (mut core, mut engine) = pad_rig();
+    core.pad_press(0); // pad de loop (Escuro)
+    render_secs(&mut engine, 1.0);
+    core.set_pad_bank(crate::pads::PAD_BANKS); // Vivo · Coro, mesmo tom
+    assert_eq!(core.pad_active, Some(0));
+    assert!(core.pad_ready(crate::pads::PAD_BANKS, 0));
+    let mid = render_secs(&mut engine, 2.0);
+    for chunk in mid.chunks(9600) {
+        assert!(rms(chunk) > 0.01, "sem buraco na troca loop → Vivo");
+    }
+    let full = render_secs(&mut engine, 3.0);
+    assert!(full.iter().all(|x| x.is_finite() && x.abs() <= 1.0));
+    assert!(rms(&full) > 0.03, "Vivo soando: {}", rms(&full));
+    // Brilho/shimmer mudam ao vivo sem quebrar
+    let mut v = core.cfg.vivo.clone();
+    v.bright = 0.1;
+    v.shimmer = 1.0;
+    v.motion = 1.0;
+    core.set_vivo(v);
+    let changed = render_secs(&mut engine, 2.0);
+    assert!(changed.iter().all(|x| x.is_finite()));
+}
+
+/// Peso do Pad Vivo + reverb de igreja (deve ser bem leve).
+#[test]
+#[ignore]
+fn bench_vivo_and_church() {
+    let (mut core, mut engine) = pad_rig();
+    core.set_pad_bank(crate::pads::PAD_BANKS + 2);
+    let mut v = core.cfg.vivo.clone();
+    v.motion = 1.0;
+    v.church_sf2 = 0.5;
+    core.set_vivo(v);
+    core.pad_press(3);
+    render_secs(&mut engine, 1.0);
+    core.pad_press(8); // dois Vivos ao mesmo tempo durante a troca
+    let t = std::time::Instant::now();
+    render_secs(&mut engine, 10.0);
+    println!(
+        "Vivo + igreja: {:.1}% de um núcleo",
+        t.elapsed().as_secs_f64() / 10.0 * 100.0
+    );
 }

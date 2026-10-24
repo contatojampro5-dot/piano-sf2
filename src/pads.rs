@@ -61,6 +61,85 @@ macro_rules! bank {
 
 static BUILTIN: [[&[u8]; PAD_KEYS]; PAD_BANKS] = [bank!("escuro"), bank!("coral"), bank!("suave")];
 
+/// Estilos ao todo: 3 de loop (Escuro, Coral, Suave) + 3 "Vivos" (motor granular).
+pub const ALL_BANKS: usize = PAD_BANKS + 3;
+
+/// Estilo "Vivo" (granular)? Bancos 3, 4 e 5.
+pub fn is_vivo(bank: usize) -> bool {
+    bank >= PAD_BANKS
+}
+
+pub fn bank_name(bank: usize) -> &'static str {
+    let b = bank % ALL_BANKS;
+    if is_vivo(b) {
+        VIVO_NAMES[b - PAD_BANKS]
+    } else {
+        BANK_NAMES[b]
+    }
+}
+
+pub fn bank_hint(bank: usize) -> &'static str {
+    let b = bank % ALL_BANKS;
+    if is_vivo(b) {
+        VIVO_HINTS[b - PAD_BANKS]
+    } else {
+        BANK_HINTS[b]
+    }
+}
+
+/// Texturas do "Pad Vivo" (motor granular), todas em C3.
+pub const VIVO_NAMES: [&str; 3] = ["Vivo · Coro", "Vivo · Cordas", "Vivo · Cristal"];
+pub const VIVO_HINTS: [&str; 3] = [
+    "vozes que respiram",
+    "cordas suaves e quentes",
+    "brilho de vidro e sino",
+];
+static TEXTURES: [&[u8]; 3] = [
+    include_bytes!("../assets/texturas/coro.ogg"),
+    include_bytes!("../assets/texturas/cordas.ogg"),
+    include_bytes!("../assets/texturas/cristal.ogg"),
+];
+/// Nota das texturas que vêm no programa.
+pub const TEXTURE_ROOT: u8 = 48;
+
+/// Carrega a textura do Pad Vivo `n` (ou o arquivo do Theo, numa nota `root`).
+pub fn load_texture(
+    n: usize,
+    custom: Option<(&str, u8)>,
+) -> Result<Arc<crate::granular::GrainSource>, String> {
+    let (clip, root) = match custom {
+        Some((path, root)) => {
+            let file =
+                std::fs::File::open(path).map_err(|e| format!("Não consegui abrir {path}: {e}"))?;
+            let ext = std::path::Path::new(path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_lowercase());
+            (decode(Box::new(file), ext.as_deref(), false)?, root)
+        }
+        None => (
+            decode(Box::new(Cursor::new(TEXTURES[n % 3])), Some("ogg"), false)?,
+            TEXTURE_ROOT,
+        ),
+    };
+    // Textura muito longa só gasta memória: usa no máximo 20 s.
+    let max = clip.rate as usize * 20 * 2;
+    let data = &clip.data[..clip.data.len().min(max)];
+    Ok(Arc::new(crate::granular::GrainSource::from_stereo_i16(
+        data, clip.rate, root,
+    )))
+}
+
+/// Nota (MIDI) de cada tom do pad: tudo perto de C3 (G..B uma oitava abaixo).
+pub fn key_midi(key: usize) -> u8 {
+    let k = (key % PAD_KEYS) as u8;
+    if k <= 6 {
+        48 + k
+    } else {
+        36 + k
+    }
+}
+
 pub fn builtin_bytes(bank: usize, key: usize) -> &'static [u8] {
     BUILTIN[bank % PAD_BANKS][key % PAD_KEYS]
 }

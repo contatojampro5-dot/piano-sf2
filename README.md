@@ -94,6 +94,16 @@ Lá em cima tem duas abas: **🎹 Sons SF2** (a mesa com as 8 camadas) e **🎶 
 - Tudo pode ir para a mesinha com **Aprender**: cada tom, volume do pad, parar, anterior/próximo e trocar Escuro/Coral.
   (Ex.: clique em Aprender → clique no botão "C" da tela → aperte um botão da mesinha.)
 
+### Pads Vivos ✨ (motor granular)
+
+Os estilos **Vivo · Coro**, **Vivo · Cordas** e **Vivo · Cristal** não são arquivos em loop: o programa pega uma
+textura curta e toca milhares de pedacinhos dela ao mesmo tempo, em qualquer tom — o som respira e nunca se repete igual.
+- **Brilho** (escuro ↔ aberto), **Shimmer** (oitavas "celestiais" em cima) e **Movimento** (calmo ↔ mexido), ao vivo.
+- **Reverb de igreja**: reverb novo de igreja grande nos pads (também dá para usar nas camadas do SF2 em ⚙ Ajustes → Som).
+- **Usar meu som como base**: escolha um WAV/MP3 seu (ex.: gerado no Suno ou ElevenLabs, numa nota só, sem bateria),
+  diga em que nota ele está ("Seu som está em") e o Vivo vira pad de todos os tons com esse som.
+- Bem leve: Pad Vivo + reverb de igreja usam menos de 1% do processador.
+
 ## Mesinha SMC-Mixer (padrão Mackie)
 
 | Na mesinha | No programa |
@@ -162,6 +172,11 @@ Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B)
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.9 — Pads Vivos (granular) e reverb de igreja
+- Motor granular novo: 3 texturas (Coro, Cordas, Cristal) que viram pad em qualquer tom, com Brilho/Shimmer/Movimento.
+- Reverb de igreja (rede de 8 atrasos, ~3,8 s) para pads e, opcional, para as camadas do SF2.
+- Som próprio (Suno/ElevenLabs/gravação) como base do Pad Vivo.
 
 ### v0.8 — modo Editar
 - Botão **✏ Editar**: tirar/colocar camadas, canal do PAD, barra de cenas, aba Pads e botões de cima.

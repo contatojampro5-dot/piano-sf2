@@ -50,6 +50,8 @@ struct UiState {
     /// Pedidos que só podem rodar com o `core` destravado (abrir arquivo trava a tela até escolher).
     open_sf2_dialog: bool,
     pad_file_dialog: Option<(usize, usize)>,
+    /// Nota do som próprio do Pad Vivo (0 = C ... 11 = B).
+    vivo_root_key: usize,
     /// Teclado de piano na tela (abre/fecha com o botão "Teclado").
     kb_open: bool,
     /// Nota que o mouse está segurando.
@@ -142,6 +144,7 @@ impl PianoApp {
                 audio_devices: Vec::new(),
                 open_sf2_dialog: false,
                 pad_file_dialog: None,
+                vivo_root_key: 0,
                 kb_open: false,
                 kb_mouse: None,
                 kb_keys: Vec::new(),
@@ -308,7 +311,13 @@ impl eframe::App for PianoApp {
                 .pick_file()
             {
                 let p = path.to_string_lossy().to_string();
-                self.core.lock().unwrap().set_pad_file(bank, key, Some(p));
+                let mut c = self.core.lock().unwrap();
+                if pads::is_vivo(bank) {
+                    let root = pads::key_midi(self.ui.vivo_root_key);
+                    c.set_vivo_file(bank - pads::PAD_BANKS, Some((p, root)));
+                } else {
+                    c.set_pad_file(bank, key, Some(p));
+                }
             }
         }
 
@@ -1008,35 +1017,105 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     let side_w = 170.0;
     let gap = 10.0;
 
-    // Banco: Escuro / Coral
-    ui.horizontal(|ui| {
-        ui.label(RichText::new("Estilo:").color(th().dim));
-        for b in 0..pads::PAD_BANKS {
-            let sel = core.cfg.pad_bank == b;
-            let text = RichText::new(format!(
-                "{}  ·  {}",
-                pads::BANK_NAMES[b],
-                pads::BANK_HINTS[b]
-            ))
-            .size(15.0)
-            .color(if sel { th().ink } else { th().text });
-            let r = ui.add_sized(
-                [290.0, 38.0],
-                egui::Button::new(text).fill(if sel { PAD_COLOR } else { th().glass_hi }),
+    // Estilos: clássicos (loop) e vivos (motor granular)
+    for (title, range) in [
+        ("Clássicos:", 0..pads::PAD_BANKS),
+        ("Vivos ✨:", pads::PAD_BANKS..pads::ALL_BANKS),
+    ] {
+        ui.horizontal(|ui| {
+            ui.add_sized(
+                [78.0, 34.0],
+                egui::Label::new(RichText::new(title).color(th().dim)),
             );
-            if !learnable(ui, core, &r, Target::PadBank) && r.clicked() {
-                core.set_pad_bank(b);
+            for b in range {
+                let sel = core.cfg.pad_bank == b;
+                let text =
+                    RichText::new(format!("{}  ·  {}", pads::bank_name(b), pads::bank_hint(b)))
+                        .size(14.0)
+                        .color(if sel { th().ink } else { th().text });
+                let r = ui.add_sized(
+                    [270.0, 34.0],
+                    egui::Button::new(text)
+                        .fill(if sel { PAD_COLOR } else { th().glass_hi })
+                        .truncate(),
+                );
+                if !learnable(ui, core, &r, Target::PadBank) && r.clicked() {
+                    core.set_pad_bank(b);
+                }
             }
-        }
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.label(
-                RichText::new("Sem terça: o pad de C serve para C e Cm.")
-                    .size(13.0)
-                    .color(th().dim),
-            );
+            if title.starts_with("Cl") {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(
+                        RichText::new("Sem terça: o pad de C serve para C e Cm.")
+                            .size(13.0)
+                            .color(th().dim),
+                    );
+                });
+            }
         });
+    }
+    // Ajustes ao vivo
+    let mut v = core.cfg.vivo.clone();
+    let vivo = pads::is_vivo(core.cfg.pad_bank);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().slider_width = 120.0;
+        ui.label(RichText::new("Reverb de igreja").color(th().dim));
+        ui.add(egui::Slider::new(&mut v.church_pads, 0.0..=1.0).show_value(false));
+        if vivo {
+            ui.add_space(12.0);
+            ui.label(RichText::new("Brilho").color(th().dim));
+            ui.add(egui::Slider::new(&mut v.bright, 0.0..=1.0).show_value(false));
+            ui.label(RichText::new("Shimmer").color(th().dim));
+            ui.add(egui::Slider::new(&mut v.shimmer, 0.0..=1.0).show_value(false));
+            ui.label(RichText::new("Movimento").color(th().dim));
+            ui.add(egui::Slider::new(&mut v.motion, 0.0..=1.0).show_value(false));
+        }
     });
-    ui.add_space(10.0);
+    if vivo {
+        let n = core.cfg.pad_bank - pads::PAD_BANKS;
+        let custom = core
+            .cfg
+            .vivo
+            .files
+            .iter()
+            .find(|(k, _, _)| *k == n)
+            .cloned();
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Base do som:").color(th().dim));
+            match &custom {
+                Some((_, path, root)) => {
+                    let file = std::path::Path::new(path).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default();
+                    let k = (0..pads::PAD_KEYS).find(|k| pads::key_midi(*k) == *root).unwrap_or(0);
+                    ui.label(RichText::new(format!("♪ {file} (em {})", pads::KEY_NAMES[k])).color(PAD_COLOR));
+                    if ui.button("Voltar ao padrão").clicked() {
+                        core.set_vivo_file(n, None);
+                    }
+                }
+                None => {
+                    ui.label(RichText::new("padrão do programa").color(th().text));
+                }
+            }
+            ui.add_space(8.0);
+            ui.label(RichText::new("Seu som está em:").color(th().dim));
+            egui::ComboBox::from_id_salt("vivo_root")
+                .width(60.0)
+                .selected_text(pads::KEY_NAMES[st.vivo_root_key])
+                .show_ui(ui, |ui| {
+                    for k in 0..pads::PAD_KEYS {
+                        ui.selectable_value(&mut st.vivo_root_key, k, pads::KEY_NAMES[k]);
+                    }
+                });
+            if ui
+                .button("🎵 Usar meu som (WAV/MP3) como base...")
+                .on_hover_text("Ex.: um som do Suno/ElevenLabs numa nota só (sem bateria). O programa transforma em pad de todos os tons.")
+                .clicked()
+            {
+                st.pad_file_dialog = Some((core.cfg.pad_bank, 0));
+            }
+        });
+    }
+    core.set_vivo(v);
+    ui.add_space(8.0);
 
     let grid_w = avail.x - side_w - gap;
     let rows_h = ui.available_height() - 30.0;
@@ -1191,10 +1270,19 @@ fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: 
             "Pad {} ({}) — som padrão {}",
             pads::KEY_NAMES[key],
             pads::KEY_NAMES_PT[key],
-            pads::BANK_NAMES[bank]
+            pads::bank_name(bank)
         ),
     });
     resp.context_menu(|ui| {
+        if pads::is_vivo(bank) {
+            ui.label(
+                RichText::new(
+                    "Pad Vivo: o som base vale para todos os tons (veja \"Base do som\" acima).",
+                )
+                .size(12.0),
+            );
+            return;
+        }
         if ui.button("📂 Usar meu arquivo (WAV/MP3/OGG)...").clicked() {
             st.pad_file_dialog = Some((bank, key));
             ui.close();
@@ -1622,7 +1710,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) -> Rect {
         core.cfg.tab = 1;
     }
     ui.label(
-        RichText::new(pads::BANK_NAMES[core.cfg.pad_bank])
+        RichText::new(pads::bank_name(core.cfg.pad_bank))
             .size(12.0)
             .color(th().dim),
     );
@@ -2383,6 +2471,13 @@ fn settings_window(
 
                 ui.separator();
                 ui.heading("Som");
+                let mut v = core.cfg.vivo.clone();
+                ui.horizontal(|ui| {
+                    ui.label("Reverb de igreja nas camadas do SF2");
+                    ui.add(egui::Slider::new(&mut v.church_sf2, 0.0..=1.0).show_value(false));
+                });
+                ui.label(RichText::new("O mesmo reverb dos pads (igreja grande). Use pouco: 10% a 30% já deixa o piano mais bonito.").size(12.0).color(th().dim));
+                core.set_vivo(v);
                 egui::Grid::new("som").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
                     ui.label("Saída");
                     let cur = core.cfg.audio_device.clone().unwrap_or_else(|| "Padrão do Windows".into());

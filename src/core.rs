@@ -11,8 +11,9 @@ use crossbeam_channel::Sender;
 use rustysynth::SoundFont;
 
 use crate::engine::{Cmd, Engine};
+use crate::granular::{GrainParams, GrainSource, GranularVoice};
 use crate::model::*;
-use crate::pads::{self, PadClip, PAD_BANKS, PAD_KEYS};
+use crate::pads::{self, PadClip, ALL_BANKS, PAD_BANKS, PAD_KEYS};
 
 /// Pedido de carregar um pad: (banco, tom, arquivo próprio).
 pub type PadJob = (usize, usize, Option<String>);
@@ -105,6 +106,10 @@ pub struct Core {
     pub pad_loader: Option<Sender<PadJob>>,
     /// Último sinal que chegou da mesinha (aparece no modo Aprender).
     pub last_signal: Option<String>,
+    /// Texturas do Pad Vivo já carregadas (3).
+    pub textures: Vec<Option<Arc<GrainSource>>>,
+    tex_jobs: std::collections::HashSet<usize>,
+    grain_seed: u32,
     pub wizard: Option<Wizard>,
 }
 
@@ -158,6 +163,9 @@ impl Core {
             pad_jobs: Default::default(),
             pad_loader: None,
             last_signal: None,
+            textures: vec![None, None, None],
+            tex_jobs: Default::default(),
+            grain_seed: 0x1234_5678,
             wizard: None,
         }
     }
@@ -203,6 +211,103 @@ impl Core {
         self.send(Cmd::SetMaster(self.cfg.master));
         self.send(Cmd::SetTranspose(mix.transpose));
         self.send(Cmd::PadVolume(self.cfg.pad_volume));
+        self.send_vivo();
+    }
+
+    fn send_vivo(&self) {
+        let v = &self.cfg.vivo;
+        self.send(Cmd::GrainParams(GrainParams {
+            bright: v.bright,
+            shimmer: v.shimmer,
+            motion: v.motion,
+        }));
+        self.send(Cmd::Church {
+            pads: v.church_pads,
+            sf2: v.church_sf2,
+        });
+    }
+
+    /// Ajustes do Pad Vivo / reverb de igreja mudaram (na tela).
+    pub fn set_vivo(&mut self, v: VivoCfg) {
+        if v != self.cfg.vivo {
+            self.cfg.vivo = v;
+            self.cfg.normalize();
+            self.send_vivo();
+            self.dirty = true;
+        }
+    }
+
+    // ---------- Pad Vivo (granular) ----------
+
+    fn request_texture(&mut self, n: usize) {
+        if self.textures[n].is_some() || !self.tex_jobs.insert(n) {
+            return;
+        }
+        let custom = self
+            .cfg
+            .vivo
+            .files
+            .iter()
+            .find(|(k, _, _)| *k == n)
+            .map(|(_, p, r)| (p.clone(), *r));
+        let job: PadJob = (
+            PAD_BANKS + n,
+            custom.as_ref().map(|c| c.1 as usize).unwrap_or(0),
+            custom.map(|c| c.0),
+        );
+        match &self.pad_loader {
+            Some(tx) => {
+                let _ = tx.send(job);
+            }
+            None => {
+                let r = load_job_texture(&job);
+                self.texture_loaded(n, r);
+            }
+        }
+    }
+
+    pub fn texture_loaded(&mut self, n: usize, result: Result<Arc<GrainSource>, String>) {
+        self.tex_jobs.remove(&n);
+        match result {
+            Ok(t) => {
+                self.textures[n] = Some(t);
+                if let Some((bank, key)) = self.pad_pending {
+                    if bank == PAD_BANKS + n {
+                        self.start_pad(key);
+                    }
+                }
+            }
+            Err(e) => {
+                if self.cfg.vivo.files.iter().any(|(k, _, _)| *k == n) {
+                    self.cfg.vivo.files.retain(|(k, _, _)| *k != n);
+                    self.dirty = true;
+                    self.notify(format!(
+                        "{}: {e}. Voltei ao som padrão.",
+                        pads::VIVO_NAMES[n]
+                    ));
+                    self.request_texture(n);
+                } else {
+                    self.notify(format!("{}: {e}", pads::VIVO_NAMES[n]));
+                }
+            }
+        }
+        self.request_repaint();
+    }
+
+    /// Usa um som do Theo como base do Vivo `n` (None = volta ao padrão). `root` = nota do arquivo.
+    pub fn set_vivo_file(&mut self, n: usize, file: Option<(String, u8)>) {
+        self.cfg.vivo.files.retain(|(k, _, _)| *k != n);
+        if let Some((p, root)) = file {
+            self.cfg.vivo.files.push((n, p, root));
+        }
+        self.dirty = true;
+        self.textures[n] = None;
+        self.request_texture(n);
+        if let Some(k) = self.pad_active {
+            if self.cfg.pad_bank == PAD_BANKS + n {
+                self.pad_pending = Some((PAD_BANKS + n, k));
+            }
+        }
     }
 
     /// A placa de som abriu com esta taxa de amostragem.
@@ -235,6 +340,10 @@ impl Core {
 
     /// Deixa os 12 tons do banco prontos (em segundo plano).
     pub fn preload_pad_bank(&mut self, bank: usize) {
+        if pads::is_vivo(bank % ALL_BANKS) {
+            self.request_texture(bank % ALL_BANKS - PAD_BANKS);
+            return;
+        }
         for k in 0..PAD_KEYS {
             self.request_pad(bank % PAD_BANKS, k);
         }
@@ -277,6 +386,30 @@ impl Core {
     fn start_pad(&mut self, key: usize) {
         let bank = self.cfg.pad_bank;
         self.pad_active = Some(key);
+        if pads::is_vivo(bank) {
+            let n = bank - PAD_BANKS;
+            match self.textures[n].clone() {
+                Some(tex) => {
+                    self.pad_pending = None;
+                    self.grain_seed = self
+                        .grain_seed
+                        .wrapping_mul(1_664_525)
+                        .wrapping_add(1_013_904_223);
+                    let voice = GranularVoice::new(
+                        tex,
+                        pads::key_midi(key),
+                        self.sample_rate,
+                        self.grain_seed,
+                    );
+                    self.send(Cmd::GrainPlay(Box::new(voice)));
+                }
+                None => {
+                    self.pad_pending = Some((bank, key));
+                    self.request_texture(n);
+                }
+            }
+            return;
+        }
         match self.pad_clips[bank][key].clone() {
             Some(clip) => {
                 self.pad_pending = None;
@@ -320,7 +453,7 @@ impl Core {
     }
 
     pub fn set_pad_bank(&mut self, bank: usize) {
-        let bank = bank % PAD_BANKS;
+        let bank = bank % ALL_BANKS;
         if bank == self.cfg.pad_bank {
             return;
         }
@@ -330,11 +463,14 @@ impl Core {
         if let Some(k) = self.pad_active {
             self.start_pad(k); // troca suave para o mesmo tom no outro banco
         }
-        self.notify(format!("Pads: {}", pads::BANK_NAMES[bank]));
+        self.notify(format!("Pads: {}", pads::bank_name(bank)));
     }
 
     /// Põe um arquivo próprio num botão (None = volta ao som padrão).
     pub fn set_pad_file(&mut self, bank: usize, key: usize, path: Option<String>) {
+        if pads::is_vivo(bank) {
+            return; // Vivo usa um arquivo só para todos os tons: set_vivo_file
+        }
         self.cfg
             .pad_files
             .retain(|f| !(f.bank == bank && f.key == key));
@@ -350,6 +486,9 @@ impl Core {
     }
 
     pub fn pad_ready(&self, bank: usize, key: usize) -> bool {
+        if pads::is_vivo(bank) {
+            return self.textures[bank - PAD_BANKS].is_some();
+        }
         self.pad_clips[bank][key].is_some()
     }
 
@@ -963,6 +1102,15 @@ pub fn load_sf2_async(core: SharedCore, path: String) {
         .expect("thread do SF2");
 }
 
+/// Pedido de textura do Vivo: banco = 3 + n, "tom" = nota do arquivo, caminho do arquivo próprio.
+fn load_job_texture(job: &PadJob) -> Result<Arc<GrainSource>, String> {
+    let (bank, root, custom) = job;
+    pads::load_texture(
+        bank - PAD_BANKS,
+        custom.as_deref().map(|p| (p, *root as u8)),
+    )
+}
+
 /// Thread que decodifica pads fora da tela e do áudio.
 pub fn start_pad_loader(core: SharedCore) {
     let (tx, rx) = crossbeam_channel::unbounded::<PadJob>();
@@ -975,10 +1123,18 @@ pub fn start_pad_loader(core: SharedCore) {
     std::thread::Builder::new()
         .name("pads".into())
         .spawn(move || {
-            while let Ok((bank, key, custom)) = rx.recv() {
-                let r = pads::load(bank, key, custom.as_deref());
+            while let Ok(job) = rx.recv() {
+                let (bank, key, custom) = &job;
+                if *bank >= PAD_BANKS {
+                    let r = load_job_texture(&job);
+                    if let Ok(mut c) = worker.lock() {
+                        c.texture_loaded(bank - PAD_BANKS, r);
+                    }
+                    continue;
+                }
+                let r = pads::load(*bank, *key, custom.as_deref());
                 if let Ok(mut c) = worker.lock() {
-                    c.pad_loaded(bank, key, r);
+                    c.pad_loaded(*bank, *key, r);
                 }
             }
         })
@@ -986,7 +1142,7 @@ pub fn start_pad_loader(core: SharedCore) {
     // Os dois bancos ficam prontos (o atual primeiro): trocar Escuro/Coral no culto é na hora.
     let mut c = core.lock().unwrap();
     c.preload_pad_bank(bank);
-    for b in 0..PAD_BANKS {
+    for b in 0..ALL_BANKS {
         c.preload_pad_bank(b);
     }
 }

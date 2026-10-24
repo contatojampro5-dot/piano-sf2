@@ -10,6 +10,7 @@ use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
 use rustysynth::{SoundFont, Synthesizer, SynthesizerSettings};
 
+use crate::granular::{ChurchReverb, GrainParams, GranularVoice};
 use crate::model::LAYERS;
 use crate::pads::{PadClip, PadVoice};
 
@@ -17,6 +18,7 @@ use crate::pads::{PadClip, PadVoice};
 pub enum Garbage {
     Synth(Box<Synthesizer>),
     Pad(Arc<PadClip>),
+    Grain(Box<GranularVoice>),
 }
 
 /// Máximo de pads soando juntos (o que entra + os que estão sumindo).
@@ -68,6 +70,14 @@ pub enum Cmd {
     PadPlay(Arc<PadClip>),
     PadStop,
     PadVolume(f32),
+    /// Toca um Pad Vivo (granular); o que estiver tocando some devagar. A voz é criada fora daqui.
+    GrainPlay(Box<GranularVoice>),
+    GrainParams(GrainParams),
+    /// Reverb de igreja: quanto nos pads e quanto nas camadas do SF2 (0..1).
+    Church {
+        pads: f32,
+        sf2: f32,
+    },
 }
 
 /// Números que a tela mostra (atualizados pela thread de áudio).
@@ -108,6 +118,18 @@ pub struct Engine {
     /// Volume dos pads (alvo e valor suavizado).
     pad_vol: f32,
     pad_vol_now: f32,
+    // Box de propósito: a voz é criada fora da thread de áudio e só "passa a mão" para cá.
+    #[allow(clippy::vec_box)]
+    grains: Vec<Box<GranularVoice>>,
+    grain_params: GrainParams,
+    reverb: ChurchReverb,
+    church_pads: f32,
+    church_sf2: f32,
+    // buffers do "barramento" dos pads e da entrada do reverb (criados antes, sem alocar no áudio)
+    pad_l: Vec<f32>,
+    pad_r: Vec<f32>,
+    rev_l: Vec<f32>,
+    rev_r: Vec<f32>,
 }
 
 impl Engine {
@@ -132,6 +154,15 @@ impl Engine {
             pads: Vec::with_capacity(MAX_PADS + 1),
             pad_vol: 0.49,
             pad_vol_now: 0.49,
+            grains: Vec::with_capacity(MAX_PADS + 1),
+            grain_params: GrainParams::default(),
+            reverb: ChurchReverb::new(48_000),
+            church_pads: 0.4,
+            church_sf2: 0.0,
+            pad_l: vec![0.0; 8192],
+            pad_r: vec![0.0; 8192],
+            rev_l: vec![0.0; 8192],
+            rev_r: vec![0.0; 8192],
         }
     }
 
@@ -182,6 +213,7 @@ impl Engine {
                     .as_ref()
                     .map(|s| s.get_sample_rate() as u32)
                     .unwrap_or(48_000);
+                self.reverb.set_sample_rate(self.sample_rate);
                 self.held = [None; 128];
                 if let Some(s) = self.synth.as_mut() {
                     s.set_master_volume(self.master);
@@ -280,12 +312,35 @@ impl Engine {
             Cmd::SetSampleRate(sr) => {
                 if self.synth.is_none() {
                     self.sample_rate = sr.max(8000);
+                    self.reverb.set_sample_rate(self.sample_rate);
                 }
+            }
+            Cmd::GrainPlay(voice) => {
+                let sr = self.sample_rate;
+                for v in &mut self.pads {
+                    v.fade_out(sr);
+                }
+                for g in &mut self.grains {
+                    g.fade_out(sr);
+                }
+                if self.grains.len() >= MAX_PADS {
+                    let old = self.grains.remove(0);
+                    let _ = self.garbage.try_send(Garbage::Grain(old));
+                }
+                self.grains.push(voice);
+            }
+            Cmd::GrainParams(p) => self.grain_params = p,
+            Cmd::Church { pads, sf2 } => {
+                self.church_pads = pads.clamp(0.0, 1.0);
+                self.church_sf2 = sf2.clamp(0.0, 1.0);
             }
             Cmd::PadPlay(clip) => {
                 let sr = self.sample_rate;
                 for v in &mut self.pads {
                     v.fade_out(sr);
+                }
+                for g in &mut self.grains {
+                    g.fade_out(sr);
                 }
                 // Lista cheia: o pad mais antigo sai na hora (já estava sumindo).
                 if self.pads.len() >= MAX_PADS {
@@ -298,6 +353,9 @@ impl Engine {
                 let sr = self.sample_rate;
                 for v in &mut self.pads {
                     v.fade_out(sr);
+                }
+                for g in &mut self.grains {
+                    g.fade_out(sr);
                 }
             }
             Cmd::PadVolume(v) => self.pad_vol = v.clamp(0.0, 1.0).powi(2),
@@ -347,12 +405,38 @@ impl Engine {
                     r.fill(0.0);
                 }
             }
-            if !self.pads.is_empty() {
+            // Pads (loop e Vivo) num "barramento" próprio; depois vão para a saída e para o reverb de igreja.
+            let has_pads = !self.pads.is_empty() || !self.grains.is_empty();
+            let church = self.church_pads > 0.001 || self.church_sf2 > 0.001;
+            if has_pads || church {
                 // Volume do pad muda suave (sem degrau quando mexe o fader).
                 self.pad_vol_now += (self.pad_vol - self.pad_vol_now) * 0.2;
-                let vol = self.pad_vol_now * self.master;
+                let gain = self.pad_vol_now * self.master;
+                let (pl, pr) = (&mut self.pad_l[..n], &mut self.pad_r[..n]);
+                pl.fill(0.0);
+                pr.fill(0.0);
                 for v in &mut self.pads {
-                    v.mix(l, r, vol, sr);
+                    v.mix(pl, pr, 1.0, sr);
+                }
+                let gp = self.grain_params;
+                for g in &mut self.grains {
+                    g.mix(pl, pr, &gp, sr);
+                }
+                if church {
+                    let (rl, rr) = (&mut self.rev_l[..n], &mut self.rev_r[..n]);
+                    let (sp, ss) = (self.church_pads * gain, self.church_sf2);
+                    for f in 0..n {
+                        rl[f] = pl[f] * sp + l[f] * ss;
+                        rr[f] = pr[f] * sp + r[f] * ss;
+                    }
+                }
+                for f in 0..n {
+                    l[f] += pl[f] * gain;
+                    r[f] += pr[f] * gain;
+                }
+                if church {
+                    self.reverb
+                        .process(&self.rev_l[..n], &self.rev_r[..n], l, r, 1.0);
                 }
             }
             for f in 0..n {
@@ -377,6 +461,16 @@ impl Engine {
             if self.pads[i].finished() {
                 let v = self.pads.remove(i);
                 let _ = self.garbage.try_send(Garbage::Pad(v.clip));
+            } else {
+                i += 1;
+            }
+        }
+
+        let mut i = 0;
+        while i < self.grains.len() {
+            if self.grains[i].finished() {
+                let v = self.grains.remove(i);
+                let _ = self.garbage.try_send(Garbage::Grain(v));
             } else {
                 i += 1;
             }

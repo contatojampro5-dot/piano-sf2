@@ -19,6 +19,8 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 - `LAYERS = 6` (v0.3; canais 7/8 da mesinha = PAD/GERAL). Uma camada = um canal MIDI de um único `Synthesizer`. Liga/desliga usa expressão (CC11) + corte após 60 ms.
 - `src/pads.rs` (v0.2/v0.3): pads por tom (12 tons × estilos Escuro/Coral/Suave) embutidos em OGG (`assets/pads/`), decodificados
   por uma thread (`start_pad_loader`) e tocados no motor com crossfade (`Cmd::PadPlay`). Gerador: `tools/gerar_pads.py`.
+- Pad Vivo (v0.9): `src/granular.rs` (GranularVoice + ChurchReverb FDN), bancos 3..5 (`pads::is_vivo`), texturas em
+  `assets/texturas/` (C3, geradas por `tools/gerar_texturas.py`), ajustes em `cfg.vivo`. Prévia WAV: teste `preview` (ignored).
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

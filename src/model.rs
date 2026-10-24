@@ -376,6 +376,7 @@ pub struct Config {
     pub bt_devices: Vec<BtDevice>,
     /// Coisas tiradas da tela no modo Editar (ids de `EDITABLE`).
     pub hidden: Vec<String>,
+    pub vivo: VivoCfg,
     /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
     #[serde(default)]
     pub mappings_version: u32,
@@ -418,6 +419,34 @@ pub struct BtDevice {
     pub name: String,
 }
 
+/// Ajustes do Pad Vivo (granular) e do reverb de igreja.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VivoCfg {
+    pub bright: f32,
+    pub shimmer: f32,
+    pub motion: f32,
+    /// Reverb de igreja nos pads (0..1).
+    pub church_pads: f32,
+    /// Reverb de igreja nas camadas do SF2 (0..1).
+    pub church_sf2: f32,
+    /// Som próprio como base de cada Vivo: (0..2, arquivo, nota MIDI do arquivo).
+    pub files: Vec<(usize, String, u8)>,
+}
+
+impl Default for VivoCfg {
+    fn default() -> Self {
+        Self {
+            bright: 0.6,
+            shimmer: 0.35,
+            motion: 0.45,
+            church_pads: 0.4,
+            church_sf2: 0.0,
+            files: Vec::new(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PadFile {
     pub bank: usize,
@@ -447,6 +476,7 @@ impl Default for Config {
             look: Appearance::default(),
             bt_devices: Vec::new(),
             hidden: Vec::new(),
+            vivo: VivoCfg::default(),
         }
     }
 }
@@ -481,7 +511,17 @@ impl Config {
         }
         self.polyphony = self.polyphony.clamp(16, 256);
         self.pad_volume = self.pad_volume.clamp(0.0, 1.0);
-        self.pad_bank %= crate::pads::PAD_BANKS;
+        self.pad_bank %= crate::pads::ALL_BANKS;
+        for v in [
+            &mut self.vivo.bright,
+            &mut self.vivo.shimmer,
+            &mut self.vivo.motion,
+            &mut self.vivo.church_pads,
+            &mut self.vivo.church_sf2,
+        ] {
+            *v = v.clamp(0.0, 1.0);
+        }
+        self.vivo.files.retain(|(n, _, _)| *n < 3);
         self.tab = self.tab.min(1);
         self.look.frost = self.look.frost.clamp(0.0, 1.0);
         self.look.glow = self.look.glow.clamp(0.0, 1.0);
