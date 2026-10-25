@@ -124,6 +124,50 @@ pub fn chords(key: usize, minor: bool) -> Vec<String> {
         .collect()
 }
 
+/// Sequências de acordes mais usadas no louvor (graus da escala, 1 = acorde do tom).
+const MAJOR_PROGS: [(&str, &[usize]); 7] = [
+    ("a campeã", &[1, 5, 6, 4]),
+    ("começando triste", &[6, 4, 1, 5]),
+    ("adoração", &[4, 1, 5, 6]),
+    ("clássica / hino", &[1, 4, 5, 1]),
+    ("balada", &[1, 6, 4, 5]),
+    ("sobe pro refrão", &[4, 5, 6]),
+    ("gospel", &[2, 5, 1]),
+];
+const MINOR_PROGS: [(&str, &[usize]); 4] = [
+    ("épica", &[1, 6, 3, 7]),
+    ("subindo", &[1, 6, 7]),
+    ("clássica menor", &[1, 4, 5, 1]),
+    ("ministração", &[6, 7, 1]),
+];
+
+/// Uma sequência pronta no tom: (nome, números "1 – 5 – 6 – 4", acordes "G – D – Em – C").
+pub struct Progression {
+    pub name: &'static str,
+    pub numbers: String,
+    pub chords: String,
+}
+
+pub fn progressions(key: usize, minor: bool) -> Vec<Progression> {
+    let ch = chords(key, minor);
+    let list: &[(&str, &[usize])] = if minor { &MINOR_PROGS } else { &MAJOR_PROGS };
+    list.iter()
+        .map(|(name, degs)| Progression {
+            name,
+            numbers: degs
+                .iter()
+                .map(|d| d.to_string())
+                .collect::<Vec<_>>()
+                .join(" – "),
+            chords: degs
+                .iter()
+                .map(|d| ch[d - 1].clone())
+                .collect::<Vec<_>>()
+                .join(" – "),
+        })
+        .collect()
+}
+
 /// Altura (0..11) está na escala?
 pub fn in_scale(key: usize, minor: bool, pc: u8) -> bool {
     scale(key, minor).iter().any(|n| n.pc == pc % 12)
@@ -168,6 +212,10 @@ mod tests {
         assert_eq!(chords(9, true).join(" "), "Am B° C Dm Em F G");
         assert!(in_scale(0, false, 4) && !in_scale(0, false, 1));
         assert_eq!(scale(0, false)[3].solfejo, "Fá");
+        let g = progressions(7, false);
+        assert_eq!(g[0].numbers, "1 – 5 – 6 – 4");
+        assert_eq!(g[0].chords, "G – D – Em – C");
+        assert_eq!(progressions(9, true)[0].chords, "Am – F – C – G");
         assert_eq!(scale(10, false)[0].solfejo, "Sib");
     }
 }

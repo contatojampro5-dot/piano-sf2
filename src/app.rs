@@ -52,6 +52,8 @@ struct UiState {
     pad_file_dialog: Option<(usize, usize)>,
     /// Nota do som próprio do Pad Vivo (0 = C ... 11 = B).
     vivo_root_key: usize,
+    /// Sequência de acordes mostrada na ajuda de escala.
+    prog_idx: usize,
     /// Teclado de piano na tela (abre/fecha com o botão "Teclado").
     kb_open: bool,
     /// Nota que o mouse está segurando.
@@ -145,6 +147,7 @@ impl PianoApp {
                 open_sf2_dialog: false,
                 pad_file_dialog: None,
                 vivo_root_key: 0,
+                prog_idx: 0,
                 kb_open: false,
                 kb_mouse: None,
                 kb_keys: Vec::new(),
@@ -1141,7 +1144,7 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
 
     let grid_w = avail.x - side_w - gap;
     let show_scale = !core.cfg.is_hidden("scale_help");
-    let scale_h = if show_scale { 168.0 } else { 0.0 };
+    let scale_h = if show_scale { 196.0 } else { 0.0 };
     let rows_h = ui.available_height() - 30.0 - scale_h;
     // Escolhe a grade (6×2, 4×3 ou 3×4) que deixa os quadrados maiores na tela.
     let (cols, rows, cell) = [(6usize, 2usize), (4, 3), (3, 4)]
@@ -1168,10 +1171,7 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                     }
                 });
             }
-            if show_scale {
-                let w = cols as f32 * cell + (cols as f32 - 1.0) * gap;
-                scale_panel(ui, core, Vec2::new(w, scale_h - gap));
-            } else {
+            if !show_scale {
                 ui.label(
                     RichText::new("Clique num tom para tocar · clique de novo para parar · trocar de tom faz a passagem suave")
                         .size(13.0)
@@ -1193,7 +1193,7 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         let ui = &mut child;
         ui.label(RichText::new("VOLUME DO PAD").strong().size(14.0));
         ui.label(RichText::new(format!("{:.0}%", core.cfg.pad_volume * 100.0)).monospace());
-        let fader_h = (ui.available_height() - 100.0).max(80.0);
+        let fader_h = (ui.available_height() - 100.0).max(36.0);
         let (resp, newv) = fader(
             ui,
             Vec2::new(inner.width(), fader_h),
@@ -1225,6 +1225,11 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             core.pad_stop();
         }
     });
+    if show_scale {
+        ui.add_space(gap);
+        let w = ui.available_width();
+        scale_panel(ui, core, st, Vec2::new(w, scale_h - gap));
+    }
 }
 
 fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: f32) {
@@ -2101,7 +2106,7 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
 }
 
 /// Quadro de ajuda: escala, pentatônica e acordes do tom do pad (para quem está começando).
-fn scale_panel(ui: &mut Ui, core: &mut Core, size: Vec2) {
+fn scale_panel(ui: &mut Ui, core: &mut Core, st: &mut UiState, size: Vec2) {
     use crate::teoria;
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     theme::glass(ui.painter(), rect, 18, false, None);
@@ -2215,6 +2220,38 @@ fn scale_panel(ui: &mut Ui, core: &mut Core, size: Vec2) {
                     RichText::new(chords.join("   "))
                         .size(17.0)
                         .color(LAYER_COLORS[0]),
+                );
+            });
+            // Sequências: uma por vez, discreta; ◀ ▶ troca.
+            let progs = teoria::progressions(key, minor);
+            let n = progs.len();
+            let pr = &progs[st.prog_idx % n];
+            ui.horizontal(|ui| {
+                ui.spacing_mut().button_padding = Vec2::new(6.0, 1.0);
+                ui.add_sized(
+                    [96.0, 22.0],
+                    egui::Label::new(RichText::new("Sequência").color(th().dim)),
+                );
+                if ui.small_button("◀").clicked() {
+                    st.prog_idx = (st.prog_idx + n - 1) % n;
+                }
+                ui.label(RichText::new(&pr.chords).size(15.0).strong());
+                ui.label(
+                    RichText::new(format!("({})  {}", pr.numbers, pr.name))
+                        .size(12.0)
+                        .color(th().dim),
+                );
+                if ui
+                    .small_button("▶")
+                    .on_hover_text("Próxima sequência")
+                    .clicked()
+                {
+                    st.prog_idx = (st.prog_idx + 1) % n;
+                }
+                ui.label(
+                    RichText::new(format!("{}/{}", st.prog_idx % n + 1, n))
+                        .size(11.0)
+                        .color(th().dim),
                 );
             });
         });

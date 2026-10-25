@@ -99,6 +99,8 @@ Lá em cima tem duas abas: **🎹 Sons SF2** (a mesa com as 8 camadas) e **🎶 
 Quando um tom do pad está tocando, aparece embaixo dos botões:
 - **Escala** do tom (ex.: F → F G A **Bb** C D E), com o nome em português embaixo (Fá, Sol, Lá, Sib...).
 - **Pentatônica** (5 notas) e **Acordes do tom** (ex.: F Gm Am Bb C Dm E°).
+- **Sequência**: uma progressão por vez, já no tom (ex.: G → "G – D – Em – C (1 – 5 – 6 – 4) a campeã"); ◀ ▶ troca.
+  Maior: a campeã, começando triste, adoração, clássica, balada, sobe pro refrão, gospel. Menor: épica, subindo, clássica, ministração.
 - Botões **Maior / Menor** (o pad serve para os dois) e um tecladinho com as notas da escala marcadas.
 - Na barra de baixo (em qualquer aba) aparece o lembrete da escala, e no **🎹 Teclado** de teste as notas da escala
   ganham bolinhas (a laranja é a nota do tom). Dá para tirar no ✏ Editar → "Ajuda de escala".
@@ -181,6 +183,10 @@ Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B)
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.11 — sequências de acordes
+- Linha discreta "Sequência" na ajuda de escala: as progressões mais usadas no louvor, já no tom do pad (◀ ▶ troca).
+- Quadro de escala ocupa a largura toda (cabe também com os ajustes do Pad Vivo abertos).
 
 ### v0.10 — ajuda de escala
 - Tom do pad mostra escala (nomes certos, com sustenidos/bemóis), pentatônica, acordes do tom e tecladinho.
