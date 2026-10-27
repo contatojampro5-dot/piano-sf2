@@ -1,0 +1,1394 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Escola de defesa da fé cristã para jovens: teologia, apologética, debates e livros.">
+<meta name="theme-color" content="#0B1026">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Apologia">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font-family:system-ui,-apple-system,sans-serif;font-size:14px}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Escola Apologia</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400&display=swap">
+<style>
+/* Layout: app de coluna única (máx. 760px) sobre um papel de parede colorido; painéis de vidro fosco estilo iOS, barra de abas flutuante e a trilha em curva como peça central. */
+:root{
+  --bg:#ECEFF8;
+  --w1:#8C9DFF; --w2:#FF9DB0; --w3:#FFD58C; --w4:#8FE3EE;
+  --grgb:255,255,255; --ga:.56; --gas:.80; --blur:24px; --wdim:.10;
+  --glass:rgba(var(--grgb),var(--ga)); --glass-strong:rgba(var(--grgb),var(--gas)); --glass-border:rgba(255,255,255,.75);
+  --glass-hi:rgba(255,255,255,.65); --glass-shadow:0 10px 34px rgba(30,40,90,.13);
+  --hair:rgba(20,26,60,.10); --fill:rgba(20,26,60,.06);
+  --ink:#0B1026; --muted:rgba(11,16,38,.58);
+  --accent:#2F55F5; --accent-2:#6A4DFF; --on-accent:#FFFFFF; --accent-soft:rgba(47,85,245,.12);
+  --rubric:#E0344B; --rubric-soft:rgba(224,52,75,.12);
+  --gold:#D99413; --gold-soft:rgba(217,148,19,.15);
+  --ok:#1FA256; --ok-2:#34C46F; --ok-soft:rgba(31,162,86,.13);
+  --locked:rgba(11,16,38,.30);
+  --f-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --f-serif:ui-serif,"New York","Literata",Georgia,"Times New Roman",serif;
+  --r-lg:24px; --r-md:16px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#060914;
+  --grgb:22,27,52; --wdim:.66; --glass-border:rgba(255,255,255,.11);
+  --glass-hi:rgba(255,255,255,.07); --glass-shadow:0 10px 34px rgba(0,0,0,.40);
+  --hair:rgba(255,255,255,.10); --fill:rgba(255,255,255,.07);
+  --ink:#F2F4FF; --muted:rgba(242,244,255,.62);
+  --accent:#7E96FF; --accent-2:#A58BFF; --on-accent:#0A0E22; --accent-soft:rgba(126,150,255,.16);
+  --rubric:#FF6B7D; --rubric-soft:rgba(255,107,125,.15);
+  --gold:#FFC857; --gold-soft:rgba(255,200,87,.15);
+  --ok:#3FCB7C; --ok-2:#6BE09D; --ok-soft:rgba(63,203,124,.15);
+  --locked:rgba(242,244,255,.30);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#060914;
+  --grgb:22,27,52; --wdim:.66; --glass-border:rgba(255,255,255,.11);
+  --glass-hi:rgba(255,255,255,.07); --glass-shadow:0 10px 34px rgba(0,0,0,.40);
+  --hair:rgba(255,255,255,.10); --fill:rgba(255,255,255,.07);
+  --ink:#F2F4FF; --muted:rgba(242,244,255,.62);
+  --accent:#7E96FF; --accent-2:#A58BFF; --on-accent:#0A0E22; --accent-soft:rgba(126,150,255,.16);
+  --rubric:#FF6B7D; --rubric-soft:rgba(255,107,125,.15);
+  --gold:#FFC857; --gold-soft:rgba(255,200,87,.15);
+  --ok:#3FCB7C; --ok-2:#6BE09D; --ok-soft:rgba(63,203,124,.15);
+  --locked:rgba(242,244,255,.30);
+  color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:1rem;line-height:1.5;-webkit-font-smoothing:antialiased;letter-spacing:-.005em}
+.wall{position:fixed;inset:0;z-index:-1;background:
+  radial-gradient(55% 45% at 8% 2%,var(--w1) 0%,transparent 70%),
+  radial-gradient(50% 40% at 100% 18%,var(--w2) 0%,transparent 70%),
+  radial-gradient(55% 45% at 85% 100%,var(--w3) 0%,transparent 70%),
+  radial-gradient(50% 45% at 0% 85%,var(--w4) 0%,transparent 70%),var(--bg)}
+.wall::after{content:"";position:absolute;inset:0;background:var(--bg);opacity:var(--wdim)}
+:root.calm *{animation:none!important;transition:none!important}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--glass-strong);-webkit-backdrop-filter:blur(var(--blur)) saturate(180%);backdrop-filter:blur(var(--blur)) saturate(180%)}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:10px}
+h1,h2,h3{font-family:var(--f-ui);text-wrap:balance;line-height:1.15;margin:0;letter-spacing:-.02em}
+p{margin:0}
+a{color:var(--accent)}
+
+.glass,.card{background:var(--glass);-webkit-backdrop-filter:blur(var(--blur)) saturate(180%);backdrop-filter:blur(var(--blur)) saturate(180%);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-hi)}
+.card{border-radius:var(--r-lg);padding:18px}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--glass-strong);-webkit-backdrop-filter:blur(var(--blur)) saturate(180%);backdrop-filter:blur(var(--blur)) saturate(180%);border-bottom:.5px solid var(--hair)}
+.top-in{max-width:760px;margin:0 auto;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;align-items:center;gap:12px}
+.brand{font-weight:700;font-size:1.06rem;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);letter-spacing:-.01em}
+.brand .pil{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#fff;font-family:var(--f-serif);font-size:1.05rem;background:linear-gradient(140deg,var(--rubric),#FF8A5B)}
+.top .sp{flex:1}
+.chip-xp{font-size:.82rem;display:flex;gap:6px;align-items:center;color:var(--muted);font-variant-numeric:tabular-nums;background:var(--fill);padding:6px 11px;border-radius:999px}
+.chip-xp b{color:var(--ink);font-weight:600}
+.flame{color:#FF7A3D;display:inline-flex}
+.iconbtn{background:var(--fill);border-radius:999px;width:36px;height:36px;display:grid;place-items:center;padding:0;color:var(--accent)}
+.iconbtn svg{width:18px;height:18px}
+
+main{max-width:760px;margin:0 auto;padding-block:18px 130px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+
+.tabs{position:fixed;z-index:9;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));pointer-events:none}
+.tabs-in{pointer-events:auto;max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);gap:2px;padding:6px;border-radius:30px;background:var(--glass-strong);-webkit-backdrop-filter:blur(var(--blur)) saturate(190%);backdrop-filter:blur(var(--blur)) saturate(190%);border:1px solid var(--glass-border);box-shadow:0 12px 40px rgba(20,25,60,.22),inset 0 1px 0 var(--glass-hi)}
+.tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px 6px;text-decoration:none;color:var(--muted);font-size:.66rem;font-weight:600;position:relative;border-radius:24px;transition:background .2s,color .2s}
+.tab svg{width:23px;height:23px}
+.tab[aria-current="page"]{color:var(--accent);background:var(--accent-soft)}
+.tab .dot{position:absolute;top:3px;right:calc(50% - 22px);min-width:18px;height:18px;border-radius:9px;background:var(--rubric);color:#fff;font-size:.66rem;font-weight:700;display:grid;place-items:center;padding:0 5px;font-variant-numeric:tabular-nums}
+
+.eyebrow{font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--muted)}
+.rub{color:var(--rubric)}
+.ref{font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums;font-weight:500}
+.muted{color:var(--muted)}
+.small{font-size:.88rem}
+.center{text-align:center}
+
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px}
+.grid2>*{min-width:0}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;border:0;background:var(--fill);padding:11px 18px;font-weight:600;text-decoration:none;color:var(--accent);min-height:44px;transition:transform .12s}
+.btn:active{transform:scale(.97)}
+.btn.pri{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 35%,transparent)}
+.btn.red{background:var(--rubric);color:#fff}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.block{width:100%}
+
+/* Início */
+.hero{display:flex;flex-direction:column;gap:8px;padding-block:4px 0}
+.hero h1{font-size:clamp(2rem,7.5vw,2.6rem);font-weight:800}
+.hero h1 em{font-style:normal;background:linear-gradient(120deg,var(--rubric),#FF8A5B);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .lead{font-size:1rem;color:var(--muted);max-width:60ch}
+.lvlbox{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:center}
+.lvlbadge{grid-row:span 2;width:56px;height:56px;border-radius:18px;background:linear-gradient(140deg,#FFD36B,#F29C1F);color:#fff;display:grid;place-items:center;font-weight:800;font-size:1.5rem;box-shadow:0 6px 16px rgba(242,156,31,.35)}
+.bar{height:8px;border-radius:5px;background:var(--fill);overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:5px;transition:width .6s}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{border-radius:var(--r-md);padding:12px 14px;display:flex;flex-direction:column;gap:0}
+.stat b{font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat span{font-size:.74rem;color:var(--muted);font-weight:600;line-height:1.3}
+.mission{display:flex;gap:12px;align-items:center;padding:12px 0;border-top:.5px solid var(--hair)}
+.mission:first-of-type{border-top:0}
+.check{width:26px;height:26px;border-radius:50%;border:2px solid var(--hair);display:grid;place-items:center;flex:none}
+.check.done{background:var(--ok);border-color:var(--ok);color:#fff}
+.check svg{width:14px;height:14px}
+.mission .grow{flex:1;min-width:0}
+.quote{font-family:var(--f-serif);font-size:1.12rem;line-height:1.5;font-style:italic}
+.quote-by{margin-top:8px;font-size:.85rem;color:var(--muted)}
+
+/* Mini trilha (Início) */
+.mini{display:flex;flex-direction:column;gap:14px}
+.mini-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.mini-g{display:flex;flex-direction:column;gap:7px;min-width:0}
+.mini-g span{font-size:.68rem;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini-dots{display:flex;align-items:center;gap:4px}
+.mini-dots i{flex:1;height:8px;border-radius:4px;background:var(--fill)}
+.mini-dots i.d{background:linear-gradient(90deg,var(--ok),var(--ok-2))}
+.mini-dots i.c{height:14px;background:linear-gradient(135deg,var(--accent),var(--accent-2));box-shadow:0 0 0 3px var(--accent-soft)}
+
+/* Trilha */
+.trail-head{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center}
+.th-info{display:flex;flex-direction:column;gap:3px;min-width:0;align-items:flex-start}
+.th-info b{font-size:1.12rem;letter-spacing:-.01em}
+.th-info .btn{margin-top:8px}
+.ring .ring-bg{fill:none;stroke:var(--fill);stroke-width:9}
+.ring .ring-fg{fill:none;stroke:url(#ringGrad);stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset .8s}
+.ring text{font-family:var(--f-ui);font-weight:700;font-size:17px;fill:var(--ink)}
+.lvlbars{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.lb{border-radius:var(--r-md);padding:11px 13px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.lb-top{display:flex;justify-content:space-between;gap:8px;font-size:.8rem;font-weight:600}
+.lb-top span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-top span:last-child{color:var(--muted);font-variant-numeric:tabular-nums}
+.lb.on{box-shadow:var(--glass-shadow),inset 0 0 0 2px var(--accent)}
+.lb.full .bar i{background:linear-gradient(90deg,var(--ok),var(--ok-2))}
+.trail{position:relative;width:100%;margin-top:4px}
+.trail svg.road{position:absolute;inset:0;overflow:visible;pointer-events:none}
+.road .base{fill:none;stroke:var(--locked);stroke-width:7;stroke-linecap:round;stroke-dasharray:.1 17}
+.road .prog{fill:none;stroke:url(#roadGrad);stroke-width:9;stroke-linecap:round}
+.banner{position:absolute;left:0;right:0;border-radius:var(--r-lg);padding:12px 16px;display:flex;align-items:center;gap:12px;z-index:1}
+.banner .bl{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.banner b{font-size:1.1rem;letter-spacing:-.015em;line-height:1.2}
+.banner .bmeta{font-size:.78rem;color:var(--muted);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.banner .bmeta span{display:block;overflow:hidden;text-overflow:ellipsis}
+.banner .bst{flex:none;min-width:44px;height:30px;padding:0 10px;border-radius:999px;background:var(--fill);display:grid;place-items:center;font-size:.8rem;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.banner .bst svg{width:15px;height:15px}
+.banner .bst.full{background:var(--ok-soft);color:var(--ok)}
+.banner.locked b,.banner.locked .eyebrow{opacity:.55}
+.trail{--disc:58px;--disc-c:72px}
+.node{position:absolute;width:0;height:0;text-decoration:none;color:var(--ink);z-index:2}
+.disc{position:absolute;left:calc(var(--disc) / -2);top:calc(var(--disc) / -2);width:var(--disc);height:var(--disc);border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:calc(var(--disc) * .27);transition:transform .15s}
+.disc svg{width:42%;height:42%}
+a.node:active .disc{transform:scale(.94)}
+.node.done .disc{background:linear-gradient(145deg,var(--ok-2),var(--ok));color:#fff;box-shadow:0 5px 0 color-mix(in srgb,var(--ok) 70%,#000),0 10px 20px color-mix(in srgb,var(--ok) 30%,transparent)}
+.node.current .disc{left:calc(var(--disc-c) / -2);top:calc(var(--disc-c) / -2);width:var(--disc-c);height:var(--disc-c);font-size:calc(var(--disc-c) * .27);background:linear-gradient(145deg,var(--accent-2),var(--accent));color:#fff;box-shadow:0 6px 0 color-mix(in srgb,var(--accent) 65%,#000),0 12px 26px color-mix(in srgb,var(--accent) 40%,transparent)}
+.node.current .disc::after{content:"";position:absolute;inset:-8px;border-radius:50%;border:3px solid var(--accent);opacity:.5;animation:pulse 1.8s ease-out infinite}
+@keyframes pulse{0%{transform:scale(.92);opacity:.6}100%{transform:scale(1.25);opacity:0}}
+.node.open .disc{background:var(--glass-strong);color:var(--accent);border:2px solid var(--accent);box-shadow:0 4px 0 var(--accent-soft),var(--glass-shadow);-webkit-backdrop-filter:blur(var(--blur));backdrop-filter:blur(var(--blur))}
+.node.locked .disc{background:var(--glass);color:var(--locked);border:1px solid var(--glass-border);box-shadow:0 4px 0 var(--fill);-webkit-backdrop-filter:blur(var(--blur));backdrop-filter:blur(var(--blur))}
+.nlabel{position:absolute;top:0;transform:translateY(-50%);width:max-content;display:flex;flex-direction:column;gap:1px;padding:6px 10px;border-radius:13px;background:var(--glass-strong);-webkit-backdrop-filter:blur(var(--blur));backdrop-filter:blur(var(--blur));border:1px solid var(--glass-border);box-shadow:var(--glass-shadow)}
+.nlabel.l{text-align:right}
+.nlabel b{font-size:.8rem;line-height:1.25;letter-spacing:-.01em}
+.nlabel span{font-size:.68rem;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums}
+.node.locked .nlabel{opacity:.7}
+.node.done .nlabel span{color:var(--ok)}
+.node.current .nlabel span{color:var(--accent)}
+.here{position:absolute;left:50%;bottom:calc(var(--disc-c) / 2 + 12px);transform:translateX(-50%);display:flex;align-items:center;gap:6px;white-space:nowrap;padding:4px 10px 4px 4px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:.72rem;font-weight:700;box-shadow:0 8px 20px rgba(0,0,0,.25);animation:bob 2.4s ease-in-out infinite}
+.here::after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:var(--ink);transform:translateX(-50%) rotate(45deg);border-radius:2px}
+.here i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:.66rem;background:linear-gradient(135deg,#FF8A5B,var(--rubric));color:#fff}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-4px)}}
+.finish .disc{left:calc(var(--disc-c) / -2);top:calc(var(--disc-c) / -2);width:var(--disc-c);height:var(--disc-c);border-radius:26%;background:linear-gradient(145deg,#FFD36B,#F29C1F);color:#fff;box-shadow:0 6px 0 #B86E0B,0 12px 26px rgba(242,156,31,.36)}
+.finish.locked .disc{background:var(--glass);color:var(--locked);border:1px solid var(--glass-border);box-shadow:0 4px 0 var(--fill)}
+.finish .disc::after{display:none}
+
+/* Aparência */
+.look{display:flex;flex-direction:column;gap:4px}
+.lrow{display:flex;flex-direction:column;gap:8px;padding:13px 0;border-top:.5px solid var(--hair)}
+.lrow:first-of-type{border-top:0}
+.lhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-weight:600}
+.lhead .lv{color:var(--muted);font-weight:500;font-size:.88rem;font-variant-numeric:tabular-nums}
+.lhead .aa{color:var(--ink);font-weight:700;line-height:1}
+.lscale{display:flex;justify-content:space-between;font-size:.74rem;color:var(--muted)}
+input[type="range"]{width:100%;accent-color:var(--accent);height:28px;margin:0}
+.seg.wide{display:flex;width:100%;margin-top:0}
+.seg.wide button{flex:1;padding:8px 4px;min-height:36px}
+.swatches{display:flex;gap:12px;flex-wrap:wrap}
+.sw{width:42px;height:42px;border-radius:50%;border:2px solid var(--glass-border);padding:0;box-shadow:var(--glass-shadow)}
+.sw[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:3px}
+.wall-sw{border-radius:14px}
+
+/* Lição */
+.lesson{display:flex;flex-direction:column;gap:16px}
+.lesson h1{font-size:clamp(1.8rem,6.5vw,2.3rem);font-weight:800}
+.verse{border-radius:var(--r-lg);padding:18px 20px;font-family:var(--f-serif);font-size:1.1rem;font-style:italic;line-height:1.55}
+.verse .ref{display:block;font-style:normal;margin-top:8px;font-family:var(--f-ui);color:var(--rubric);font-weight:600}
+.prose{font-family:var(--f-serif);font-size:1.06rem;line-height:1.72;display:flex;flex-direction:column;gap:14px;background:var(--glass-strong);-webkit-backdrop-filter:blur(var(--blur)) saturate(180%);backdrop-filter:blur(var(--blur)) saturate(180%);border:1px solid var(--glass-border);border-radius:var(--r-lg);padding:20px;box-shadow:var(--glass-shadow)}
+.prose>*{max-width:66ch}
+.prose h3{font-family:var(--f-ui);font-size:1.18rem;font-weight:700;margin-top:10px;display:flex;gap:8px;align-items:baseline}
+.prose h3::before{content:"¶";color:var(--rubric);font-family:var(--f-serif);font-weight:400}
+.prose ul,.prose ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px}
+.prose b{font-weight:700}
+.prose .box{font-family:var(--f-ui);font-size:.95rem;line-height:1.55;background:var(--accent-soft);border-radius:var(--r-md);padding:14px 16px}
+.prose .box.r{background:var(--rubric-soft)}
+.prose blockquote{margin:0;padding:2px 0 2px 16px;border-left:3px solid var(--gold);font-style:italic}
+.prose blockquote cite{display:block;font-style:normal;font-family:var(--f-ui);font-size:.82rem;color:var(--muted);margin-top:4px}
+#tout.prose{background:none;border:0;box-shadow:none;padding:0;-webkit-backdrop-filter:none;backdrop-filter:none}
+.pratica{border-radius:var(--r-lg);overflow:hidden}
+.pratica .q{padding:16px 18px;background:var(--rubric-soft);font-weight:600}
+.pratica .q small{display:block;font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--rubric);margin-bottom:4px}
+.pratica .a{padding:16px 18px;font-family:var(--f-serif);line-height:1.65}
+
+/* Quiz */
+.opt{display:block;width:100%;text-align:left;padding:14px 16px;border-radius:var(--r-md);border:1.5px solid transparent;background:var(--fill);font-weight:500;line-height:1.4}
+.opt:hover:not(:disabled){border-color:var(--accent)}
+.opt.right{border-color:var(--ok);background:var(--ok-soft)}
+.opt.wrong{border-color:var(--rubric);background:var(--rubric-soft)}
+.opt:disabled{cursor:default}
+.explain{font-size:.93rem;padding:13px 15px;border-radius:var(--r-md);background:var(--fill)}
+.qprog{font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums;font-weight:600}
+.score{font-size:2.6rem;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+
+/* Cards */
+.chips{display:flex;gap:4px;flex-wrap:wrap;padding:4px;border-radius:16px;background:var(--fill);width:fit-content;max-width:100%}
+.chip{border:0;background:transparent;border-radius:12px;padding:7px 12px;font-size:.84rem;font-weight:600;color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--glass-strong);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.flash{min-height:260px;display:flex;flex-direction:column;justify-content:center;gap:14px;text-align:center;padding:28px 22px;cursor:pointer;user-select:none}
+.flash .front{font-size:1.35rem;font-weight:700;line-height:1.3;letter-spacing:-.015em}
+.flash .back{font-family:var(--f-serif);font-size:1.08rem;line-height:1.6;border-top:.5px solid var(--hair);padding-top:14px}
+.lvl-pill{font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);align-self:center}
+.rate{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.rate .btn{flex-direction:column;gap:0;font-size:.92rem;border-radius:var(--r-md);background:var(--glass-strong)}
+.rate .btn.pri{background:linear-gradient(135deg,var(--accent),var(--accent-2))}
+.rate .btn small{font-weight:500;opacity:.75;font-size:.72rem}
+.boxes{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.boxes div{background:var(--fill);border-radius:12px;padding:8px 4px;text-align:center}
+.boxes b{display:block;font-weight:700;font-variant-numeric:tabular-nums}
+.boxes span{font-size:.66rem;color:var(--muted)}
+
+/* Debate */
+.persona{display:grid;grid-template-columns:48px 1fr;gap:14px;align-items:start;text-align:left;border-radius:var(--r-lg);padding:14px;width:100%;color:var(--ink)}
+.persona:active{transform:scale(.98)}
+.ava{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:1.2rem;color:#fff}
+.persona h3{font-size:1rem}
+.persona p{font-size:.86rem;color:var(--muted)}
+.persona>div{min-width:0}
+.chat{display:flex;flex-direction:column;gap:8px}
+.msg{max-width:84%;padding:10px 14px;border-radius:20px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.them{align-self:flex-start;background:var(--glass-strong);-webkit-backdrop-filter:blur(var(--blur));backdrop-filter:blur(var(--blur));border:1px solid var(--glass-border);border-bottom-left-radius:6px}
+.msg.me{align-self:flex-end;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border-bottom-right-radius:6px}
+.msg.sys{align-self:center;background:transparent;color:var(--muted);font-size:.82rem;text-align:center}
+textarea{width:100%;min-height:96px;resize:vertical;border:1px solid var(--glass-border);border-radius:var(--r-md);background:var(--glass-strong);padding:12px 14px;line-height:1.5}
+textarea:focus{border-color:var(--accent);outline:none}
+input[type="text"]{width:100%;border:1px solid var(--glass-border);border-radius:14px;background:var(--glass-strong);padding:11px 14px;min-height:44px}
+input[type="text"]:focus{border-color:var(--accent);outline:none}
+.scoregrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.scoregrid div{background:var(--fill);border-radius:14px;padding:10px 6px;text-align:center}
+.scoregrid b{display:block;font-size:1.3rem;font-weight:700;font-variant-numeric:tabular-nums}
+.scoregrid span{font-size:.72rem;color:var(--muted);font-weight:600}
+.keypoints{display:flex;flex-direction:column;gap:8px;padding-left:1.2em;margin:0}
+.selfcheck label{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:.5px solid var(--hair)}
+.selfcheck input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent)}
+
+/* Livros */
+.book{display:grid;grid-template-columns:54px 1fr;gap:14px}
+.spine{width:54px;height:78px;border-radius:4px 10px 10px 4px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;font-size:.7rem;font-weight:600;color:#fff;box-shadow:inset 4px 0 0 rgba(0,0,0,.18),0 6px 14px rgba(0,0,0,.18);font-variant-numeric:tabular-nums}
+.book>div{min-width:0}
+.book h3{font-size:1.08rem}
+.book details{margin-top:8px}
+.book summary{cursor:pointer;font-weight:600;font-size:.9rem;color:var(--accent)}
+.book ul{margin:8px 0 0;padding-left:1.2em;font-size:.92rem;display:flex;flex-direction:column;gap:4px}
+.seg{display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:var(--fill);margin-top:10px}
+.seg button{border:0;background:transparent;padding:7px 12px;font-size:.8rem;font-weight:600;border-radius:9px}
+.seg button[aria-pressed="true"]{background:var(--glass-strong);color:var(--accent);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+
+/* Perfil */
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.badge{border-radius:var(--r-md);padding:14px 10px;text-align:center}
+.badge .seal{width:44px;height:44px;margin:0 auto 8px;border-radius:14px;display:grid;place-items:center;font-weight:800;background:linear-gradient(140deg,#FFD36B,#F29C1F);color:#fff;box-shadow:0 5px 14px rgba(242,156,31,.3)}
+.badge.off{opacity:.45}
+.badge.off .seal{background:var(--fill);color:var(--muted);box-shadow:none}
+.badge b{display:block;font-size:.85rem}
+.badge span{font-size:.74rem;color:var(--muted)}
+.switch{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:13px 0;border-top:.5px solid var(--hair)}
+.switch>div{min-width:0}
+input.ios{appearance:none;-webkit-appearance:none;flex:none;width:51px;height:31px;border-radius:999px;background:var(--fill);position:relative;cursor:pointer;transition:background .2s;margin:0;border:1px solid var(--hair)}
+input.ios::after{content:"";position:absolute;top:2px;left:2px;width:25px;height:25px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);transition:transform .2s}
+input.ios:checked{background:var(--ok);border-color:var(--ok)}
+input.ios:checked::after{transform:translateX(20px)}
+
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:var(--glass-strong);-webkit-backdrop-filter:blur(var(--blur));backdrop-filter:blur(var(--blur));border:1px solid var(--glass-border);color:var(--ink);padding:10px 18px;border-radius:999px;font-weight:600;font-size:.9rem;opacity:0;transition:.25s;pointer-events:none;z-index:20;max-width:calc(100% - 32px);text-align:center;box-shadow:var(--glass-shadow)}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.back{display:inline-flex;gap:4px;align-items:center;color:var(--accent);text-decoration:none;font-weight:600;font-size:.95rem}
+.back svg{width:18px;height:18px}
+hr{border:0;border-top:.5px solid var(--hair);margin:0}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+@media (max-width:420px){.stats b{font-size:1.25rem}.scoregrid{grid-template-columns:repeat(2,1fr)}}
+</style>
+
+<div class="wall" aria-hidden="true"></div>
+<header class="top"><div class="top-in">
+  <a class="brand" href="#inicio"><span class="pil">¶</span>Apologia</a>
+  <span class="sp"></span>
+  <span class="chip-xp" id="hdrStats"></span>
+  <a class="iconbtn" href="#perfil" aria-label="Meu perfil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></a>
+</div></header>
+
+<main id="app" aria-live="polite"></main>
+
+<nav class="tabs" aria-label="Seções"><div class="tabs-in" id="tabs"></div></nav>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ================== CONTEÚDO ================== */
+const TRACKS=[
+ {id:"t1",n:1,name:"Fundamentos",lvl:"Iniciante",desc:"O que você crê e por que é razoável crer.",mods:["f1","f2","f3","f4"]},
+ {id:"t2",n:2,name:"Doutrina",lvl:"Intermediário",desc:"As verdades centrais que a igreja sempre confessou.",mods:["d1","d2","d3","d4"]},
+ {id:"t3",n:3,name:"Apologética",lvl:"Avançado",desc:"Respostas às objeções mais fortes contra a fé.",mods:["a1","a2","a3","a4"]},
+ {id:"t4",n:4,name:"Cosmovisão e coragem",lvl:"Mestre",desc:"Fé aplicada à cultura, à vida pública e à sua geração.",mods:["c1","c2","c3","c4"]}
+];
+
+const MODS={
+f1:{title:"O Evangelho em uma página",min:7,
+ sum:"A história completa da Bíblia em quatro atos, e por que ela dá firmeza à sua identidade.",
+ verse:{t:"Porque pela graça sois salvos, por meio da fé; e isto não vem de vós; é dom de Deus. Não vem das obras, para que ninguém se glorie.",r:"Ef 2.8-9"},
+ body:`<p>Antes de defender a fé, você precisa saber explicá-la. Muita gente que critica o cristianismo nunca ouviu o que ele realmente diz. E muito jovem cristão também não sabe resumir. Vamos resolver isso.</p>
+<h3>A grande história em quatro atos</h3>
+<ol>
+<li><b>Criação.</b> Deus criou tudo, e tudo era bom. O ser humano foi feito à imagem de Deus (Gn 1.27). Por isso cada pessoa tem valor, antes de qualquer conquista.</li>
+<li><b>Queda.</b> O ser humano se rebelou contra Deus (Gn 3). Pecado não é só "errar"; é querer ser o próprio deus. Isso quebrou nossa relação com Deus, com os outros e com o mundo. "Todos pecaram" (Rm 3.23).</li>
+<li><b>Redenção.</b> Deus não nos abandonou. O Filho se fez homem em Jesus, viveu a vida perfeita que não vivemos, morreu no nosso lugar e ressuscitou ao terceiro dia (1 Co 15.3-4). "Aquele que não conheceu pecado, Deus o fez pecado por nós" (2 Co 5.21).</li>
+<li><b>Consumação.</b> Jesus voltará, julgará com justiça e fará novas todas as coisas: sem morte, sem choro, sem dor (Ap 21.4-5).</li>
+</ol>
+<h3>Graça não é prêmio</h3>
+<p>Quase todas as religiões dizem: "Faça o bem e talvez Deus te aceite". O cristianismo diz o contrário: <b>Deus te aceita em Cristo, e por isso você muda.</b> As boas obras são o fruto da salvação, não o preço dela (Ef 2.10).</p>
+<blockquote>"O cristianismo, se for falso, não tem importância nenhuma; se for verdadeiro, tem importância infinita. A única coisa que ele não pode ser é moderadamente importante."<cite>C. S. Lewis, "Apologética cristã" (1945), em <i>Deus no banco dos réus</i></cite></blockquote>
+<h3>Por que isso te deixa firme</h3>
+<p>Se sua identidade depende de aprovação, você vai se calar quando a turma rir da sua fé. Se sua identidade está em Cristo, a aprovação do grupo perde poder sobre você. Firmeza começa aqui: <b>você não precisa vencer a discussão para estar seguro.</b></p>
+<div class="box">Memorize os quatro atos: <b>Criação, Queda, Redenção, Consumação.</b> Toda conversa sobre fé cabe em um deles.</div>`,
+ pr:{q:"\"Me explica rapidinho: o que vocês, crentes, acreditam?\"",a:"\"Em resumo: Deus criou tudo bom e fez a gente para ele. A gente virou as costas, e isso estragou tudo, por dentro e por fora. Jesus, que é Deus, veio, viveu sem pecado, morreu no meu lugar e ressuscitou. Quem confia nele é perdoado, não por merecer, mas por graça. E um dia ele vai consertar o mundo inteiro. Quer que eu te conte por que eu acho que isso é verdade?\""},
+ quiz:[
+  {q:"Qual é a ordem dos quatro atos da história bíblica?",o:["Queda, Criação, Lei, Juízo","Criação, Queda, Redenção, Consumação","Criação, Lei, Profetas, Igreja","Redenção, Criação, Queda, Céu"],c:1,e:"Criação (tudo bom), Queda (pecado), Redenção (Cristo) e Consumação (tudo novo)."},
+  {q:"Segundo Efésios 2.8-10, qual o lugar das boas obras?",o:["Elas compram a salvação","Elas são opcionais e sem importância","Elas são fruto de quem já foi salvo pela graça","Elas valem só para os pastores"],c:2,e:"Somos salvos pela graça, mediante a fé, para as boas obras (v. 10). Obras são resultado, não pagamento."},
+  {q:"Por que a doutrina da imagem de Deus (Gn 1.27) importa no dia a dia?",o:["Porque dá valor a toda pessoa antes de qualquer conquista","Porque prova que o ser humano é Deus","Porque só cristãos têm valor","Porque fala apenas da aparência física"],c:0,e:"Todo ser humano carrega a imagem de Deus, por isso tem dignidade: rico ou pobre, nascido ou não nascido, crente ou não."}
+ ]},
+
+f2:{title:"Deus existe? Três argumentos",min:10,
+ sum:"Cosmológico, ajuste fino e moral: três caminhos racionais que apontam para Deus.",
+ verse:{t:"Pois os atributos invisíveis de Deus, assim o seu eterno poder como também a sua própria divindade, claramente se reconhecem, desde o princípio do mundo, sendo percebidos por meio das coisas que foram criadas.",r:"Rm 1.20"},
+ body:`<p>Fé cristã não é "pular no escuro". A Bíblia diz que a criação aponta para o Criador. Aqui estão três argumentos que filósofos sérios usam até hoje.</p>
+<h3>1. O argumento cosmológico (Kalam)</h3>
+<p>Formulado na Idade Média e popularizado hoje pelo filósofo William Lane Craig:</p>
+<ol><li>Tudo o que começa a existir tem uma causa.</li><li>O universo começou a existir.</li><li>Logo, o universo tem uma causa.</li></ol>
+<p>A premissa 2 é apoiada pela cosmologia: o modelo do Big Bang indica que tempo, espaço e matéria tiveram início. Curiosidade que vale ouro: quem propôs essa ideia, em 1927, foi <b>Georges Lemaître</b>, físico e padre católico.</p>
+<p>Se o tempo, o espaço e a matéria começaram, a causa precisa estar <b>fora</b> deles: sem tempo (eterna), sem espaço (imaterial), imensamente poderosa e capaz de escolher criar (pessoal). Isso descreve o Deus da Bíblia.</p>
+<h3>2. O ajuste fino</h3>
+<p>Várias constantes da física, como a força da gravidade e a constante cosmológica, precisam estar numa faixa estreitíssima para a vida existir. Mude um pouco e não haveria estrelas, química ou vida. Há três explicações possíveis: <b>necessidade física, acaso ou design</b>. Não há evidência de que as constantes sejam necessárias, e o acaso exige probabilidades absurdas. O design é a melhor explicação.</p>
+<blockquote>"Uma interpretação de bom senso dos fatos sugere que um superintelecto andou mexendo na física, assim como na química e na biologia."<cite>Fred Hoyle, astrônomo, que não era cristão (1981)</cite></blockquote>
+<h3>3. O argumento moral</h3>
+<ol><li>Se Deus não existe, valores morais objetivos não existem.</li><li>Valores morais objetivos existem.</li><li>Logo, Deus existe.</li></ol>
+<p>Todo mundo sabe que torturar uma criança por diversão é errado <b>de verdade</b>, não só "na minha opinião". Mas de onde vem esse "de verdade"? Matéria e acaso não produzem deveres. Uma lei moral exige um Legislador.</p>
+<blockquote>"Meu argumento contra Deus era que o universo parecia muito cruel e injusto. Mas de onde eu tinha tirado essa ideia de justo e injusto?"<cite>C. S. Lewis, <i>Cristianismo puro e simples</i>, livro 2</cite></blockquote>
+<div class="box r"><b>Cuidado:</b> o argumento moral não diz que ateus são imorais. Muitos ateus são pessoas boas. A questão é outra: sem Deus, o que <b>fundamenta</b> o bem e o mal?</div>`,
+ pr:{q:"\"Se tudo precisa de uma causa, quem criou Deus?\"",a:"\"Boa pergunta, mas o argumento não diz que tudo precisa de causa. Diz que tudo o que <b>começa a existir</b> precisa. Deus, por definição, não começou: é eterno. Aliás, você também acredita em algo eterno, ou a matéria, ou um ciclo infinito, ou Deus. A pergunta é qual explica melhor um universo que teve começo. Matéria não pode criar a si mesma antes de existir.\""},
+ quiz:[
+  {q:"Qual premissa do argumento Kalam é apoiada pela cosmologia do Big Bang?",o:["Tudo o que começa a existir tem uma causa","O universo começou a existir","Deus é pessoal","A moral é objetiva"],c:1,e:"O Big Bang indica um início do universo físico, o que apoia a premissa 2."},
+  {q:"Como responder a \"Quem criou Deus?\"",o:["Dizer que é falta de fé perguntar isso","O argumento trata do que começa a existir; Deus é eterno, não começou","Dizer que Deus foi criado por outro deus","Mudar de assunto"],c:1,e:"Só precisa de causa o que começa a existir. Um ser eterno não tem começo."},
+  {q:"Quais são as três explicações possíveis para o ajuste fino?",o:["Evolução, sorte e destino","Necessidade, acaso e design","Big Bang, multiverso e caos","Ciência, religião e filosofia"],c:1,e:"Necessidade física, acaso ou design inteligente. O argumento mostra que design é a melhor das três."},
+  {q:"O argumento moral afirma que:",o:["Ateus não conseguem ser bons","Sem Deus não há fundamento para valores morais objetivos","A Bíblia é o único livro com moral","A moral muda conforme a cultura"],c:1,e:"Não é sobre o comportamento dos ateus, e sim sobre o fundamento da moral."}
+ ]},
+
+f3:{title:"A Bíblia é confiável?",min:10,
+ sum:"Manuscritos, arqueologia e formação do cânon: por que a Bíblia que você lê é fiel ao original.",
+ verse:{t:"Toda a Escritura é inspirada por Deus e útil para o ensino, para a repreensão, para a correção, para a educação na justiça.",r:"2 Tm 3.16"},
+ body:`<p>"A Bíblia foi alterada como um telefone sem fio." Você vai ouvir isso. Veja o que os fatos dizem.</p>
+<h3>Mais manuscritos do que qualquer livro antigo</h3>
+<p>O Novo Testamento tem <b>mais de 5.800 manuscritos em grego</b>, além de milhares em latim e outras línguas. A obra antiga mais bem documentada depois dele, a <i>Ilíada</i> de Homero, tem cerca de 2 mil. De muitos clássicos, como os escritos de Tácito, restam poucos manuscritos, copiados séculos depois.</p>
+<p>O fragmento mais antigo conhecido, o <b>Papiro P52</b> (trecho de João 18), é geralmente datado da primeira metade do século II, poucas décadas depois de o Evangelho ser escrito.</p>
+<h3>Não é telefone sem fio</h3>
+<p>Telefone sem fio é uma linha só, em que cada pessoa ouve a anterior. Os manuscritos se espalharam em <b>muitos ramos independentes</b> (Egito, Síria, Roma...). Comparando milhares de cópias, os estudiosos reconstroem o texto original com altíssima precisão. A maioria das variantes é ortografia ou ordem de palavras, e <b>nenhuma doutrina central depende de uma variante duvidosa</b>.</p>
+<h3>Os Manuscritos do Mar Morto</h3>
+<p>Descobertos em 1947, incluíam um rolo completo de Isaías cerca de mil anos mais antigo do que as cópias que tínhamos. O resultado: o texto era praticamente o mesmo. As diferenças eram, na maioria, de grafia.</p>
+<h3>A arqueologia confirma detalhes</h3>
+<ul>
+<li><b>Estela de Tel Dan</b> (1993): cita a "Casa de Davi", contra quem dizia que Davi era lenda.</li>
+<li><b>Pedra de Pilatos</b> (1961, Cesareia): inscrição com o nome de Pôncio Pilatos.</li>
+<li><b>Ossuário de Caifás</b> (1990): provável caixa de ossos do sumo sacerdote do julgamento de Jesus.</li>
+<li><b>Tanque de Siloé</b> (2004): o lugar de João 9, encontrado em Jerusalém.</li>
+</ul>
+<h3>Quem escolheu os livros?</h3>
+<p>A igreja não "inventou" o cânon; ela <b>reconheceu</b> os livros que já eram usados como Escritura. Critérios: ligação com os apóstolos, fidelidade à fé recebida e uso amplo pelas igrejas. Em 367, Atanásio listou exatamente os 27 livros do Novo Testamento que temos hoje.</p>`,
+ pr:{q:"\"A Bíblia foi escrita por homens e alterada várias vezes. Não dá pra confiar.\"",a:"\"Foi escrita por homens, sim, e a gente crê que Deus os inspirou. Agora, alterada? Temos mais de 5.800 manuscritos gregos do Novo Testamento, de lugares diferentes. Quando alguém tenta mudar uma cópia, as outras denunciam. Os Manuscritos do Mar Morto mostraram Isaías praticamente igual depois de mil anos de cópias. Qual trecho você acha que foi alterado? A gente pode olhar junto.\""},
+ quiz:[
+  {q:"Aproximadamente quantos manuscritos gregos do Novo Testamento existem?",o:["Cerca de 50","Cerca de 600","Mais de 5.800","Nenhum, só traduções"],c:2,e:"Mais de 5.800 em grego, muito mais do que qualquer outra obra da Antiguidade."},
+  {q:"Por que a comparação com o \"telefone sem fio\" falha?",o:["Porque a Bíblia nunca foi copiada","Porque as cópias se espalharam em vários ramos independentes que podem ser comparados","Porque os monges eram perfeitos","Porque só existe um manuscrito"],c:1,e:"Vários ramos independentes permitem detectar e corrigir erros de cópia."},
+  {q:"O que a Estela de Tel Dan (1993) confirmou?",o:["A existência de Pilatos","A \"Casa de Davi\", ou seja, a dinastia do rei Davi","O local do Tanque de Siloé","A data do Êxodo"],c:1,e:"A inscrição menciona a \"Casa de Davi\", forte evidência da existência histórica de Davi."},
+  {q:"Em 367, quem listou os 27 livros do Novo Testamento?",o:["Constantino","Martinho Lutero","Atanásio de Alexandria","O apóstolo João"],c:2,e:"Atanásio, em sua carta pascal de 367, lista os 27 livros que reconhecemos hoje."}
+ ]},
+
+f4:{title:"Quem foi Jesus de verdade?",min:9,
+ sum:"Fontes fora da Bíblia, o que Jesus afirmou sobre si e o famoso trilema de C. S. Lewis.",
+ verse:{t:"Respondeu-lhes Jesus: Em verdade, em verdade eu vos digo: antes que Abraão existisse, EU SOU.",r:"Jo 8.58"},
+ body:`<h3>Jesus existiu? Até os críticos dizem que sim</h3>
+<p>Praticamente nenhum historiador sério nega que Jesus existiu. O estudioso agnóstico Bart Ehrman, crítico do cristianismo, escreveu um livro inteiro (<i>Did Jesus Exist?</i>, 2012) para mostrar que sim, existiu. Algumas fontes não cristãs:</p>
+<ul>
+<li><b>Tácito</b>, historiador romano (<i>Anais</i> 15.44, c. 116 d.C.): Cristo "sofreu a pena máxima durante o reinado de Tibério, pelas mãos do procurador Pôncio Pilatos".</li>
+<li><b>Flávio Josefo</b>, historiador judeu (<i>Antiguidades</i> 20.9.1, c. 93 d.C.): menciona "Tiago, irmão de Jesus, chamado Cristo".</li>
+<li><b>Plínio, o Jovem</b>, governador romano (<i>Cartas</i> 10.96, c. 112 d.C.): os cristãos cantavam hinos "a Cristo, como a um deus".</li>
+</ul>
+<h3>O que Jesus afirmou sobre si</h3>
+<ul>
+<li>Usou o nome divino: "antes que Abraão existisse, EU SOU" (Jo 8.58; compare Êx 3.14). Os ouvintes entenderam e pegaram pedras.</li>
+<li>Perdoou pecados cometidos contra outros, algo que só Deus pode fazer (Mc 2.5-7).</li>
+<li>Diante do sumo sacerdote, confirmou ser o Cristo e o Filho do Homem que viria nas nuvens (Mc 14.61-62).</li>
+<li>Aceitou adoração: "Senhor meu e Deus meu!" (Jo 20.28).</li>
+</ul>
+<h3>O trilema de C. S. Lewis</h3>
+<p>Muita gente diz: "Jesus foi um grande mestre moral, mas não Deus". Lewis mostrou que essa opção não está disponível. Quem diz o que Jesus disse é <b>mentiroso</b> (sabia que não era Deus), <b>lunático</b> (achava que era, sem ser) ou <b>Senhor</b> (é mesmo quem disse ser).</p>
+<blockquote>"Você pode calá-lo como a um louco, pode cuspir nele e matá-lo como a um demônio; ou pode cair a seus pés e chamá-lo de Senhor e Deus. Mas não venhamos com essa bobagem condescendente de que ele foi um grande mestre humano. Ele não nos deixou essa opção."<cite>C. S. Lewis, <i>Cristianismo puro e simples</i>, livro 2, cap. 3</cite></blockquote>
+<div class="box">Críticos acrescentam uma quarta opção: <b>lenda</b>. A resposta está no próximo nível: as fontes são próximas demais dos fatos para dar tempo de uma lenda se formar (veja o credo de 1 Co 15).</div>`,
+ pr:{q:"\"Jesus foi um cara legal, tipo Gandhi. Mas Filho de Deus já é exagero.\"",a:"\"Concordo que ele foi bom. O problema é que um homem só bom não diria o que ele disse: que perdoa pecados, que existia antes de Abraão, que vai julgar o mundo. Se não fosse verdade, ele seria um mentiroso ou alguém fora da realidade, e nenhum dos dois é 'só um cara legal'. O que você acha dessas coisas que ele disse?\""},
+ quiz:[
+  {q:"Qual historiador romano registrou que Cristo foi executado sob Pôncio Pilatos?",o:["Heródoto","Tácito","Platão","Júlio César"],c:1,e:"Tácito, nos Anais 15.44, por volta de 116 d.C."},
+  {q:"Em Jo 8.58, por que os ouvintes quiseram apedrejar Jesus?",o:["Porque ele quebrou o sábado","Porque usou para si o nome divino \"EU SOU\"","Porque criticou Roma","Porque não pagou impostos"],c:1,e:"\"EU SOU\" remete ao nome de Deus em Êxodo 3.14. Eles entenderam a afirmação de divindade."},
+  {q:"Quais são as três opções do trilema de Lewis?",o:["Profeta, rei ou sacerdote","Mentiroso, lunático ou Senhor","Mestre, profeta ou lenda","Homem, anjo ou Deus"],c:1,e:"Quem afirma o que Jesus afirmou é mentiroso, lunático ou o Senhor."}
+ ]},
+
+d1:{title:"Trindade sem confusão",min:9,
+ sum:"Um só Deus em três Pessoas: o que isso significa e quais erros evitar.",
+ verse:{t:"Ide, portanto, fazei discípulos de todas as nações, batizando-os em nome do Pai, e do Filho, e do Espírito Santo.",r:"Mt 28.19"},
+ body:`<p>A Trindade não é matemática confusa. É o retrato de quem Deus revelou ser. Repare em Mateus 28.19: "em <b>nome</b>", no singular, e três Pessoas.</p>
+<h3>A definição em uma frase</h3>
+<p>Há <b>um só Deus</b> (Dt 6.4), que existe eternamente em <b>três Pessoas</b>: Pai, Filho e Espírito Santo. As três são igualmente Deus, igualmente eternas, e não se confundem entre si.</p>
+<div class="box">Fórmula para memorizar: <b>um "quê" e três "quem".</b> Um único ser divino (o quê) e três Pessoas (quem).</div>
+<h3>Três erros que a igreja já rejeitou</h3>
+<ul>
+<li><b>Modalismo</b> (Sabélio, séc. III): Deus seria uma pessoa só, usando três "máscaras". Problema: no batismo de Jesus, o Filho está na água, o Espírito desce e o Pai fala do céu, ao mesmo tempo (Mt 3.16-17).</li>
+<li><b>Arianismo</b> (Ário, séc. IV): o Filho seria a primeira criatura, não Deus. Rejeitado no Concílio de Niceia (325), que declarou o Filho <i>homoousios</i>, "da mesma substância" do Pai. "No princípio era o Verbo, e o Verbo estava com Deus, e o Verbo era Deus" (Jo 1.1). As Testemunhas de Jeová hoje repetem esse erro antigo.</li>
+<li><b>Triteísmo</b>: três deuses separados. A Bíblia é clara: Deus é um só.</li>
+</ul>
+<h3>Cuidado com as analogias</h3>
+<p>"A Trindade é como a água: gelo, líquido e vapor." Isso é modalismo, porque a mesma água muda de forma. "É como um ovo: casca, clara e gema." Isso divide Deus em partes, e cada Pessoa é Deus por inteiro. Melhor admitir: Deus é maior que qualquer comparação, mas a doutrina não é contraditória. Seria contradição dizer "um Deus e três Deuses" ou "uma pessoa e três pessoas". Não é isso que dizemos.</p>
+<h3>Por que isso importa</h3>
+<p>"Deus é amor" (1 Jo 4.8). Mas amor precisa de alguém para amar. Antes da criação, quem Deus amava? Na Trindade, o Pai, o Filho e o Espírito se amam desde a eternidade. Deus não criou você porque estava sozinho; criou para incluir você num amor que já existia.</p>`,
+ pr:{q:"\"Trindade é contraditória. 1 + 1 + 1 = 3, não 1.\"",a:"\"Seria contraditório se a gente dissesse que Deus é um e três <b>no mesmo sentido</b>. Mas dizemos que ele é um em <b>ser</b> e três em <b>pessoas</b>. É como perguntar 'o que' e 'quem': um único ser divino, três quem. Não é soma; é a forma de existir de um ser que é maior do que nós. E faz sentido de 'Deus é amor': amor eterno precisa de relação eterna.\""},
+ quiz:[
+  {q:"Qual erro diz que Deus é uma pessoa só que aparece em três formas?",o:["Arianismo","Modalismo","Triteísmo","Gnosticismo"],c:1,e:"Modalismo: uma pessoa com três \"modos\" ou máscaras."},
+  {q:"O que o Concílio de Niceia (325) afirmou sobre o Filho?",o:["Que é a primeira criatura","Que é homoousios, da mesma substância do Pai","Que é um anjo","Que só se tornou Deus na ressurreição"],c:1,e:"Homoousios: o Filho é plenamente Deus, da mesma substância do Pai, contra Ário."},
+  {q:"Por que a analogia da água (gelo, líquido, vapor) é ruim?",o:["Porque ensina modalismo","Porque é científica demais","Porque divide Deus em partes","Porque é bíblica"],c:0,e:"A mesma água em formas diferentes é exatamente o que o modalismo ensina."}
+ ]},
+
+d2:{title:"A ressurreição: o fato central",min:11,
+ sum:"O credo mais antigo, os fatos mínimos que até céticos aceitam e por que as teorias alternativas falham.",
+ verse:{t:"E, se Cristo não ressuscitou, é vã a vossa fé, e ainda permaneceis nos vossos pecados.",r:"1 Co 15.17"},
+ body:`<p>Paulo coloca tudo em jogo num único fato: se Jesus não ressuscitou, o cristianismo é falso. Nenhuma outra religião se arrisca assim. Isso significa que a fé cristã pode ser investigada.</p>
+<h3>O credo mais antigo</h3>
+<p>Em 1 Coríntios 15.3-7, Paulo passa adiante algo que ele "recebeu": Cristo morreu, foi sepultado, ressuscitou e apareceu a Pedro, aos Doze, a mais de quinhentos irmãos de uma vez, a Tiago e a todos os apóstolos. Muitos estudiosos, inclusive céticos, datam esse credo de <b>poucos anos depois da crucificação</b>. Isso é cedo demais para uma lenda.</p>
+<h3>Os fatos mínimos</h3>
+<p>O historiador Gary Habermas reuniu fatos aceitos pela grande maioria dos estudiosos, crentes ou não:</p>
+<ol>
+<li>Jesus morreu crucificado.</li>
+<li>Os discípulos acreditaram sinceramente ter visto Jesus ressuscitado, e estavam dispostos a sofrer por isso.</li>
+<li>Paulo, que perseguia a igreja, se converteu de repente.</li>
+<li>Tiago, irmão de Jesus e cético (Jo 7.5), se converteu e virou líder da igreja.</li>
+<li>O túmulo foi encontrado vazio (aceito pela maioria, embora não por todos).</li>
+</ol>
+<h3>As explicações alternativas não fecham</h3>
+<ul>
+<li><b>Roubaram o corpo:</b> então os discípulos morreram por uma mentira que eles mesmos inventaram. Gente morre por algo que acredita, não por algo que sabe ser falso.</li>
+<li><b>Alucinação:</b> alucinações são individuais. Não explicam aparições em grupo, nem o túmulo vazio, nem a conversão de inimigos como Paulo.</li>
+<li><b>Jesus só desmaiou:</b> soldados romanos eram especialistas em execução. E um homem meio morto não convenceria ninguém de que venceu a morte.</li>
+<li><b>Túmulo errado:</b> bastava as autoridades mostrarem o túmulo certo com o corpo.</li>
+</ul>
+<h3>Um detalhe que ninguém inventaria</h3>
+<p>As primeiras testemunhas foram <b>mulheres</b>. Naquela cultura, o testemunho de mulheres tinha pouco peso. Quem inventasse a história escolheria homens respeitados. Historiadores chamam isso de <b>critério do constrangimento</b>: detalhes que "atrapalham" a história tendem a ser verdadeiros.</p>`,
+ pr:{q:"\"Ressurreição é impossível. Gente morta não volta.\"",a:"\"Concordo: por causas naturais, não volta. Ninguém está dizendo que Jesus voltou por causa natural. A questão é: se Deus existe, ressuscitar alguém é impossível? Só é impossível se você já decidiu antes que Deus não existe. Então vamos olhar os fatos que até historiadores céticos aceitam: a morte, o túmulo vazio, as aparições, a conversão de Paulo e de Tiago. Qual explicação dá conta de todos eles?\""},
+ quiz:[
+  {q:"Por que o credo de 1 Coríntios 15.3-7 é tão importante?",o:["Porque foi escrito por Lutero","Porque é datado de poucos anos após a crucificação, cedo demais para lenda","Porque não fala de ressurreição","Porque é de um historiador romano"],c:1,e:"Muitos estudiosos o datam de poucos anos após os eventos."},
+  {q:"Qual destes NÃO é um dos fatos mínimos de Habermas?",o:["Jesus morreu crucificado","Paulo se converteu","Jesus nasceu em 25 de dezembro","Tiago, irmão cético de Jesus, se converteu"],c:2,e:"A data do nascimento não faz parte dos fatos mínimos e nem é conhecida com certeza."},
+  {q:"Por que a teoria da alucinação falha?",o:["Porque alucinações são individuais e não explicam aparições em grupo nem o túmulo vazio","Porque ninguém tinha imaginação","Porque os romanos proibiram","Porque a Bíblia não fala de aparições"],c:0,e:"Não existe alucinação coletiva idêntica para 500 pessoas, e o túmulo continuaria cheio."},
+  {q:"O que é o \"critério do constrangimento\"?",o:["Detalhes que atrapalham a história tendem a ser verdadeiros","Histórias vergonhosas devem ser apagadas","Só vale o que é aceito por todos","Evitar falar de religião em público"],c:0,e:"Ex.: mulheres como primeiras testemunhas; ninguém inventaria esse detalhe naquela cultura."}
+ ]},
+
+d3:{title:"Graça, fé e salvação",min:8,
+ sum:"Justificação, santificação e a diferença entre graça verdadeira e graça barata.",
+ verse:{t:"Justificados, pois, mediante a fé, temos paz com Deus por meio de nosso Senhor Jesus Cristo.",r:"Rm 5.1"},
+ body:`<h3>Justificação: o veredito</h3>
+<p>Justificar é um termo de tribunal: Deus <b>declara justo</b> o pecador. Não porque ele seja bom, mas porque a justiça de Cristo é creditada na conta dele (Rm 3.23-26). Na cruz houve uma troca: "Aquele que não conheceu pecado, ele o fez pecado por nós; para que nele fôssemos feitos justiça de Deus" (2 Co 5.21).</p>
+<h3>Santificação: o caminho</h3>
+<p>A justificação acontece de uma vez. A santificação é o processo de ficar parecido com Cristo ao longo da vida. "Desenvolvei a vossa salvação com temor e tremor, porque Deus é quem efetua em vós tanto o querer como o realizar" (Fp 2.12-13). Você se esforça <b>porque</b> Deus está agindo, não para convencê-lo a agir.</p>
+<h3>Fé e obras não brigam</h3>
+<p>Paulo diz que somos salvos pela fé, sem obras (Ef 2.8-9). Tiago diz que a fé sem obras é morta (Tg 2.17). Contradição? Não. Paulo fala da <b>raiz</b>: o que salva. Tiago fala do <b>fruto</b>: como se reconhece a fé verdadeira. Uma árvore viva dá frutos; os frutos não dão vida à árvore.</p>
+<h3>Graça barata</h3>
+<blockquote>"Graça barata é a graça sem discipulado, a graça sem a cruz, a graça sem Jesus Cristo vivo e encarnado."<cite>Dietrich Bonhoeffer, <i>Discipulado</i> (1937)</cite></blockquote>
+<p>Bonhoeffer, pastor alemão, foi executado pelos nazistas em 1945. Ele sabia que a graça é de graça, mas não é barata: custou a vida do Filho de Deus, e chama você a seguir Jesus com tudo.</p>
+<h3>Segurança</h3>
+<p>"Agora, pois, já nenhuma condenação há para os que estão em Cristo Jesus" (Rm 8.1). Nada "poderá nos separar do amor de Deus" (Rm 8.38-39). Um jovem seguro disso não tem medo de rejeição: ele já foi aceito pelo único que importa.</p>`,
+ pr:{q:"\"Então é só aceitar Jesus e fazer o que quiser depois?\"",a:"\"Não. A salvação é de graça, mas não é barata. Quem foi salvo de verdade passa a amar quem o salvou, e quem ama muda. As obras não compram o perdão; elas mostram que a fé é real. É como casamento: você não trabalha pra ganhar o 'sim', mas depois do 'sim' sua vida inteira muda.\""},
+ quiz:[
+  {q:"\"Justificação\" significa:",o:["Deus declarar justo o pecador com base na justiça de Cristo","Arranjar uma desculpa para o pecado","Ficar perfeito nesta vida","Fazer boas obras suficientes"],c:0,e:"É um veredito judicial: a justiça de Cristo é creditada a quem crê."},
+  {q:"Como Paulo (Ef 2.8-9) e Tiago (Tg 2.17) se harmonizam?",o:["Não se harmonizam","Paulo fala da raiz que salva (fé); Tiago, do fruto que mostra a fé verdadeira (obras)","Tiago corrige Paulo","Paulo fala só dos judeus"],c:1,e:"Raiz e fruto: a fé salva; as obras provam que a fé é viva."},
+  {q:"Quem escreveu sobre a \"graça barata\"?",o:["C. S. Lewis","Dietrich Bonhoeffer","Agostinho","Spurgeon"],c:1,e:"Bonhoeffer, em Discipulado (1937). Ele foi executado pelos nazistas em 1945."}
+ ]},
+
+d4:{title:"A história que te trouxe aqui",min:9,
+ sum:"De Pentecostes à Reforma e às igrejas do Brasil: os marcos que você precisa saber.",
+ verse:{t:"Jesus Cristo, ontem e hoje, é o mesmo e o será para sempre.",r:"Hb 13.8"},
+ body:`<p>Quem não conhece a própria história é facilmente convencido de que ela é vergonhosa. Estes marcos te dão chão.</p>
+<h3>Linha do tempo essencial</h3>
+<ul>
+<li><b>c. 30-33</b>: crucificação e ressurreição de Jesus. Pentecostes: nasce a igreja.</li>
+<li><b>64</b>: Nero persegue cristãos em Roma. Pedro e Paulo morrem nessa época.</li>
+<li><b>c. 155</b>: martírio de Policarpo, discípulo do apóstolo João.</li>
+<li><b>313</b>: Edito de Milão: o cristianismo deixa de ser perseguido no Império.</li>
+<li><b>325</b>: Concílio de Niceia: o Filho é plenamente Deus.</li>
+<li><b>381</b>: Concílio de Constantinopla: completa o Credo Niceno, afirmando a divindade do Espírito Santo.</li>
+<li><b>451</b>: Concílio de Calcedônia: Jesus é uma Pessoa com duas naturezas, plenamente Deus e plenamente homem.</li>
+<li><b>31 de outubro de 1517</b>: Martinho Lutero publica as 95 teses. Começa a Reforma Protestante.</li>
+<li><b>Séc. XVII-XVIII</b>: surgem os batistas; Wesley e o avivamento metodista.</li>
+<li><b>1910-1911</b>: chegam ao Brasil a Congregação Cristã (1910) e a Assembleia de Deus (1911, Belém do Pará).</li>
+</ul>
+<h3>As cinco Solas da Reforma</h3>
+<ul>
+<li><b>Sola Scriptura</b>: só a Escritura é a autoridade final.</li>
+<li><b>Sola Gratia</b>: salvação só pela graça.</li>
+<li><b>Sola Fide</b>: recebida só pela fé.</li>
+<li><b>Solus Christus</b>: só por meio de Cristo.</li>
+<li><b>Soli Deo Gloria</b>: tudo para a glória de Deus.</li>
+</ul>
+<h3>Coragem que vem de longe</h3>
+<p>Quando mandaram Policarpo, já idoso, amaldiçoar Cristo para escapar da morte, ele respondeu:</p>
+<blockquote>"Há oitenta e seis anos eu o sirvo, e ele nunca me fez mal algum. Como posso blasfemar contra o meu Rei, que me salvou?"<cite><i>Martírio de Policarpo</i>, séc. II</cite></blockquote>
+<p>Você faz parte dessa linhagem. A fé que chegou até você passou por gente que preferiu morrer a negá-la.</p>`,
+ pr:{q:"\"O cristianismo só cresceu porque o imperador Constantino impôs.\"",a:"\"Na verdade, ele cresceu quase 300 anos <b>debaixo de perseguição</b> antes de Constantino. Os cristãos eram presos, jogados às feras, e mesmo assim se multiplicavam, porque cuidavam dos doentes, adotavam bebês abandonados e morriam sem negar a fé. Constantino chegou depois que a igreja já estava em todo o Império.\""},
+ quiz:[
+  {q:"O que o Concílio de Calcedônia (451) definiu?",o:["A lista dos livros da Bíblia","Jesus é uma Pessoa com duas naturezas, divina e humana","O batismo infantil","O fim das perseguições"],c:1,e:"Plenamente Deus e plenamente homem, numa única Pessoa."},
+  {q:"Em que data Lutero publicou as 95 teses?",o:["25 de dezembro de 1500","31 de outubro de 1517","7 de setembro de 1822","1º de janeiro de 1600"],c:1,e:"31 de outubro de 1517, hoje lembrado como Dia da Reforma."},
+  {q:"Qual Sola afirma que a Escritura é a autoridade final?",o:["Sola Fide","Sola Gratia","Sola Scriptura","Soli Deo Gloria"],c:2,e:"Sola Scriptura: tradição e líderes são submetidos à Bíblia."},
+  {q:"Quando a Assembleia de Deus chegou ao Brasil?",o:["1822, no Rio","1911, em Belém do Pará","1950, em São Paulo","1517, na Bahia"],c:1,e:"Em 1911, em Belém do Pará, com os missionários Daniel Berg e Gunnar Vingren."}
+ ]},
+
+a1:{title:"Se Deus é bom, por que o mal?",min:11,
+ sum:"O problema lógico, o problema emocional e por que a cruz muda a pergunta.",
+ verse:{t:"Vós, na verdade, intentastes o mal contra mim; porém Deus o tornou em bem.",r:"Gn 50.20"},
+ body:`<p>Esta é a objeção mais forte e mais pessoal contra a fé. Leve-a a sério. Mas saiba que existem <b>dois problemas diferentes</b> aqui.</p>
+<h3>O problema lógico</h3>
+<p>"Um Deus bom e todo-poderoso não permitiria o mal. O mal existe. Logo, esse Deus não existe." O filósofo Alvin Plantinga (<i>God, Freedom and Evil</i>, 1974) mostrou que não há contradição: Deus pode ter boas razões para permitir o mal, por exemplo, criar seres <b>realmente livres</b>, capazes de amar. Amor forçado não é amor. Hoje, muitos filósofos ateus admitem que a versão lógica do problema foi respondida.</p>
+<h3>O mal aponta para Deus</h3>
+<p>Para chamar algo de "mal", você precisa de um padrão de bem. Se não há Deus, o que chamamos de mal é só a natureza seguindo seu curso. O ateu Richard Dawkins admitiu isso: num universo sem Deus não há "nenhum mal e nenhum bem, nada além de uma indiferença cega e impiedosa" (<i>O rio que saía do Éden</i>, 1995). A indignação diante do mal faz mais sentido num mundo criado por um Deus bom.</p>
+<h3>Deus não ficou de longe</h3>
+<p>O cristianismo é a única fé em que Deus <b>entra</b> no sofrimento. Jesus chorou diante do túmulo de Lázaro (Jo 11.35), foi traído, torturado e morto. Qualquer que seja a razão pela qual Deus permite o mal, não é indiferença. A cruz prova isso.</p>
+<blockquote>"Deus sussurra em nossos prazeres, fala em nossa consciência, mas grita em nossas dores: elas são o seu megafone para despertar um mundo surdo."<cite>C. S. Lewis, <i>O problema do sofrimento</i> (1940)</cite></blockquote>
+<h3>O fim da história</h3>
+<p>José foi vendido pelos irmãos, mas Deus transformou aquilo em salvação para muitos (Gn 50.20). Nem sempre veremos o porquê nesta vida. Mas a história termina com Deus enxugando "dos olhos toda lágrima" (Ap 21.4).</p>
+<h3>Quando a dor é de verdade</h3>
+<div class="box r">Se um amigo está de luto, <b>não comece com argumentos</b>. Os amigos de Jó acertaram nos primeiros sete dias, quando ficaram em silêncio ao lado dele (Jó 2.13), e erraram quando começaram a explicar. "Chorai com os que choram" (Rm 12.15). Presença primeiro, filosofia depois.</div>`,
+ pr:{q:"\"Se Deus existe, por que deixa criança morrer de câncer?\"",a:"\"Essa pergunta também me dói. Eu não sei o porquê de cada caso. Mas repara: se não existe Deus, a morte de uma criança não é 'injusta', é só biologia. A gente sente que é errado porque sabe que o mundo não deveria ser assim. A Bíblia concorda: o mundo está quebrado. E Deus não ficou assistindo: ele entrou na dor, morreu numa cruz e prometeu acabar com a morte. Sem Deus, há sofrimento sem esperança. Com ele, há sofrimento com esperança.\""},
+ quiz:[
+  {q:"Qual a diferença entre o problema lógico e o emocional do mal?",o:["Não há diferença","O lógico alega contradição; o emocional é a dor real de quem sofre","O lógico é para crianças","O emocional só afeta ateus"],c:1,e:"Um pede argumento; o outro pede presença e cuidado."},
+  {q:"Qual filósofo é conhecido pela defesa do livre-arbítrio diante do problema lógico do mal?",o:["Nietzsche","Alvin Plantinga","Karl Marx","Sartre"],c:1,e:"Alvin Plantinga, em God, Freedom and Evil (1974)."},
+  {q:"Como o mal pode apontar PARA Deus?",o:["Porque Deus cria o mal","Porque chamar algo de mal exige um padrão objetivo de bem","Porque o mal é ilusão","Porque só cristãos sofrem"],c:1,e:"Sem um padrão de bem, \"mal\" vira só preferência ou natureza."},
+  {q:"Com um amigo de luto, o que fazer primeiro?",o:["Explicar a defesa do livre-arbítrio","Dizer que tudo tem um motivo","Estar presente e chorar junto","Recomendar um livro de apologética"],c:2,e:"Rm 12.15 e Jó 2.13: presença antes de argumentos."}
+ ]},
+
+a2:{title:"Fé e ciência não são inimigas",min:10,
+ sum:"Os cristãos que fundaram a ciência, os mitos do conflito e o erro do cientificismo.",
+ verse:{t:"Os céus proclamam a glória de Deus, e o firmamento anuncia as obras das suas mãos.",r:"Sl 19.1"},
+ body:`<h3>A ciência moderna nasceu entre cristãos</h3>
+<p>Kepler, Galileu, Boyle, Pascal, Newton, Faraday e Maxwell eram crentes. <b>Gregor Mendel</b>, pai da genética, era monge. <b>Georges Lemaître</b>, que propôs a teoria do Big Bang, era padre. <b>Francis Collins</b>, que liderou o Projeto Genoma Humano, é cristão e escreveu <i>A linguagem de Deus</i> (2006).</p>
+<p>Isso não é coincidência. Eles acreditavam que o universo foi criado por um Deus racional e, por isso, seria <b>ordenado e compreensível</b>. Vale a pena investigá-lo. É a base de toda ciência.</p>
+<h3>Mitos que você vai ouvir</h3>
+<ul>
+<li><b>"Na Idade Média achavam que a Terra era plana."</b> Falso. Os estudiosos medievais sabiam que a Terra é esférica. O mito foi popularizado no século XIX, em parte por uma biografia romanceada de Colombo escrita por Washington Irving (1828).</li>
+<li><b>"O caso Galileu prova que a fé odeia a ciência."</b> O caso envolveu política, personalidade e a física da época, que ainda não tinha provas decisivas. Houve erro das autoridades da Igreja, mas Galileu morreu crente e via a ciência como leitura do "livro da natureza" escrito por Deus.</li>
+</ul>
+<h3>O erro do cientificismo</h3>
+<p>Cientificismo é a ideia de que "só a ciência produz conhecimento verdadeiro". Mas essa frase <b>não pode ser provada pela ciência</b>: nenhum experimento a testa. Ela se derruba sozinha. Além disso, a ciência pressupõe coisas que não prova: que a lógica funciona, que a natureza é uniforme, que devemos ser honestos nos dados.</p>
+<h3>Ciência responde "como"; a fé responde "por quê"</h3>
+<p>Explicar como um motor funciona não elimina o engenheiro que o projetou. Descrever as leis da física não responde por que existem leis, nem por que algo existe em vez de nada.</p>
+<div class="box">Sobre a idade da Terra e a leitura de Gênesis 1, cristãos fiéis à Bíblia divergem (criacionismo de Terra jovem, de Terra antiga e outras visões). Conheça os argumentos de cada lado e não faça disso o centro da conversa com quem nem crê em Deus ainda. Comece pelo essencial: Deus criou, e Cristo ressuscitou.</div>`,
+ pr:{q:"\"Eu acredito na ciência, não em religião.\"",a:"\"Eu também acredito na ciência! Os caras que fundaram a ciência moderna, Newton, Kepler, Pascal, Mendel, eram cristãos. Eles estudavam a natureza justamente porque criam num Criador racional. Agora, quando você diz 'só acredito no que a ciência prova', isso a ciência consegue provar? Não. É uma crença filosófica, assim como a minha.\""},
+ quiz:[
+  {q:"Quem propôs a teoria que ficou conhecida como Big Bang?",o:["Stephen Hawking","Georges Lemaître, físico e padre","Charles Darwin","Albert Einstein"],c:1,e:"Lemaître, em 1927 e 1931."},
+  {q:"Por que o cientificismo se autorrefuta?",o:["Porque a ciência está sempre errada","Porque a frase \"só a ciência produz conhecimento\" não pode ser provada cientificamente","Porque cientistas são religiosos","Porque a Bíblia proíbe"],c:1,e:"É uma afirmação filosófica que nega o valor de afirmações filosóficas."},
+  {q:"Os estudiosos medievais acreditavam que a Terra era plana?",o:["Sim, todos","Não, sabiam que era esférica; o mito surgiu no século XIX","Só os monges","Só até o ano 1000"],c:1,e:"É um mito moderno, popularizado no século XIX."}
+ ]},
+
+a3:{title:"\"Cada um tem sua verdade\"?",min:9,
+ sum:"Relativismo, tolerância verdadeira e duas perguntas que mudam qualquer conversa.",
+ verse:{t:"Respondeu-lhe Jesus: Eu sou o caminho, e a verdade, e a vida; ninguém vem ao Pai senão por mim.",r:"Jo 14.6"},
+ body:`<h3>A frase que se derruba sozinha</h3>
+<p>"Não existe verdade absoluta." Essa frase é absolutamente verdadeira? Se for, ela mesma é uma verdade absoluta, e se contradiz. Se não for, por que eu deveria aceitá-la? O relativismo <b>serra o galho em que está sentado</b>.</p>
+<p>Na prática, ninguém vive como relativista. Quem diz "cada um tem sua verdade" não aceita que o banco tenha "a verdade dele" sobre o saldo de sua conta.</p>
+<h3>Tolerância de verdade</h3>
+<p>Hoje "tolerância" virou "concordar com tudo". Mas tolerar significa <b>suportar aquilo de que você discorda</b>. Só se tolera o que se considera errado. Tolerância real é: discordo de você, e mesmo assim respeito você e seu direito de falar. Isso é coerente com a fé: Deus ama pessoas que discordam dele.</p>
+<h3>Toda visão é exclusiva</h3>
+<p>"Cristãos são arrogantes por dizer que Jesus é o único caminho." Mas a frase "todas as religiões levam a Deus" também é exclusiva: exclui quem crê que elas não levam, incluindo budistas, muçulmanos e cristãos. A história dos cegos e do elefante (cada um toca uma parte e acha que conhece o todo) só funciona porque o narrador afirma ver o elefante inteiro. Quem conta a história está reivindicando a visão completa que nega aos outros.</p>
+<h3>As duas perguntas de Colombo</h3>
+<p>O apologista Greg Koukl (<i>Táticas</i>) ensina a usar perguntas em vez de discursos:</p>
+<ol>
+<li><b>"O que você quer dizer com isso?"</b> Esclarece o que a pessoa realmente pensa (muitas vezes, nem ela sabe).</li>
+<li><b>"Como você chegou a essa conclusão?"</b> Transfere o ônus da prova para quem afirmou.</li>
+</ol>
+<div class="box">Perguntas tiram a pressão de você. Quem pergunta conduz a conversa sem precisar saber todas as respostas.</div>
+<p>Diante de Jesus, Pilatos perguntou com desdém: "Que é a verdade?" (Jo 18.38). A Verdade estava em pé na frente dele.</p>`,
+ pr:{q:"\"Isso é verdade pra você, mas não pra mim.\"",a:"\"Hmm, o que você quer dizer com isso? Porque tem coisas que são assim, tipo 'sorvete de flocos é o melhor', isso é gosto. Mas Jesus ter ressuscitado ou não é um fato histórico: ou aconteceu, ou não. Não pode ser verdade pra mim e mentira pra você. Se ele ressuscitou, é verdade pra nós dois. Vale a gente investigar se aconteceu, né?\""},
+ quiz:[
+  {q:"Por que \"não existe verdade absoluta\" é autorrefutante?",o:["Porque é uma afirmação que se apresenta como verdade absoluta","Porque é muito longa","Porque é científica","Porque é bíblica"],c:0,e:"Ela pretende ser absolutamente verdadeira enquanto nega que isso exista."},
+  {q:"Segundo a lição, tolerância verdadeira é:",o:["Concordar com todas as opiniões","Respeitar a pessoa e seu direito de falar mesmo discordando dela","Nunca falar de religião","Aceitar tudo para evitar briga"],c:1,e:"Só se tolera aquilo de que se discorda."},
+  {q:"Quais são as duas perguntas de Colombo (Greg Koukl)?",o:["\"Você vai à igreja?\" e \"Você lê a Bíblia?\"","\"O que você quer dizer com isso?\" e \"Como chegou a essa conclusão?\"","\"Você já pecou?\" e \"Quer aceitar Jesus?\"","\"Quem criou Deus?\" e \"Por que o mal?\""],c:1,e:"Esclarecer o significado e pedir as razões."}
+ ]},
+
+a4:{title:"Moral sem Deus se sustenta?",min:9,
+ sum:"Por que direitos humanos e dignidade têm raiz cristã, e o que acontece quando ela é cortada.",
+ verse:{t:"Porquanto, quando, pois, os gentios, que não têm lei, procedem, por natureza, de conformidade com a lei... mostram a norma da lei gravada no seu coração.",r:"Rm 2.14-15"},
+ body:`<h3>Duas perguntas diferentes</h3>
+<p>"Um ateu pode ser bom?" Claro que sim. A Bíblia diz que a lei moral está gravada no coração de todos (Rm 2.15). Essa é uma pergunta sobre <b>conhecer</b> o bem. A pergunta real é outra: <b>o que faz o bem ser bem?</b> Sem Deus, de onde vem a obrigação moral?</p>
+<h3>As opções sem Deus</h3>
+<ul>
+<li><b>Evolução:</b> explicaria por que sentimos certas coisas, não por que elas são certas. Se a moral é só instinto de sobrevivência, a crueldade que "funciona" seria justificável.</li>
+<li><b>Cultura ou maioria:</b> então a escravidão era certa quando a maioria a aceitava, e os abolicionistas estavam errados. Ninguém aceita isso.</li>
+<li><b>Preferência pessoal:</b> então "não torture inocentes" vale tanto quanto "não gosto de jiló".</li>
+</ul>
+<h3>Nietzsche entendeu</h3>
+<p>Friedrich Nietzsche, ateu, anunciou que "Deus está morto" (<i>A gaia ciência</i>, 1882) e percebeu que a moral cristã não sobreviveria sem o Deus cristão. Ele não achava que bastava tirar Deus e manter a compaixão. O século XX, com regimes que rejeitaram Deus e mataram dezenas de milhões, mostrou o preço de cortar a raiz.</p>
+<h3>De onde vêm os direitos humanos</h3>
+<p>A ideia de que todo ser humano tem dignidade igual e inviolável não é óbvia na história. Ela vem da convicção bíblica de que somos criados à <b>imagem de Deus</b>. A Declaração de Independência dos EUA (1776) diz que os homens são "dotados pelo seu Criador" de direitos inalienáveis. Tire o Criador e esses direitos viram concessão do Estado, que pode retirá-los.</p>
+<h3>O "Tao" de C. S. Lewis</h3>
+<p>Em <i>A abolição do homem</i> (1943), Lewis mostrou que culturas antigas do mundo inteiro (babilônios, chineses, gregos, hebreus, nórdicos) compartilham uma lei moral comum: honrar pais, não matar inocentes, ser justo. Ele alertou que uma educação que trata valores como meros sentimentos forma "homens sem peito": gente que sabe pensar, mas não tem coragem moral.</p>`,
+ pr:{q:"\"Eu não preciso de Deus para ser uma pessoa boa.\"",a:"\"Concordo que você pode ser boa pessoa sem crer em Deus. Conheço ateus mais gentis que muito crente. Minha pergunta é outra: se não existe Deus, o que faz a bondade ser obrigatória? Se tudo é matéria e acaso, quem diz que ser bom é melhor do que ser cruel, se a crueldade me beneficiar? Eu acho que você sente que o bem é real. Eu também. Só acho que isso aponta para alguém por trás dele.\""},
+ quiz:[
+  {q:"Qual é a pergunta central do argumento moral?",o:["Se ateus conseguem ser bons","O que fundamenta o bem e o dever moral","Se religiosos são melhores","Se a moral deve ser lei"],c:1,e:"Não é sobre comportamento, e sim sobre o fundamento."},
+  {q:"Se a moral fosse decidida pela maioria, o que se concluiria sobre a escravidão?",o:["Que sempre foi errada","Que era certa enquanto a maioria a aceitava, e os abolicionistas estavam errados","Que nunca existiu","Que é questão de gosto"],c:1,e:"Essa conclusão absurda mostra que a moral não depende da maioria."},
+  {q:"Em A abolição do homem, Lewis chamou os produtos de uma educação sem valores objetivos de:",o:["Homens sem cabeça","Homens sem peito","Homens de barro","Homens livres"],c:1,e:"\"Homens sem peito\": razão sem coragem moral."}
+ ]},
+
+c1:{title:"Cosmovisão: as lentes que todo mundo usa",min:9,
+ sum:"Quatro perguntas que revelam a cosmovisão de qualquer pessoa e as alternativas que disputam sua geração.",
+ verse:{t:"E não vos conformeis com este século, mas transformai-vos pela renovação da vossa mente.",r:"Rm 12.2"},
+ body:`<p>Cosmovisão é o conjunto de convicções pelas quais você enxerga tudo. Todo mundo tem uma, inclusive quem diz não ter. Ela aparece nas respostas a quatro perguntas:</p>
+<ol><li><b>Origem:</b> de onde viemos?</li><li><b>Sentido:</b> por que estamos aqui?</li><li><b>Moral:</b> como devemos viver?</li><li><b>Destino:</b> para onde vamos?</li></ol>
+<h3>As concorrentes</h3>
+<ul>
+<li><b>Naturalismo:</b> só existe matéria. Origem: acaso. Sentido: nenhum, a não ser o que você inventa. Destino: o nada.</li>
+<li><b>Pós-modernismo:</b> não há verdade, só narrativas e disputas de poder. Toda afirmação de verdade é vista como tentativa de dominar.</li>
+<li><b>Consumismo e hedonismo:</b> a vida é sobre prazer, imagem e experiências. O sentido vira o próximo produto ou a próxima curtida.</li>
+<li><b>Ideologias que viram religião:</b> projetos políticos que prometem salvação pelo Estado ou pela revolução, com seus próprios "pecados", "santos" e "hereges". O século XX mostrou aonde as utopias que se colocam no lugar de Deus podem chegar.</li>
+</ul>
+<h3>A resposta cristã às quatro perguntas</h3>
+<p><b>Origem:</b> Deus nos criou à sua imagem. <b>Sentido:</b> conhecer e amar a Deus e ao próximo, e cuidar da criação. <b>Moral:</b> refletir o caráter de Deus revelado nas Escrituras. <b>Destino:</b> ressurreição e nova criação em Cristo.</p>
+<blockquote>"Não há um centímetro quadrado em todo o domínio da existência humana sobre o qual Cristo, que é soberano sobre tudo, não clame: 'É meu!'"<cite>Abraham Kuyper, teólogo e primeiro-ministro da Holanda (1880)</cite></blockquote>
+<p>Kuyper foi pastor, jornalista, fundador de universidade e chefe de governo. Fé cristã não é assunto só de domingo: ela tem algo a dizer sobre escola, trabalho, arte, ciência e política.</p>
+<div class="box">Exercício: pegue a letra de uma música, um filme ou uma série de que você gosta e responda às quatro perguntas a partir dela. Você vai começar a ver as cosmovisões em tudo.</div>
+<p>"Cuidado que ninguém vos venha a enredar com sua filosofia e vãs sutilezas, conforme a tradição dos homens" (Cl 2.8).</p>`,
+ pr:{q:"\"Eu não tenho cosmovisão nenhuma, só vivo minha vida.\"",a:"\"Todo mundo tem, mesmo sem dar nome. Me diz: você acha que sua vida tem algum propósito, ou é tudo acaso? Acha que existe certo e errado de verdade? O que acontece quando a gente morre? Suas respostas a isso são sua cosmovisão. A minha começa com Deus. A sua começa com o quê?\""},
+ quiz:[
+  {q:"Quais são as quatro perguntas de cosmovisão?",o:["Quem, quando, onde, quanto","Origem, sentido, moral e destino","Igreja, família, escola e trabalho","Passado, presente, futuro e eternidade"],c:1,e:"De onde viemos, por que estamos aqui, como viver e para onde vamos."},
+  {q:"Qual cosmovisão diz que só existe matéria?",o:["Teísmo","Naturalismo","Pós-modernismo","Panteísmo"],c:1,e:"Naturalismo: tudo é matéria, energia e acaso."},
+  {q:"A frase do \"centímetro quadrado\" é de quem?",o:["Calvino","Abraham Kuyper","C. S. Lewis","Billy Graham"],c:1,e:"Abraham Kuyper, em 1880, na fundação da Universidade Livre de Amsterdã."}
+ ]},
+
+c2:{title:"Vida humana: imagem de Deus",min:9,
+ sum:"Dignidade da vida da concepção à morte natural, com argumentos, ciência e compaixão.",
+ verse:{t:"Pois tu formaste o meu interior, tu me teceste no seio de minha mãe. Graças te dou, visto que por modo assombrosamente maravilhoso me formaste.",r:"Sl 139.13-14"},
+ body:`<h3>O fundamento</h3>
+<p>Todo ser humano é criado à imagem de Deus (Gn 1.27). Por isso, tirar a vida de um inocente é grave (Gn 9.6). A Bíblia trata a vida no ventre como pessoa conhecida por Deus: "Antes que eu te formasse no ventre materno, eu te conheci" (Jr 1.5). João Batista "estremeceu" no ventre de Isabel ao ouvir a saudação de Maria (Lc 1.41).</p>
+<h3>O que a ciência mostra</h3>
+<p>A embriologia ensina que, na concepção, surge um novo organismo humano, com DNA próprio, distinto do pai e da mãe. Por volta da sexta semana de gestação já se detecta atividade cardíaca. A questão não é se aquilo é vida humana (é), mas se <b>toda vida humana tem valor</b>.</p>
+<h3>Um argumento simples (SLED)</h3>
+<p>As diferenças entre um embrião e você são de quatro tipos, e nenhuma muda o valor de alguém:</p>
+<ul>
+<li><b>Tamanho:</b> uma criança é menor que um adulto e não vale menos.</li>
+<li><b>Nível de desenvolvimento:</b> uma menina de 4 anos é menos desenvolvida que uma mulher de 20.</li>
+<li><b>Ambiente:</b> atravessar 20 centímetros pelo canal de parto não muda quem você é.</li>
+<li><b>Dependência:</b> quem depende de insulina ou de aparelhos não perde direitos.</li>
+</ul>
+<h3>Cristãos sempre foram assim</h3>
+<p>No Império Romano, era comum abandonar bebês indesejados para morrer. A <i>Didaqué</i>, manual cristão do século I ou II, ordena: "Não matarás a criança por aborto, nem a matarás depois de nascida". Cristãos resgatavam e criavam esses bebês. Depois vieram hospitais, orfanatos e asilos.</p>
+<h3>Pró-vida de verdade</h3>
+<ul>
+<li>É defender o bebê <b>e</b> cuidar da mãe: apoio a gestantes em crise, adoção, ajuda concreta.</li>
+<li>É defender o idoso e o doente contra a pressão da eutanásia, e a pessoa com deficiência contra o descarte.</li>
+</ul>
+<div class="box r">Fale sempre com graça. Alguém perto de você pode já ter passado por um aborto. A mensagem para essa pessoa é Romanos 8.1: "nenhuma condenação há para os que estão em Cristo Jesus". Há perdão completo.</div>`,
+ pr:{q:"\"Meu corpo, minhas regras.\"",a:"\"Eu concordo que seu corpo é seu, e ninguém deveria mandar nele. A questão é se existe <b>outro corpo</b> ali. O bebê tem DNA próprio, coração próprio, às vezes outro tipo sanguíneo e outro sexo. Se é outro ser humano, a pergunta deixa de ser só sobre o seu corpo. E eu acho que a gente deveria cuidar dos dois: da mãe e do filho.\""},
+ quiz:[
+  {q:"O que a embriologia mostra que surge na concepção?",o:["Um aglomerado sem identidade","Um novo organismo humano com DNA próprio","Uma parte do corpo da mãe","Nada mensurável"],c:1,e:"Um novo organismo humano, distinto do pai e da mãe."},
+  {q:"No argumento SLED, as letras representam:",o:["Saúde, Lei, Educação, Direito","Tamanho, nível de desenvolvimento, ambiente e dependência (em inglês: Size, Level, Environment, Degree)","Sexo, Local, Estado, Data","Sangue, Lugar, Época, Destino"],c:1,e:"Size, Level of development, Environment, Degree of dependency."},
+  {q:"O que a Didaqué (séc. I-II) ensinava?",o:["Nada sobre crianças","Não matarás a criança por aborto, nem depois de nascida","Que o aborto era permitido até certo mês","Que só os pais decidem"],c:1,e:"Os primeiros cristãos se destacavam por proteger crianças."},
+  {q:"Como falar com alguém que já passou por um aborto?",o:["Com condenação, para que se arrependa","Evitar a pessoa","Com graça: em Cristo há perdão completo (Rm 8.1)","Dizer que não foi nada"],c:2,e:"Verdade e graça andam juntas."}
+ ]},
+
+c3:{title:"Família, corpo e identidade",min:10,
+ sum:"O desenho de Deus para a sexualidade, sua identidade em Cristo e como falar com verdade e amor.",
+ verse:{t:"E o Verbo se fez carne e habitou entre nós, cheio de graça e de verdade.",r:"Jo 1.14"},
+ body:`<h3>O desenho original</h3>
+<p>"Criou Deus o homem à sua imagem... homem e mulher os criou" (Gn 1.27). "Por isso, deixa o homem pai e mãe e se une à sua mulher, tornando-se os dois uma só carne" (Gn 2.24). Quando perguntaram a Jesus sobre casamento, ele citou exatamente esses textos (Mt 19.4-6). O casamento entre homem e mulher não é invenção cultural da igreja: é o desenho do Criador.</p>
+<h3>Sexualidade é dádiva, não ídolo</h3>
+<p>O sexo é bom, criado por Deus, e tem lugar: a aliança do casamento. A cultura transformou o desejo em identidade e em direito absoluto. A Bíblia diz que seu corpo é "santuário do Espírito Santo" e que você foi "comprado por preço" (1 Co 6.18-20). Seu corpo importa para Deus.</p>
+<h3>Sua identidade não é o seu desejo</h3>
+<p>A cultura diz: "você é o que sente; siga seu coração". A Bíblia diz que o coração é enganoso (Jr 17.9) e que sua identidade mais profunda é dada por Deus: "se alguém está em Cristo, é nova criatura" (2 Co 5.17). Todo cristão luta com desejos que não deve seguir. A luta não define você; Cristo define.</p>
+<h3>Família: os "pequenos pelotões"</h3>
+<p>O pensador conservador Edmund Burke chamou a família e as comunidades próximas de "pequenos pelotões" da sociedade: é ali que primeiro aprendemos a amar, servir e obedecer. Uma sociedade que enfraquece a família acaba entregando ao Estado funções que ele faz muito pior. Honrar pai e mãe (Êx 20.12) é o primeiro mandamento com promessa.</p>
+<h3>Uma luta real: pornografia</h3>
+<p>Ela distorce a visão do outro e do sexo e vicia. Saída prática: luz (conte a alguém maduro), prestação de contas, filtros, e lembrar que a graça de Deus é maior que sua queda (1 Jo 1.9).</p>
+<h3>Graça E verdade</h3>
+<p>Jesus foi "cheio de graça e de verdade" (Jo 1.14). Para a mulher pega em adultério ele disse as duas coisas: "Nem eu tampouco te condeno; vai e não peques mais" (Jo 8.11). Graça sem verdade é bajulação; verdade sem graça é crueldade.</p>
+<div class="box">Seja amigo de quem pensa diferente, inclusive de pessoas LGBT. Firmeza nas convicções nunca autoriza desprezo, piada ou humilhação. Você pode discordar profundamente e amar profundamente, como Jesus.</div>`,
+ pr:{q:"\"Sua igreja é homofóbica por não aceitar casamento gay.\"",a:"\"Eu entendo por que parece isso, e infelizmente tem cristão que trata mal as pessoas, o que é errado. Mas discordar de alguém não é odiar. Eu creio que Deus desenhou o casamento entre homem e mulher, porque Jesus disse isso em Mateus 19. Ao mesmo tempo, creio que todo ser humano tem dignidade, e eu também tenho desejos que Deus me pede para não seguir. Posso discordar de você e ser seu amigo. Você consegue fazer o mesmo comigo?\""},
+ quiz:[
+  {q:"Quando perguntado sobre casamento, que textos Jesus citou (Mt 19.4-6)?",o:["Levítico 18","Gênesis 1.27 e 2.24","Cantares","Nenhum"],c:1,e:"Jesus voltou ao desenho da criação: homem e mulher, uma só carne."},
+  {q:"Segundo a lição, onde está a identidade mais profunda do cristão?",o:["Nos seus desejos","Na opinião dos amigos","Em Cristo (2 Co 5.17)","Na sua aparência"],c:2,e:"Nova criatura em Cristo; a luta não te define."},
+  {q:"Quem chamou a família de \"pequenos pelotões\" da sociedade?",o:["Karl Marx","Edmund Burke","Rousseau","Nietzsche"],c:1,e:"Edmund Burke, em Reflexões sobre a Revolução na França (1790)."},
+  {q:"\"Graça sem verdade é ____; verdade sem graça é ____.\"",o:["fraqueza / força","bajulação / crueldade","amor / justiça","fácil / difícil"],c:1,e:"Jesus uniu as duas (Jo 1.14; Jo 8.11)."}
+ ]},
+
+c4:{title:"Fé em público: liberdade e coragem",min:10,
+ sum:"Seus direitos, seus deveres e como se posicionar na escola, na faculdade e nas redes.",
+ verse:{t:"Antes, santificai a Cristo, como Senhor, em vosso coração, estando sempre preparados para responder a todo aquele que vos pedir razão da esperança que há em vós, fazendo-o, todavia, com mansidão e temor.",r:"1 Pe 3.15"},
+ body:`<p>A palavra "responder" em 1 Pedro 3.15 é, em grego, <b>apologia</b>: uma defesa racional, como num tribunal. É daí que vem o nome deste app. Repare que Pedro pede duas coisas: <b>preparo</b> e <b>mansidão</b>. Firmeza não é grosseria.</p>
+<h3>Seus direitos no Brasil</h3>
+<ul>
+<li>"É inviolável a liberdade de consciência e de crença, sendo assegurado o livre exercício dos cultos religiosos" (Constituição Federal, art. 5º, VI).</li>
+<li>"Ninguém será privado de direitos por motivo de crença religiosa ou de convicção filosófica ou política" (art. 5º, VIII).</li>
+<li>A livre manifestação do pensamento também é garantida (art. 5º, IV).</li>
+</ul>
+<p>Você tem o direito de expressar sua fé com respeito na escola, na faculdade e no trabalho. Conhecer isso tira o medo.</p>
+<h3>Autoridade e limite</h3>
+<p>O cristão respeita as autoridades (Rm 13.1): professor, diretor, governo. Mas quando uma autoridade manda negar a Cristo, vale Atos 5.29: "Antes, importa obedecer a Deus do que aos homens". Daniel continuou orando com a janela aberta (Dn 6.10), sem desrespeitar o rei, e sem obedecê-lo naquilo.</p>
+<h3>Na sala de aula</h3>
+<ul>
+<li>Seja o aluno mais educado e esforçado da sala. Excelência abre ouvidos.</li>
+<li>Discordou? Pergunte com respeito: "Professor, qual a fonte disso?" ou "Como os críticos dessa visão respondem?".</li>
+<li>Não tente vencer a discussão e perder a pessoa.</li>
+<li>Em trabalhos e redações, você pode argumentar a partir da sua cosmovisão, com fontes e boa lógica.</li>
+</ul>
+<h3>Nas redes</h3>
+<p>Antes de postar ou comentar, três perguntas: <b>É verdade? É necessário? Edifica?</b> (Ef 4.29). Confira antes de compartilhar: espalhar notícia falsa é dar falso testemunho (Êx 20.16). Não entre em briga de comentários com quem só quer plateia. Uma conversa sincera em particular vale mais que cem respostas lacradoras.</p>
+<h3>Coragem com exemplos</h3>
+<p><b>William Wilberforce</b>, cristão evangélico, dedicou a vida no Parlamento britânico a acabar com o tráfico de escravos (proibido em 1807) e com a própria escravidão no Império Britânico (1833). Fé levada a sério muda nações.</p>
+<div class="box">Regra de ouro: <b>convicção firme, tom manso, vida coerente.</b> As pessoas podem discutir seus argumentos, mas têm dificuldade de discutir uma vida transformada.</div>`,
+ pr:{q:"O professor diz na frente da turma: \"Religião é coisa de gente sem estudo\".",a:"Levante a mão com calma: \"Professor, posso fazer uma observação? Newton, Pascal, Mendel e Lemaître, que propôs o Big Bang, eram homens de fé e de muito estudo. Hoje há filósofos como Alvin Plantinga e cientistas como Francis Collins que são cristãos. Talvez o mais justo seja dizer que existem pessoas estudadas dos dois lados. O senhor concorda?\" Respeitoso, informado, sem ataque pessoal."},
+ quiz:[
+  {q:"Qual a palavra grega por trás de \"responder\" em 1 Pe 3.15?",o:["Ágape","Apologia","Kerigma","Logos"],c:1,e:"Apologia: uma defesa racional, como num tribunal."},
+  {q:"Qual inciso do art. 5º da Constituição garante a liberdade de consciência e de crença?",o:["Inciso I","Inciso VI","Inciso XX","Não existe"],c:1,e:"Art. 5º, VI. O inciso VIII proíbe privar alguém de direitos por motivo de crença."},
+  {q:"Quando uma autoridade manda negar a Cristo, qual texto orienta o cristão?",o:["Rm 13.1, obedecer sempre","At 5.29, importa obedecer a Deus antes que aos homens","Nenhum","Ec 3.1"],c:1,e:"Respeitamos as autoridades, mas não acima de Deus."},
+  {q:"Quais as três perguntas antes de postar?",o:["Vai viralizar? Vai lacrar? Vai irritar?","É verdade? É necessário? Edifica?","Quem postou? Quando? Onde?","É curto? É bonito? É engraçado?"],c:1,e:"Baseadas em Ef 4.29 e no mandamento contra o falso testemunho."}
+ ]}
+};
+
+const CARDS=[
+ // Versículos
+ {id:"v1",cat:"Versículo",f:"1 Pedro 3.15",b:"\"Santificai a Cristo, como Senhor, em vosso coração, estando sempre preparados para responder a todo aquele que vos pedir razão da esperança que há em vós, fazendo-o com mansidão e temor.\""},
+ {id:"v2",cat:"Versículo",f:"Romanos 1.16",b:"\"Não me envergonho do evangelho, porque é o poder de Deus para a salvação de todo aquele que crê.\""},
+ {id:"v3",cat:"Versículo",f:"João 14.6",b:"\"Eu sou o caminho, e a verdade, e a vida; ninguém vem ao Pai senão por mim.\""},
+ {id:"v4",cat:"Versículo",f:"Efésios 2.8-9",b:"\"Pela graça sois salvos, por meio da fé; e isto não vem de vós; é dom de Deus. Não vem das obras, para que ninguém se glorie.\""},
+ {id:"v5",cat:"Versículo",f:"2 Coríntios 5.21",b:"\"Aquele que não conheceu pecado, ele o fez pecado por nós; para que, nele, fôssemos feitos justiça de Deus.\""},
+ {id:"v6",cat:"Versículo",f:"Romanos 8.1",b:"\"Agora, pois, já nenhuma condenação há para os que estão em Cristo Jesus.\""},
+ {id:"v7",cat:"Versículo",f:"1 Coríntios 15.3-4",b:"\"Cristo morreu pelos nossos pecados, segundo as Escrituras, e foi sepultado e ressuscitou ao terceiro dia, segundo as Escrituras.\""},
+ {id:"v8",cat:"Versículo",f:"Romanos 12.2",b:"\"Não vos conformeis com este século, mas transformai-vos pela renovação da vossa mente.\""},
+ {id:"v9",cat:"Versículo",f:"Colossenses 2.8",b:"\"Cuidado que ninguém vos venha a enredar com sua filosofia e vãs sutilezas, conforme a tradição dos homens... e não segundo Cristo.\""},
+ {id:"v10",cat:"Versículo",f:"Gênesis 1.27",b:"\"Criou Deus, pois, o homem à sua imagem, à imagem de Deus o criou; homem e mulher os criou.\""},
+ {id:"v11",cat:"Versículo",f:"Atos 5.29",b:"\"Antes, importa obedecer a Deus do que aos homens.\""},
+ {id:"v12",cat:"Versículo",f:"João 1.1",b:"\"No princípio era o Verbo, e o Verbo estava com Deus, e o Verbo era Deus.\""},
+ {id:"v13",cat:"Versículo",f:"Romanos 1.20",b:"\"Os atributos invisíveis de Deus, seu eterno poder e divindade, claramente se reconhecem desde a criação do mundo, por meio das coisas criadas.\""},
+ {id:"v14",cat:"Versículo",f:"2 Timóteo 3.16",b:"\"Toda a Escritura é inspirada por Deus e útil para o ensino, para a repreensão, para a correção, para a educação na justiça.\""},
+ {id:"v15",cat:"Versículo",f:"Hebreus 11.6",b:"\"Sem fé é impossível agradar a Deus, porquanto é necessário que aquele que se aproxima de Deus creia que ele existe e que se torna galardoador dos que o buscam.\""},
+ // Argumentos
+ {id:"g1",cat:"Argumento",f:"Argumento Kalam (3 passos)",b:"1. Tudo o que começa a existir tem uma causa. 2. O universo começou a existir. 3. Logo, o universo tem uma causa (eterna, imaterial, poderosa e pessoal)."},
+ {id:"g2",cat:"Argumento",f:"Argumento moral (3 passos)",b:"1. Se Deus não existe, valores morais objetivos não existem. 2. Valores morais objetivos existem. 3. Logo, Deus existe."},
+ {id:"g3",cat:"Argumento",f:"Ajuste fino: as 3 explicações possíveis",b:"Necessidade física, acaso ou design. Não há evidência de necessidade, o acaso é improvável demais: o design é a melhor explicação."},
+ {id:"g4",cat:"Argumento",f:"Trilema de Lewis",b:"Quem afirma o que Jesus afirmou é Mentiroso, Lunático ou Senhor. \"Só um bom mestre\" não é opção."},
+ {id:"g5",cat:"Argumento",f:"Os 5 fatos mínimos (Habermas)",b:"1. Morte por crucificação. 2. Discípulos creram ver Jesus ressuscitado. 3. Conversão de Paulo. 4. Conversão de Tiago. 5. Túmulo vazio."},
+ {id:"g6",cat:"Argumento",f:"Por que o relativismo se autorrefuta?",b:"\"Não existe verdade absoluta\" se apresenta como verdade absoluta. A frase serra o galho em que está sentada."},
+ {id:"g7",cat:"Argumento",f:"Por que o cientificismo se autorrefuta?",b:"\"Só a ciência produz conhecimento\" não pode ser provado por nenhum experimento científico. É uma tese filosófica."},
+ {id:"g8",cat:"Argumento",f:"Defesa do livre-arbítrio (Plantinga)",b:"Deus pode permitir o mal para criar seres realmente livres, capazes de amar. Não há contradição lógica entre Deus bom e todo-poderoso e a existência do mal."},
+ {id:"g9",cat:"Argumento",f:"As 2 perguntas de Colombo (Koukl)",b:"\"O que você quer dizer com isso?\" e \"Como você chegou a essa conclusão?\""},
+ {id:"g10",cat:"Argumento",f:"SLED (valor da vida no ventre)",b:"Tamanho, nível de desenvolvimento, ambiente e grau de dependência: nenhuma dessas diferenças muda o valor de um ser humano."},
+ // Citações
+ {id:"q1",cat:"Citação",f:"Lewis: \"Creio no cristianismo como creio que o sol nasceu...\"",b:"\"...não apenas porque o vejo, mas porque, por meio dele, vejo todas as outras coisas.\" (\"A teologia é poesia?\", 1945)"},
+ {id:"q2",cat:"Citação",f:"Lewis: o cristianismo não pode ser...",b:"\"...moderadamente importante.\" Se for falso, não importa; se for verdadeiro, tem importância infinita."},
+ {id:"q3",cat:"Citação",f:"Lewis: \"Deus sussurra em nossos prazeres...\"",b:"\"...fala em nossa consciência, mas grita em nossas dores: elas são o seu megafone para despertar um mundo surdo.\" (O problema do sofrimento)"},
+ {id:"q4",cat:"Citação",f:"Lewis: o desejo que nada neste mundo satisfaz",b:"\"Se encontro em mim um desejo que nenhuma experiência deste mundo pode satisfazer, a explicação mais provável é que fui feito para outro mundo.\" (Cristianismo puro e simples)"},
+ {id:"q5",cat:"Citação",f:"Agostinho: \"Fizeste-nos para ti...\"",b:"\"...e inquieto está o nosso coração enquanto não repousa em ti.\" (Confissões, livro I)"},
+ {id:"q6",cat:"Citação",f:"Chesterton: o ideal cristão...",b:"\"...não foi experimentado e achado em falta; foi achado difícil e deixado sem experimentar.\" (O que há de errado com o mundo, 1910)"},
+ {id:"q7",cat:"Citação",f:"Kuyper: o centímetro quadrado",b:"\"Não há um centímetro quadrado em todo o domínio da existência humana sobre o qual Cristo, que é soberano sobre tudo, não clame: 'É meu!'\""},
+ {id:"q8",cat:"Citação",f:"Policarpo diante da morte",b:"\"Há oitenta e seis anos eu o sirvo, e ele nunca me fez mal algum. Como posso blasfemar contra o meu Rei, que me salvou?\""},
+ {id:"q9",cat:"Citação",f:"Bonhoeffer: graça barata",b:"\"Graça barata é a graça sem discipulado, a graça sem a cruz, a graça sem Jesus Cristo vivo e encarnado.\""},
+ // Conceitos e história
+ {id:"h1",cat:"História",f:"325 d.C.",b:"Concílio de Niceia: o Filho é homoousios, da mesma substância do Pai (contra Ário)."},
+ {id:"h2",cat:"História",f:"451 d.C.",b:"Concílio de Calcedônia: Jesus é uma Pessoa com duas naturezas, plenamente Deus e plenamente homem."},
+ {id:"h3",cat:"História",f:"31/10/1517",b:"Lutero publica as 95 teses: começa a Reforma Protestante."},
+ {id:"h4",cat:"História",f:"367 d.C.",b:"Atanásio lista os 27 livros do Novo Testamento."},
+ {id:"h5",cat:"História",f:"1947",b:"Descoberta dos Manuscritos do Mar Morto: Isaías praticamente idêntico, mil anos mais antigo."},
+ {id:"h6",cat:"História",f:"Tácito, Anais 15.44",b:"Historiador romano (c. 116 d.C.) registra que Cristo foi executado sob Pôncio Pilatos, no reinado de Tibério."},
+ {id:"k1",cat:"Conceito",f:"Trindade em uma frase",b:"Um só Deus, eternamente em três Pessoas: Pai, Filho e Espírito Santo. Um \"quê\" e três \"quem\"."},
+ {id:"k2",cat:"Conceito",f:"Justificação",b:"Ato de Deus declarar justo o pecador com base na justiça de Cristo, recebida pela fé (Rm 5.1)."},
+ {id:"k3",cat:"Conceito",f:"As 5 Solas",b:"Sola Scriptura, Sola Gratia, Sola Fide, Solus Christus, Soli Deo Gloria."},
+ {id:"k4",cat:"Conceito",f:"As 4 perguntas de cosmovisão",b:"Origem, sentido, moral e destino."},
+ {id:"k5",cat:"Conceito",f:"Imago Dei",b:"\"Imagem de Deus\" (Gn 1.27): a base da dignidade de todo ser humano."},
+ {id:"k6",cat:"Conceito",f:"Apologia",b:"Palavra grega de 1 Pe 3.15: uma defesa racional da fé, feita com mansidão e temor."}
+];
+
+const PERSONAS=[
+ {id:"lucas",name:"Lucas",role:"o cientificista",color:"#2C6E8F",
+  persona:"estudante de engenharia de 20 anos, ateu, fã de divulgadores científicos; acha que a ciência substituiu Deus e que fé é crer sem evidência",
+  opening:"Cara, sem ofensa, mas a ciência já explica tudo. Deus era só o jeito antigo de explicar o que a gente não entendia. Hoje temos o Big Bang e a evolução. Pra que Deus?",
+  obj:[
+   {q:"A ciência já explica tudo. Deus é só o \"deus das lacunas\".",k:["A ciência explica COMO a natureza funciona; não explica por que existe algo em vez de nada.","O Big Bang aponta para um início do universo, o que combina com a criação (e foi proposto por um padre, Lemaître).","Os fundadores da ciência eram cristãos e estudavam a natureza porque criam num Criador racional.","Pergunta de volta: \"O que exatamente a ciência explicou que tornou Deus desnecessário?\""]},
+   {q:"Fé é acreditar sem evidência.",k:["Na Bíblia, fé é confiança baseada em evidência (Jo 20.30-31; 1 Co 15.6: \"a maioria ainda vive\").","Pergunte: \"De onde você tirou essa definição?\"","Todos confiam em coisas que não verificam pessoalmente, inclusive em cientistas.","Apresente evidências: o início do universo, o ajuste fino, a ressurreição."]},
+   {q:"Só acredito no que pode ser provado cientificamente.",k:["Essa frase não pode ser provada cientificamente: ela se autorrefuta.","A lógica, a matemática, a moral e a história não são provadas em laboratório e são conhecimento real.","A própria ciência pressupõe coisas que não prova (uniformidade da natureza, confiabilidade da razão)."]}
+  ]},
+ {id:"helena",name:"Prof.ª Helena",role:"a relativista",color:"#8A4B9C",
+  persona:"professora de sociologia de 45 anos, educada mas firme; acredita que verdade é construção social e que quem afirma possuir a verdade é intolerante",
+  opening:"Olha, eu respeito sua fé, mas verdade é uma construção social. Cada cultura tem a sua. Quando você diz que Jesus é o único caminho, você está sendo intolerante com as outras culturas, não acha?",
+  obj:[
+   {q:"Verdade é construção social. Cada cultura tem a sua.",k:["Essa afirmação vale para todas as culturas? Se sim, é uma verdade universal, o que contradiz a tese.","Culturas têm costumes diferentes, mas fatos (Jesus ressuscitou ou não) não dependem de cultura.","Pergunta: \"A escravidão era errada mesmo nas culturas que a aceitavam?\""]},
+   {q:"Dizer que Jesus é o único caminho é intolerante.",k:["Tolerância significa respeitar quem discorda, não concordar com tudo.","Dizer que todas as religiões são iguais também exclui quem discorda (inclusive as próprias religiões).","Jesus não é uma imposição cultural: ele mesmo afirmou isso (Jo 14.6), e o convite é para todos os povos."]},
+   {q:"A religião foi usada para colonizar e oprimir.",k:["Houve erros reais e devemos reconhecê-los.","Mas foi a fé cristã que inspirou Wilberforce a combater a escravidão e missionários a criar escolas e hospitais.","O abuso de algo não prova que esse algo é falso."]}
+  ]},
+ {id:"rafa",name:"Rafa",role:"o cético histórico",color:"#A0522D",
+  persona:"jovem de 19 anos que assiste muito vídeo na internet; acha que Jesus é um mito copiado de deuses pagãos e que os Evangelhos foram escritos séculos depois",
+  opening:"Mano, já viu que a história de Jesus é cópia de Hórus? Nasceu de virgem, 12 discípulos, morreu e ressuscitou... E os Evangelhos foram escritos séculos depois. Isso é mito.",
+  obj:[
+   {q:"Jesus é cópia de Hórus/Mitra.",k:["Peça a fonte: os paralelos (virgem, 12 discípulos, 25 de dezembro) não aparecem nas fontes egípcias; vieram de autores modernos e do filme Zeitgeist (2007).","Os historiadores, inclusive céticos como Bart Ehrman, rejeitam a teoria do mito.","Os Evangelhos se situam em lugares, governantes e datas reais (Pilatos, Tibério, Herodes)."]},
+   {q:"Os Evangelhos foram escritos séculos depois.",k:["A maioria dos estudiosos data os Evangelhos no século I (Marcos por volta de 65-70 d.C.).","As cartas de Paulo são ainda mais antigas (anos 50), e o credo de 1 Co 15 é de poucos anos depois da cruz.","Para comparar: as biografias mais antigas de Alexandre, o Grande, são de cerca de 400 anos depois dele."]},
+   {q:"Jesus nem existiu.",k:["Tácito, Josefo e Plínio, fontes não cristãs, mencionam Jesus ou seus seguidores.","Praticamente nenhum historiador da área nega sua existência.","Pergunta: \"Qual historiador especialista no século I defende isso?\""]}
+  ]},
+ {id:"bia",name:"Bia",role:"a amiga ferida",color:"#B23A48",
+  persona:"amiga de 17 anos que perdeu a mãe para o câncer há um ano; está magoada com Deus, não é agressiva, é sincera e machucada",
+  opening:"Eu orei todo dia pela minha mãe. A igreja inteira orou. E ela morreu mesmo assim. Se Deus existe e é bom, por que ele deixou isso acontecer?",
+  obj:[
+   {q:"Se Deus é bom, por que deixou minha mãe morrer?",k:["Comece com empatia e presença, não com argumento (Rm 12.15; Jó 2.13).","Admita que não sabe o porquê específico; isso é honesto.","Jesus chorou diante da morte (Jo 11.35): Deus não é indiferente à dor.","A esperança cristã é a ressurreição: a morte não tem a última palavra (Ap 21.4)."]},
+   {q:"Então orar não adianta nada.",k:["Oração não é uma máquina; é relacionamento com um Pai que vê mais longe que nós.","Até Jesus orou \"passa de mim este cálice\" e se submeteu ao Pai.","Ofereça orar com ela agora e estar junto nos próximos dias."]},
+   {q:"Estou com raiva de Deus.",k:["A Bíblia tem salmos inteiros de lamento e queixa (Sl 13, Sl 88): Deus aguenta sua sinceridade.","Raiva de Deus ainda é falar com Deus.","Convide-a a levar essa dor a ele, não para longe dele."]}
+  ]},
+ {id:"diego",name:"Diego",role:"o militante",color:"#3D7A4A",
+  persona:"universitário de 22 anos, ativista, inteligente e provocador; acha que religião causa guerras, que a Bíblia é machista e que cristãos conservadores são intolerantes",
+  opening:"Religião só serviu pra causar guerra, cruzada e inquisição. E a Bíblia é machista. Sinceramente, vocês conservadores são o atraso do país.",
+  obj:[
+   {q:"Religião causou a maioria das guerras.",k:["Estudos de enciclopédias de guerras indicam que menos de 10% das guerras tiveram a religião como causa principal.","Os regimes mais mortíferos do século XX eram oficialmente ateus.","Erros como os da Inquisição foram reais e contrários ao ensino de Jesus (Mt 26.52)."]},
+   {q:"A Bíblia é machista.",k:["Gênesis 1.27: homem e mulher igualmente imagem de Deus.","Jesus ensinou mulheres como discípulas (Lc 10.39), algo raro na época, e elas foram as primeiras testemunhas da ressurreição.","Gálatas 3.28: \"não há homem nem mulher; todos vós sois um em Cristo\"."]},
+   {q:"Vocês conservadores são intolerantes.",k:["Discordar não é odiar; tolerância é conviver com quem discorda.","Pergunte: \"Você é tolerante comigo, que discordo de você?\"","Mostre com o tom da conversa: calma, respeito e argumentos."]}
+  ]},
+ {id:"marina",name:"Marina",role:"a espiritualizada",color:"#C08A1E",
+  persona:"jovem de 21 anos que gosta de meditação, signos e frases motivacionais; diz ser espiritual, mas não religiosa, e acha que todos os caminhos levam a Deus",
+  opening:"Eu sou espiritual, mas não religiosa, sabe? Acho que todos os caminhos levam a Deus. O importante é ter energia boa e ser uma pessoa do bem.",
+  obj:[
+   {q:"Todos os caminhos levam a Deus.",k:["As religiões se contradizem nos pontos centrais (Deus pessoal ou não, Jesus ressuscitou ou não). Não podem estar todas certas.","Pergunte: \"Que Deus? Como você sabe que todos levam a ele?\"","Jesus afirmou ser o único caminho; se ele está errado, não é um bom guia."]},
+   {q:"O importante é ser uma pessoa do bem.",k:["Bom segundo qual padrão?","O padrão de Deus é perfeito, e todos falhamos (Rm 3.23).","O evangelho não é \"seja bom\"; é \"Deus salva quem não é bom o suficiente\"."]},
+   {q:"Sou espiritual, não religiosa.",k:["Pergunte o que ela quer dizer com isso: muitas vezes significa \"eu decido em que acredito\".","Espiritualidade sem verdade vira gosto pessoal.","Jesus não oferece uma \"energia\", mas um relacionamento com um Deus pessoal."]}
+  ]}
+];
+
+const BOOKS=[
+ {id:"b1",t:"Cristianismo puro e simples",a:"C. S. Lewis",y:1952,lvl:"Iniciante",col:"#2342A6",why:"O melhor ponto de partida. Lewis, ex-ateu, explica a fé de forma lógica e acessível.",ideas:["A lei moral aponta para um Legislador","O trilema: mentiroso, lunático ou Senhor","O orgulho como o grande pecado"],q:["Qual argumento de Lewis você usaria primeiro com um amigo ateu?","Como a lei moral aparece no seu dia a dia?"]},
+ {id:"b2",t:"Cartas de um diabo a seu aprendiz",a:"C. S. Lewis",y:1942,lvl:"Iniciante",col:"#7A2420",why:"Um demônio ensina outro a desviar um jovem. Divertido e assustadoramente atual.",ideas:["As tentações pequenas e diárias","A distração é uma arma","A humildade verdadeira"],q:["Qual tática do Fitafuso você reconhece na sua vida?","Como a distração das telas se encaixa no livro?"]},
+ {id:"b3",t:"Em defesa de Cristo",a:"Lee Strobel",y:1998,lvl:"Iniciante",col:"#5A3E8C",why:"Um jornalista ateu investiga Jesus entrevistando especialistas e se converte.",ideas:["Confiabilidade dos Evangelhos","Evidências médicas da morte de Jesus","O túmulo vazio"],q:["Qual entrevista mais te convenceu?","Como resumir a evidência da ressurreição em 1 minuto?"]},
+ {id:"b4",t:"A fé na era do ceticismo",a:"Timothy Keller",y:2008,lvl:"Intermediário",col:"#2E6A63",why:"Keller responde às sete objeções mais comuns de jovens urbanos e universitários.",ideas:["Toda dúvida é baseada numa fé","Exclusividade e tolerância","Os sinais de Deus"],q:["Qual das sete objeções você mais ouve?","O que Keller quer dizer com \"duvidar das suas dúvidas\"?"]},
+ {id:"b5",t:"Ortodoxia",a:"G. K. Chesterton",y:1908,lvl:"Intermediário",col:"#9C6F12",why:"Brilhante e bem-humorado: como a fé cristã é a aventura mais sã que existe.",ideas:["O louco não é quem perdeu a razão, mas quem perdeu tudo menos a razão","A tradição como democracia dos mortos","O paradoxo cristão"],q:["Que frase de Chesterton você citaria num debate?","Por que ele chama a ortodoxia de aventura?"]},
+ {id:"b6",t:"O problema do sofrimento",a:"C. S. Lewis",y:1940,lvl:"Intermediário",col:"#424B6B",why:"A resposta intelectual de Lewis à dor. Complete depois com \"A anatomia de uma dor\".",ideas:["Livre-arbítrio e mal moral","Dor como megafone de Deus","O céu como resposta final"],q:["Qual a diferença entre este livro e uma resposta a um amigo de luto?","O que Lewis diz sobre a dor animal?"]},
+ {id:"b7",t:"O conhecimento de Deus",a:"J. I. Packer",y:1973,lvl:"Intermediário",col:"#1E5A3A",why:"Teologia que aquece o coração: quem Deus é e o que significa conhecê-lo.",ideas:["Conhecer sobre Deus x conhecer a Deus","Atributos de Deus","Adoção como filhos"],q:["Qual atributo de Deus você menos considerava?","Como teologia vira devoção?"]},
+ {id:"b8",t:"Táticas",a:"Greg Koukl",y:2009,lvl:"Intermediário",col:"#B32E28",why:"O manual prático de como conversar sobre fé usando perguntas. Essencial para debates.",ideas:["As perguntas de Colombo","O ônus da prova","Identificar afirmações autorrefutantes"],q:["Como usar a pergunta \"O que você quer dizer com isso?\" nesta semana?","Qual tática você vai treinar no simulador?"]},
+ {id:"b9",t:"Confissões",a:"Agostinho de Hipona",y:398,lvl:"Avançado",col:"#6B4E2E",why:"A primeira autobiografia espiritual do Ocidente: um jovem brilhante e rebelde encontrado por Deus.",ideas:["O coração inquieto","O roubo das peras e a natureza do pecado","Tome e leia: a conversão"],q:["Onde você se vê na juventude de Agostinho?","O que ele aprendeu com a própria inquietação?"]},
+ {id:"b10",t:"A abolição do homem",a:"C. S. Lewis",y:1943,lvl:"Avançado",col:"#30395E",why:"Curto e profético: o que acontece com uma sociedade que trata valores como meros sentimentos.",ideas:["O Tao: a lei moral universal","Homens sem peito","O perigo do poder do homem sobre o homem"],q:["Onde você vê \"homens sem peito\" na cultura hoje?","Qual a relação com a educação atual?"]},
+ {id:"b11",t:"Apologética contemporânea",a:"William Lane Craig",y:1994,lvl:"Avançado",col:"#4A5A8C",why:"Nível universitário: Kalam, argumento moral e ressurreição com rigor filosófico.",ideas:["O argumento cosmológico Kalam","O absurdo da vida sem Deus","Historicidade da ressurreição"],q:["Que objeção ao Kalam é mais forte e como Craig responde?","Como simplificar esse conteúdo para um amigo?"]},
+ {id:"b12",t:"Verdade absoluta",a:"Nancy Pearcey",y:2004,lvl:"Avançado",col:"#7C2F5E",why:"Como libertar o cristianismo do \"cativeiro cultural\" e aplicá-lo a toda a vida.",ideas:["A divisão entre fato e valor","Cosmovisão em todas as áreas","Darwinismo como cosmovisão"],q:["Onde você separa fé e vida sem perceber?","Como aplicar isso na sua futura profissão?"]},
+ {id:"b13",t:"Como viveremos?",a:"Francis Schaeffer",y:1976,lvl:"Avançado",col:"#2E5E7A",why:"Uma viagem pela história da arte, filosofia e política mostrando como ideias moldam civilizações.",ideas:["Ideias têm consequências","Da Reforma à cultura moderna","A base para a liberdade"],q:["Qual ideia histórica mais influencia sua geração?","Por que Schaeffer liga cosmovisão e liberdade?"]},
+ {id:"b14",t:"Discipulado",a:"Dietrich Bonhoeffer",y:1937,lvl:"Avançado",col:"#3B3B3B",why:"Escrito por um pastor que enfrentou o nazismo: o preço e a alegria de seguir Jesus.",ideas:["Graça barata x graça preciosa","O Sermão do Monte","Obediência como fruto da fé"],q:["Onde você tem buscado graça barata?","O que a vida de Bonhoeffer ensina sobre coragem?"]},
+ {id:"b15",t:"A cruz de Cristo",a:"John Stott",y:1986,lvl:"Mestre",col:"#8C1F1A",why:"O livro de referência sobre o centro da fé: o que aconteceu na cruz.",ideas:["Substituição","A autossatisfação de Deus","Viver sob a cruz"],q:["Como explicar a substituição com suas palavras?","Como a cruz muda a forma de lidar com inimigos?"]},
+ {id:"b16",t:"Teologia sistemática",a:"Wayne Grudem",y:1994,lvl:"Mestre",col:"#1F3A6B",why:"Para quem quer ir fundo: doutrina por doutrina, com textos bíblicos e aplicação. Use como consulta.",ideas:["Doutrina da Escritura","Doutrina de Deus e de Cristo","Salvação e igreja"],q:["Que doutrina você vai estudar primeiro?","Em que pontos Grudem reconhece divergências entre evangélicos?"]},
+ {id:"b17",t:"Como ser um conservador",a:"Roger Scruton",y:2014,lvl:"Mestre",col:"#5E5130",why:"Um filósofo explica o que vale a pena conservar: família, tradição, instituições e beleza.",ideas:["Conservar é mais difícil que destruir","O valor das instituições","Pertencimento e lar"],q:["O que na sua cidade ou igreja vale a pena conservar?","Como o conservadorismo de Scruton dialoga com a fé cristã?"]}
+];
+
+const QUOTES=[
+ ["Creio no cristianismo assim como creio que o sol nasceu: não apenas porque o vejo, mas porque, por meio dele, vejo todas as outras coisas.","C. S. Lewis"],
+ ["Fizeste-nos para ti, e inquieto está o nosso coração enquanto não repousa em ti.","Agostinho, Confissões"],
+ ["O ideal cristão não foi experimentado e achado em falta; foi achado difícil e deixado sem experimentar.","G. K. Chesterton"],
+ ["Não há um centímetro quadrado em todo o domínio da existência humana sobre o qual Cristo não clame: 'É meu!'","Abraham Kuyper"],
+ ["Se encontro em mim um desejo que nenhuma experiência deste mundo pode satisfazer, a explicação mais provável é que fui feito para outro mundo.","C. S. Lewis"],
+ ["Há oitenta e seis anos eu o sirvo, e ele nunca me fez mal algum. Como posso blasfemar contra o meu Rei, que me salvou?","Policarpo de Esmirna"],
+ ["Graça barata é a graça sem discipulado, a graça sem a cruz.","Dietrich Bonhoeffer"]
+];
+
+const LEVELS=[[0,"Catecúmeno"],[150,"Discípulo"],[400,"Defensor"],[800,"Apologeta"],[1400,"Mestre"]];
+const INTERVALS=[1,2,4,8,16,32];
+
+/* ================== ESTADO ================== */
+const LS="apologia.v1";
+function fresh(){return{v:1,name:"",xp:0,days:{},lessons:{},cards:{},books:{},debates:0,unlockAll:false,updatedAt:0,look:defLook()}}
+let S=fresh();
+try{const r=localStorage.getItem(LS);if(r)S=Object.assign(fresh(),JSON.parse(r))}catch(e){}
+S.look=Object.assign(defLook(),S.look||{});
+let SYNC={on:false,ref:null,timer:null,status:"local"};
+let SAMPLE=null;
+
+function save(){S.updatedAt=Date.now();try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}queueSync()}
+function dkey(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function today(){return dkey(new Date())}
+function addDays(k,n){const[y,m,d]=k.split("-").map(Number);return dkey(new Date(y,m-1,d+n))}
+function gain(n,why){S.xp+=n;const k=today();S.days[k]=(S.days[k]||0)+n;save();toast("+"+n+" XP · "+why);hdr()}
+function streak(){let k=today(),c=0;if(!S.days[k])k=addDays(k,-1);while(S.days[k]){c++;k=addDays(k,-1)}return c}
+function level(){let i=0;LEVELS.forEach((l,j)=>{if(S.xp>=l[0])i=j});const cur=LEVELS[i],nx=LEVELS[i+1];return{i,name:cur[1],min:cur[0],next:nx?nx[0]:null,nextName:nx?nx[1]:null}}
+function passed(id){return(S.lessons[id]?.best||0)>=0.67}
+function trackUnlocked(t){if(S.unlockAll||t.n===1)return true;const prev=TRACKS[t.n-2];return prev.mods.filter(passed).length>=3}
+function dueCards(){const k=today();return CARDS.filter(c=>S.cards[c.id]&&S.cards[c.id].due<=k)}
+function newCards(){return CARDS.filter(c=>!S.cards[c.id])}
+function newToday(){return Object.values(S.cards).filter(c=>c.added===today()).length}
+function todayStats(){const k=today();return{lesson:Object.values(S.lessons).some(l=>l.day===k),cards:Object.values(S.cards).filter(c=>c.last===k).length,debate:(S.debDays||{})[k]||0}}
+
+/* ================== SINCRONIA (conta claude.ai) ================== */
+async function initSync(){
+ try{
+  if(!window.claude||!window.claude.use)return;
+  const[db,user]=await Promise.all([claude.use("db"),claude.use("user")]);
+  if(!db||!user)return;
+  const id=await user.id();if(!id)return;
+  const ref=db.doc("data/users/"+id+"/progress");
+  const snap=await ref.get();
+  if(snap.exists){const r=snap.data().state;if(r&&(r.updatedAt||0)>(S.updatedAt||0)){S=Object.assign(fresh(),r);S.look=Object.assign(defLook(),S.look||{});applyLook();try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}route()}}
+  SYNC.ref=ref;SYNC.on=true;SYNC.status="conta";
+  if(!snap.exists||(snap.data().state?.updatedAt||0)<(S.updatedAt||0))await ref.set({state:S});
+  if(location.hash==="#perfil")route();
+ }catch(e){SYNC.on=false;SYNC.status="local"}
+}
+function queueSync(){if(!SYNC.on)return;clearTimeout(SYNC.timer);SYNC.timer=setTimeout(async()=>{try{await SYNC.ref.set({state:S})}catch(e){SYNC.on=false;SYNC.status="local"}},2500)}
+async function initSample(){try{if(window.claude&&window.claude.use)SAMPLE=await claude.use("sample")}catch(e){SAMPLE=null}
+ if(!SAMPLE)return;const h=location.hash;
+ if(/^#m-/.test(h))renderTutor(h.slice(3));else if(h==="#debate"&&!DB)viewDebate();else if(h==="#perfil")viewPerfil();}
+
+/* ================== UTIL ================== */
+const $=s=>document.querySelector(s);
+const app=$("#app");
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
+function strip(h){const d=document.createElement("div");d.innerHTML=h;return d.textContent.replace(/\s+/g," ").trim()}
+let tt;function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("on"),2200)}
+const IC={
+ home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+ path:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zm0 0A2 2 0 0 0 6 22h13"/><path d="M9 7h6M9 11h4"/></svg>',
+ cards:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="14" height="15" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12"/></svg>',
+ debate:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9 11h.01M12 11h.01M15 11h.01"/></svg>',
+ books:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h4v16H4zM10 4h4v16h-4z"/><path d="M16 5l3.5-1 3 15.5-3.5 1z"/></svg>',
+ check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>',
+ back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>'
+};
+
+function hdr(){$("#hdrStats").innerHTML=`<span class="flame" title="Dias seguidos"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2c1 4-3 6-3 10a3 3 0 0 0 6 0c0-1.5-.6-2.6-1-3.5 2.6 1.4 4 4 4 6.5a6 6 0 0 1-12 0C6 9 11 7 12 2z"/></svg></span><b>${streak()}</b>d <span>·</span> <b>${S.xp}</b> XP`}
+function tabs(cur){const due=dueCards().length;const items=[["inicio","Início",IC.home],["trilha","Trilha",IC.path],["cards","Cards",IC.cards],["debate","Debate",IC.debate],["livros","Livros",IC.books]];
+ $("#tabs").innerHTML=items.map(([h,l,i])=>`<a class="tab" href="#${h}" ${cur===h?'aria-current="page"':""}>${i}${h==="cards"&&due?`<span class="dot">${due}</span>`:""}${l}</a>`).join("")}
+
+/* ================== TELAS ================== */
+function nextModule(){for(const t of TRACKS){if(!trackUnlocked(t))continue;for(const m of t.mods)if(!passed(m))return m}return null}
+
+function trailState(){
+ const seq=[];TRACKS.forEach(t=>t.mods.forEach((id,i)=>seq.push({id,t,i})));
+ const cur=nextModule();
+ const curIdx=cur?seq.findIndex(s=>s.id===cur):seq.length;
+ const done=seq.filter(s=>passed(s.id)).length;
+ const curT=cur?seq[curIdx].t:TRACKS[TRACKS.length-1];
+ return{seq,cur,curIdx,done,total:seq.length,curT,pct:Math.round(done/seq.length*100)};
+}
+function ring(p){const r=34,c=2*Math.PI*r;return`<svg class="ring" viewBox="0 0 84 84" width="84" height="84" role="img" aria-label="${p}% da trilha concluída"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--accent-2)"/><stop offset="1" style="stop-color:var(--accent)"/></linearGradient></defs><circle cx="42" cy="42" r="${r}" class="ring-bg"/><circle cx="42" cy="42" r="${r}" class="ring-fg" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c*(1-p/100)).toFixed(1)}" transform="rotate(-90 42 42)"/><text x="42" y="48" text-anchor="middle">${p}%</text></svg>`}
+
+function viewHome(){
+ const L=level(),st=streak(),ts=todayStats(),T=trailState(),nm=T.cur,due=dueCards().length,nw=Math.max(0,10-newToday());
+ const pct=L.next?Math.round((S.xp-L.min)/(L.next-L.min)*100):100;
+ const q=QUOTES[Math.floor(Date.now()/864e5)%QUOTES.length];
+ app.innerHTML=`
+ <section class="hero">
+  <span class="eyebrow">${S.name?"Fala, "+esc(S.name)+"!":"Escola de defesa da fé"}</span>
+  <h1>Pronto para <em>responder</em>?</h1>
+  <p class="lead">"Estai sempre preparados para responder a todo aquele que vos pedir razão da esperança que há em vós." <span class="ref">1 Pe 3.15</span></p>
+ </section>
+ <a class="card mini" href="#trilha" style="text-decoration:none;color:inherit">
+  <div class="row" style="justify-content:space-between;flex-wrap:nowrap">
+   <div style="min-width:0"><span class="eyebrow">Você está aqui</span><h2 style="font-size:1.2rem;margin-top:2px">${T.cur?`Nível ${T.curT.n} · ${esc(T.curT.name)}`:"Trilha completa!"}</h2><p class="small muted">${T.cur?`Lição ${T.curIdx+1} de ${T.total}: ${esc(MODS[T.cur].title)}`:"As 16 lições aprovadas."}</p></div>
+   <b style="font-size:1.6rem;font-variant-numeric:tabular-nums;letter-spacing:-.02em;flex:none">${T.pct}%</b>
+  </div>
+  <div class="mini-row">${TRACKS.map(t=>`<div class="mini-g"><span>${t.n}. ${esc(t.name)}</span><div class="mini-dots">${t.mods.map(id=>`<i class="${passed(id)?"d":id===T.cur?"c":""}"></i>`).join("")}</div></div>`).join("")}</div>
+  <span class="small" style="color:var(--accent);font-weight:600">Ver trilha completa ›</span>
+ </a>
+ <div class="card lvlbox">
+  <div class="lvlbadge">${L.i+1}</div>
+  <div class="row" style="justify-content:space-between"><b style="font-size:1.1rem">${L.name}</b><span class="ref">${S.xp}${L.next?" / "+L.next:""} XP</span></div>
+  <div><div class="bar"><i style="width:${pct}%"></i></div><p class="small muted" style="margin-top:6px">${L.next?`Faltam ${L.next-S.xp} XP para <b>${L.nextName}</b>`:"Nível máximo. Agora ensine outros (2 Tm 2.2)."}</p></div>
+ </div>
+ <div class="stats">
+  <div class="stat glass"><b>${st}</b><span>dias seguidos</span></div>
+  <div class="stat glass"><b>${T.done}/16</b><span>lições aprovadas</span></div>
+  <div class="stat glass"><b>${Object.values(S.cards).filter(c=>c.box>=3).length}</b><span>cards dominados</span></div>
+ </div>
+ <div class="card">
+  <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2 style="font-size:1.25rem">Missão de hoje</h2><span class="ref">${[ts.lesson,ts.cards>=10,ts.debate>0].filter(Boolean).length}/3</span></div>
+  <div class="mission"><span class="check ${ts.lesson?"done":""}">${ts.lesson?IC.check:""}</span><div class="grow"><b>Estudar 1 lição</b><p class="small muted">${nm?esc(MODS[nm].title):"Todas aprovadas. Revise uma!"}</p></div>${nm?`<a class="btn pri" href="#m-${nm}">Estudar</a>`:""}</div>
+  <div class="mission"><span class="check ${ts.cards>=10?"done":""}">${ts.cards>=10?IC.check:""}</span><div class="grow"><b>Revisar 10 cards</b><p class="small muted">${ts.cards}/10 hoje · ${due} para revisar · ${nw} novos disponíveis</p></div><a class="btn" href="#cards">Revisar</a></div>
+  <div class="mission"><span class="check ${ts.debate?"done":""}">${ts.debate?IC.check:""}</span><div class="grow"><b>Treinar 1 debate</b><p class="small muted">Enfrente uma objeção real e receba avaliação</p></div><a class="btn" href="#debate">Treinar</a></div>
+ </div>
+ <div class="card">
+  <span class="eyebrow">Frase do dia</span>
+  <p class="quote" style="margin-top:10px">"${esc(q[0])}"</p>
+  <p class="quote-by">${esc(q[1])}</p>
+ </div>`;
+}
+
+let trailScrolled=false;
+function viewTrilha(){
+ const T=trailState();
+ app.innerHTML=`<section class="hero"><span class="eyebrow">Do iniciante ao mestre</span><h1>Sua trilha</h1></section>
+ <div class="card trail-head">${ring(T.pct)}
+  <div class="th-info"><span class="eyebrow">Você está aqui</span>
+   <b>${T.cur?`Nível ${T.curT.n} · ${esc(T.curT.name)}`:"Trilha completa!"}</b>
+   <p class="small muted">${T.cur?`Lição ${T.curIdx+1} de ${T.total}: ${esc(MODS[T.cur].title)}`:"Você aprovou as 16 lições. Agora ensine outros."}</p>
+   <p class="small muted">${T.done} de ${T.total} lições aprovadas</p>
+   ${T.cur?`<a class="btn pri" href="#m-${T.cur}">Continuar lição</a>`:""}
+  </div></div>
+ <div class="lvlbars">${TRACKS.map(t=>{const d=t.mods.filter(passed).length;return`<div class="lb glass ${T.cur&&t===T.curT?"on":""} ${d===4?"full":""}"><div class="lb-top"><span>${t.n}. ${esc(t.name)}</span><span>${trackUnlocked(t)?d+"/4":'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-label="Bloqueado"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>'}</span></div><div class="bar"><i style="width:${d*25}%"></i></div></div>`}).join("")}</div>
+ <div class="trail" id="trail"></div>
+ <p class="small muted center">Acerte 2 de 3 questões para aprovar uma lição. Aprove 3 lições de um nível para abrir o próximo.</p>`;
+ drawTrail(T);
+ if(!trailScrolled){trailScrolled=true;setTimeout(()=>{const h=document.querySelector("#trail .current");if(h&&location.hash==="#trilha")h.scrollIntoView({block:"center",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})},350)}
+}
+const TSIZE={compacta:{d:50,c:62,row:96,gap:70},normal:{d:58,c:72,row:108,gap:80},grande:{d:68,c:84,row:124,gap:92}};
+function drawTrail(T){
+ const el=$("#trail");if(!el)return;
+ const Z=TSIZE[S.look.trail]||TSIZE.normal,fs=S.look.font||1;
+ el.style.setProperty("--disc",Z.d+"px");el.style.setProperty("--disc-c",Z.c+"px");
+ const W=el.clientWidth||360,cx=W/2,amp=Math.min(118,W*.27),ROW=Z.row*Math.max(1,fs),GAP=Z.gap*Math.max(1,fs);
+ // mede a altura real do cartão de nível (muda com o tamanho da letra)
+ el.innerHTML=`<div class="banner glass" style="visibility:hidden;position:absolute;top:0"><span class="eyebrow">Nível</span><b>Medida</b><div class="bmeta"><span>texto</span></div></div>`;
+ const BAN=Math.ceil(el.firstElementChild.offsetHeight)||84;
+ const pts=[],me=(S.name||"Eu").trim().charAt(0).toUpperCase()||"E";
+ let y=0,html="";
+ const lock='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+ TRACKS.forEach((t,ti)=>{
+  const un=trackUnlocked(t),d=t.mods.filter(passed).length;
+  html+=`<div class="banner glass ${un?"":"locked"}" style="top:${y}px"><div class="bl"><span class="eyebrow">Nível ${t.n} · ${t.lvl}</span><b>${esc(t.name)}</b><div class="bmeta"><span>${esc(t.desc)}</span></div></div><span class="bst ${d===4?"full":""}">${un?d+"/4":lock}</span></div>`;
+  y+=BAN+GAP;
+  t.mods.forEach((id,i)=>{
+   const k=ti*4+i,x=cx+amp*Math.sin(k*.95),cy=y;pts.push([x,cy]);
+   const m=MODS[id],best=S.lessons[id]?.best;
+   const st=passed(id)?"done":k===T.curIdx?"current":un?"open":"locked";
+   const off=(st==="current"?Z.c:Z.d)/2+14;
+   const side=x<=cx?"r":"l",space=(side==="r"?W-x:x)-off-4;
+   const sub=st==="done"?`Aprovada · ${Math.round(best*100)}%`:st==="current"?`Agora · ${m.min} min`:st==="open"?(best!=null?`Tente de novo · ${Math.round(best*100)}%`:`Disponível · ${m.min} min`):"Bloqueada";
+   const inner=`<span class="disc">${st==="done"?IC.check:st==="locked"?lock:t.n+"."+(i+1)}</span>${st==="current"?`<span class="here"><i>${esc(me)}</i>Você está aqui</span>`:""}<span class="nlabel ${side}" style="${side==="r"?"left":"right"}:${off}px;max-width:${Math.round(Math.max(96,Math.min(160*fs,space)))}px"><b>${esc(m.title)}</b><span>${sub}</span></span>`;
+   html+=st==="locked"?`<span class="node locked" style="left:${x}px;top:${cy}px" aria-label="${esc(m.title)}, bloqueada">${inner}</span>`:`<a class="node ${st}" href="#m-${id}" style="left:${x}px;top:${cy}px" aria-label="${esc(m.title)}, ${sub}">${inner}</a>`;
+   y+=ROW;
+  });
+  y+=GAP-ROW+Z.c/2+10;
+ });
+ const allDone=T.done===T.total,fy=y+Z.c/2;pts.push([cx,fy]);
+ const crown='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 12H5z"/></svg>';
+ const foff=Z.c/2+18;
+ html+=`<span class="node finish ${allDone?"done current":"locked"}" style="left:${cx}px;top:${fy}px" aria-label="Fim da trilha: Mestre"><span class="disc">${crown}</span><span class="nlabel r" style="left:${foff}px;max-width:${Math.round(Math.max(90,Math.min(150,W-cx-foff-4)))}px"><b>Mestre</b><span>${allDone?"Concluída!":"Fim da trilha"}</span></span></span>`;
+ const H=fy+Z.c/2+30;el.style.height=H+"px";
+ const pd=p=>{if(!p.length)return"";let d=`M${p[0][0].toFixed(1)},${p[0][1].toFixed(1)}`;for(let i=1;i<p.length;i++){const[a,b]=p[i-1],[c,e]=p[i],h=(e-b)/2;d+=` C${a.toFixed(1)},${(b+h).toFixed(1)} ${c.toFixed(1)},${(e-h).toFixed(1)} ${c.toFixed(1)},${e.toFixed(1)}`}return d};
+ const progN=allDone?pts.length:T.curIdx+1;
+ el.innerHTML=`<svg class="road" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs><linearGradient id="roadGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--ok)"/><stop offset="1" style="stop-color:var(--accent)"/></linearGradient></defs><path class="base" d="${pd(pts)}"/>${progN>1?`<path class="prog" d="${pd(pts.slice(0,progN))}"/>`:""}</svg>`+html;
+}
+
+/* ================== APARÊNCIA ================== */
+function defLook(){return{glass:45,blur:24,font:1,trail:"normal",theme:"auto",wall:"aurora",accent:"azul",motion:true}}
+const WALLS={aurora:["Aurora",["#8C9DFF","#FF9DB0","#FFD58C","#8FE3EE"]],oceano:["Oceano",["#5AA9FF","#4DE0D0","#7C8CFF","#A6F0FF"]],sol:["Pôr do sol",["#FF8A5B","#FF5C8A","#FFC857","#C77DFF"]],floresta:["Floresta",["#4CC38A","#A3E36A","#2FB5A8","#E6D36B"]],grafite:["Sem cor",["transparent","transparent","transparent","transparent"]]};
+const ACCENTS={azul:["Azul","#2F55F5","#6A4DFF","#7E96FF","#A58BFF"],roxo:["Roxo","#7B3FF2","#B04DFF","#B08CFF","#D19BFF"],verde:["Verde","#0E9F6E","#0D9488","#4ADE9B","#5EEAD4"],laranja:["Laranja","#E8590C","#F08C00","#FF9F5A","#FFC145"],rosa:["Rosa","#D6336C","#E64980","#FF7EA8","#FF9EC1"]};
+const FONTS=[[.88,"P"],[.94,"M"],[1,"Padrão"],[1.08,"G"],[1.16,"GG"]];
+const darkMQ=matchMedia("(prefers-color-scheme: dark)");
+function isDark(){return S.look.theme==="dark"||(S.look.theme==="auto"&&darkMQ.matches)}
+function hexA(h,a){const n=parseInt(h.slice(1),16);return`rgba(${n>>16&255},${n>>8&255},${n&255},${a})`}
+function applyLook(){
+ const L=S.look,r=document.documentElement,st=r.style,dk=isDark();
+ if(L.theme==="auto")r.removeAttribute("data-theme");else r.setAttribute("data-theme",L.theme);
+ const ga=+(0.94-L.glass*0.0085).toFixed(3);
+ st.setProperty("--ga",ga);st.setProperty("--gas",Math.min(.97,ga+.24).toFixed(3));
+ st.setProperty("--blur",L.blur+"px");
+ st.fontSize=(L.font*100)+"%";
+ const w=(WALLS[L.wall]||WALLS.aurora)[1];w.forEach((c,i)=>st.setProperty("--w"+(i+1),c));
+ const a=ACCENTS[L.accent]||ACCENTS.azul,c1=dk?a[3]:a[1],c2=dk?a[4]:a[2];
+ st.setProperty("--accent",c1);st.setProperty("--accent-2",c2);st.setProperty("--accent-soft",hexA(c1,dk?.16:.12));
+ r.classList.toggle("calm",!L.motion);
+}
+darkMQ.addEventListener?.("change",()=>{if(S.look.theme==="auto")applyLook()});
+function lookPanel(){
+ const L=S.look,seg=(id,opts,cur)=>`<div class="seg wide" role="group" id="${id}">${opts.map(([v,l])=>`<button data-v="${v}" aria-pressed="${String(cur)===String(v)}">${l}</button>`).join("")}</div>`;
+ return`<div class="card look"><h2 style="font-size:1.2rem">Aparência</h2>
+ <div class="lrow"><div class="lhead"><label for="lgl">Transparência do vidro</label><span class="lv" id="lglv">${L.glass}%</span></div><input type="range" id="lgl" min="0" max="100" step="5" value="${L.glass}"><div class="lscale"><span>Sólido</span><span>Bem transparente</span></div></div>
+ <div class="lrow"><div class="lhead"><label for="lbl">Desfoque do fundo</label><span class="lv" id="lblv">${L.blur}</span></div><input type="range" id="lbl" min="0" max="40" step="2" value="${L.blur}"><div class="lscale"><span>Nenhum</span><span>Forte</span></div></div>
+ <div class="lrow"><div class="lhead"><span>Tamanho da letra</span><span class="aa" style="font-size:${L.font}rem">Aa</span></div>${seg("lfs",FONTS.map(f=>[f[0],f[1]]),L.font)}</div>
+ <div class="lrow"><div class="lhead"><span>Tamanho da trilha</span></div>${seg("ltr",[["compacta","Compacta"],["normal","Normal"],["grande","Grande"]],L.trail)}</div>
+ <div class="lrow"><div class="lhead"><span>Tema</span></div>${seg("lth",[["auto","Automático"],["light","Claro"],["dark","Escuro"]],L.theme)}</div>
+ <div class="lrow"><div class="lhead"><span>Papel de parede</span><span class="lv">${WALLS[L.wall][0]}</span></div><div class="swatches" id="lwl">${Object.entries(WALLS).map(([k,[n,c]])=>`<button class="sw wall-sw" data-v="${k}" aria-pressed="${L.wall===k}" aria-label="${n}" style="background:${k==="grafite"?"var(--fill)":`linear-gradient(135deg,${c[0]},${c[1]} 45%,${c[2]})`}"></button>`).join("")}</div></div>
+ <div class="lrow"><div class="lhead"><span>Cor de destaque</span><span class="lv">${ACCENTS[L.accent][0]}</span></div><div class="swatches" id="lac">${Object.entries(ACCENTS).map(([k,a])=>`<button class="sw" data-v="${k}" aria-pressed="${L.accent===k}" aria-label="${a[0]}" style="background:linear-gradient(135deg,${a[1]},${a[2]})"></button>`).join("")}</div></div>
+ <div class="switch"><div><b>Animações</b><p class="small muted">Pulsar da lição atual e transições.</p></div><input type="checkbox" class="ios" id="lmo" ${L.motion?"checked":""} aria-label="Animações"></div>
+ <div class="row"><button class="btn" id="lrs">Restaurar padrão</button></div></div>`;
+}
+function bindLook(){
+ const set=(k,v,rerender)=>{S.look[k]=v;applyLook();save();if(rerender)viewPerfil()};
+ const gl=$("#lgl");gl.oninput=()=>{S.look.glass=+gl.value;$("#lglv").textContent=gl.value+"%";applyLook()};gl.onchange=()=>save();
+ const bl=$("#lbl");bl.oninput=()=>{S.look.blur=+bl.value;$("#lblv").textContent=bl.value;applyLook()};bl.onchange=()=>save();
+ [["lfs","font",Number],["ltr","trail",String],["lth","theme",String]].forEach(([id,k,f])=>$("#"+id).querySelectorAll("button").forEach(b=>b.onclick=()=>set(k,f(b.dataset.v),true)));
+ $("#lwl").querySelectorAll("button").forEach(b=>b.onclick=()=>set("wall",b.dataset.v,true));
+ $("#lac").querySelectorAll("button").forEach(b=>b.onclick=()=>set("accent",b.dataset.v,true));
+ $("#lmo").onchange=e=>set("motion",e.target.checked,false);
+ $("#lrs").onclick=()=>{S.look=defLook();applyLook();save();viewPerfil();toast("Aparência restaurada")};
+}
+
+let rzT;window.addEventListener("resize",()=>{clearTimeout(rzT);rzT=setTimeout(()=>{if(location.hash==="#trilha")drawTrail(trailState())},150)});
+
+let QZ=null;
+function viewModule(id){
+ const m=MODS[id];if(!m){location.hash="#trilha";return}
+ const t=TRACKS.find(t=>t.mods.includes(id));
+ if(!trackUnlocked(t)){location.hash="#trilha";return}
+ if(!S.lessons[id])S.lessons[id]={};
+ app.innerHTML=`<a class="back" href="#trilha">${IC.back} Trilha</a>
+ <article class="lesson">
+  <div class="stack" style="gap:8px"><span class="eyebrow"><span class="rub">¶</span> Nível ${t.n} · ${t.name} · ${m.min} min</span><h1>${esc(m.title)}</h1></div>
+  <div class="verse glass">"${esc(m.verse.t)}"<span class="ref">${m.verse.r}</span></div>
+  <div class="prose">${m.body}</div>
+  <div class="pratica glass"><div class="q"><small>Na prática: alguém te diz</small>${m.pr.q}</div><div class="a">${m.pr.a}</div></div>
+  <div id="tutor"></div>
+  <div class="card stack" id="quiz"></div>
+ </article>`;
+ if(!S.lessons[id].read){S.lessons[id].read=true;S.lessons[id].day=today();gain(10,"lição lida")}
+ renderTutor(id);
+ QZ={id,i:0,right:0,answered:false};renderQuiz();
+}
+
+function renderTutor(id){
+ const el=$("#tutor");if(!el)return;
+ if(!SAMPLE){el.innerHTML="";return}
+ el.innerHTML=`<div class="card stack"><div><span class="eyebrow">Tire uma dúvida</span><p class="small muted" style="margin-top:4px">Pergunte qualquer coisa sobre esta lição. A resposta usa a sua conta Claude.</p></div>
+ <label for="tq" class="small" style="font-weight:600">Sua pergunta</label>
+ <input type="text" id="tq" placeholder="Ex.: como explicar isso para meu primo de 12 anos?">
+ <div class="row"><button class="btn pri" id="tbtn">Perguntar</button></div><div id="tout" class="prose" style="font-size:1rem"></div></div>`;
+ $("#tbtn").onclick=async()=>{
+  const q=$("#tq").value.trim();if(!q)return;const out=$("#tout"),b=$("#tbtn");b.disabled=true;out.textContent="Pensando...";
+  const m=MODS[id];
+  try{await SAMPLE(`Você é um professor de teologia e apologética cristã evangélica (base protestante histórica, credos niceno e calcedonense) num app para jovens brasileiros de 15 a 25 anos. Responda em português do Brasil, de forma clara, fiel à Bíblia e com no máximo 180 palavras. Cite versículos quando ajudar. Quando houver divergência legítima entre evangélicos, diga isso. Seja gentil e direto.\n\nLição: "${m.title}"\nConteúdo da lição: ${strip(m.body).slice(0,5000)}\n\nPergunta do aluno: ${q}`,{onText:({text})=>{out.textContent=text},cache:false});}
+  catch(e){out.textContent=e.text||"";if(e.code!=="cancelled")toast(errMsg(e.code));if(["not_granted","sampling_disabled","not_declared","capability_disabled"].includes(e.code)){SAMPLE=null;}}
+  finally{b.disabled=false}
+ };
+}
+
+function renderQuiz(){
+ const el=$("#quiz");if(!el||!QZ)return;const m=MODS[QZ.id],qs=m.quiz;
+ if(QZ.i>=qs.length){
+  const sc=QZ.right/qs.length,prev=S.lessons[QZ.id].best||0,wasPassed=prev>=0.67;
+  if(sc>prev)S.lessons[QZ.id].best=sc;S.lessons[QZ.id].day=today();
+  const ok=sc>=0.67;
+  if(ok&&!wasPassed)gain(sc===1?50:30,sc===1?"prova perfeita":"lição aprovada");else save();
+  const nx=nextModule();
+  el.innerHTML=`<span class="eyebrow">Resultado</span><div class="score">${QZ.right}/${qs.length}</div>
+  <p>${ok?(sc===1?"Perfeito! Você domina esta lição.":"Aprovado! Revise os erros e siga em frente."):"Ainda não. Releia a lição e tente de novo: repetição gera domínio."}</p>
+  <div class="row"><button class="btn" id="qretry">Refazer prova</button>${ok&&nx?`<a class="btn pri" href="#m-${nx}">Próxima lição</a>`:""}<a class="btn ghost" href="#trilha">Voltar à trilha</a></div>`;
+  $("#qretry").onclick=()=>{QZ={id:QZ.id,i:0,right:0,answered:false};renderQuiz()};
+  return}
+ const q=qs[QZ.i];
+ el.innerHTML=`<div class="row" style="justify-content:space-between"><span class="eyebrow">Prova da lição</span><span class="qprog">${QZ.i+1} de ${qs.length}</span></div>
+ <h3 style="font-family:var(--f-ui);font-size:1.08rem">${esc(q.q)}</h3>
+ <div class="stack" style="gap:8px">${q.o.map((o,i)=>`<button class="opt" data-i="${i}">${esc(o)}</button>`).join("")}</div><div id="qexp"></div>`;
+ el.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{
+  if(QZ.answered)return;QZ.answered=true;const i=+b.dataset.i,ok=i===q.c;if(ok)QZ.right++;
+  el.querySelectorAll(".opt").forEach(x=>{x.disabled=true;if(+x.dataset.i===q.c)x.classList.add("right")});if(!ok)b.classList.add("wrong");
+  $("#qexp").innerHTML=`<div class="explain"><b>${ok?"Certo!":"Não foi dessa vez."}</b> ${esc(q.e)}</div><div class="row" style="margin-top:10px"><button class="btn pri" id="qnext">${QZ.i+1<qs.length?"Próxima":"Ver resultado"}</button></div>`;
+  $("#qnext").onclick=()=>{QZ.i++;QZ.answered=false;renderQuiz()};$("#qnext").focus();
+ });
+}
+
+/* ----- Cards ----- */
+let CS={filter:"Todos",queue:[],cur:null,shown:false,free:false};
+const CATS=["Todos","Versículo","Argumento","Citação","História","Conceito"];
+function buildQueue(){
+ const f=c=>CS.filter==="Todos"||c.cat===CS.filter;
+ if(CS.free){CS.queue=CARDS.filter(f).sort(()=>Math.random()-.5);return}
+ const due=dueCards().filter(f);const nw=newCards().filter(f).slice(0,Math.max(0,10-newToday()));
+ CS.queue=[...due,...nw];
+}
+function viewCards(){
+ if(!CS.cur){buildQueue();CS.cur=CS.queue.shift()||null;CS.shown=false}
+ const boxes=[0,1,2,3,4,5].map(b=>CARDS.filter(c=>S.cards[c.id]&&Math.min(S.cards[c.id].box,5)===b).length);
+ const c=CS.cur;
+ app.innerHTML=`<section class="hero"><span class="eyebrow"><span class="rub">¶</span> Revisão espaçada</span><h1>Cards</h1><p class="lead">Cada acerto empurra o card para mais longe (1, 2, 4, 8, 16, 32 dias). Cada erro traz ele de volta amanhã. É assim que se decora para a vida.</p></section>
+ <div class="chips" role="group" aria-label="Filtrar por tipo">${CATS.map(k=>`<button class="chip" aria-pressed="${CS.filter===k}" data-k="${k}">${k}</button>`).join("")}</div>
+ ${c?`<div class="card flash" id="flash" tabindex="0" role="button" aria-label="Mostrar resposta">
+   <span class="lvl-pill cat">${c.cat}</span>
+   <div class="front">${esc(c.f)}</div>
+   ${CS.shown?`<div class="back">${esc(c.b)}</div>`:`<p class="small muted">Tente lembrar. Toque para ver a resposta.</p>`}
+  </div>
+  ${CS.shown?`<div class="rate"><button class="btn" data-r="0">Errei<small>amanhã</small></button><button class="btn" data-r="1">Difícil<small>${INTERVALS[Math.min(S.cards[c.id]?.box||0,5)]}d</small></button><button class="btn pri" data-r="2">Acertei<small>${INTERVALS[Math.min((S.cards[c.id]?.box||0)+1,5)]}d</small></button></div>`:""}
+  <p class="small muted" style="text-align:center">${CS.queue.length} restante${CS.queue.length===1?"":"s"} nesta sessão${CS.free?" · treino livre":""}</p>`
+ :`<div class="card stack" style="text-align:center;align-items:center"><h2>Tudo revisado por hoje!</h2><p class="muted">Volte amanhã para os próximos cards. Quer treinar mais agora?</p><button class="btn pri" id="free">Treino livre (todos os cards)</button></div>`}
+ <div class="card stack"><span class="eyebrow">Suas caixas</span><div class="boxes">${boxes.map((n,i)=>`<div><b>${n}</b><span>caixa ${i}</span></div>`).join("")}</div><p class="small muted">${CARDS.length-Object.keys(S.cards).length} cards ainda não vistos · até 10 novos por dia</p></div>`;
+ app.querySelectorAll(".chip").forEach(b=>b.onclick=()=>{CS.filter=b.dataset.k;CS.cur=null;viewCards()});
+ const fl=$("#flash");if(fl){const show=()=>{if(!CS.shown){CS.shown=true;viewCards()}};fl.onclick=show;fl.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();show()}}}
+ app.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>rate(+b.dataset.r));
+ const fr=$("#free");if(fr)fr.onclick=()=>{CS.free=true;CS.cur=null;viewCards()};
+}
+function rate(r){
+ const c=CS.cur,k=today();let st=S.cards[c.id];
+ if(!st){st={box:0,due:k,added:k};S.cards[c.id]=st}
+ if(r===0){st.box=0;st.due=addDays(k,1)}
+ else if(r===1){st.due=addDays(k,INTERVALS[Math.min(st.box,5)])}
+ else{st.box=Math.min(st.box+1,6);st.due=addDays(k,INTERVALS[Math.min(st.box,5)])}
+ st.last=k;
+ if(r===0&&!CS.free)CS.queue.push(c);
+ gain(r===0?1:2,"card revisado");
+ CS.cur=CS.queue.shift()||null;CS.shown=false;viewCards();tabs("cards");
+}
+
+/* ----- Debate ----- */
+let DB=null;
+function errMsg(c){return({rate_limited:"Muitas perguntas seguidas. Espere um pouco e tente de novo.",not_granted:"Sem permissão para usar o Claude. Use o treino offline.",sampling_disabled:"O Claude não está disponível nesta conta. Use o treino offline.",session_expired:"Sua sessão expirou. Entre de novo no Claude.",refused:"A IA não respondeu a essa mensagem. Reformule e tente outra vez.",invalid_json:"A avaliação veio num formato inesperado. Tente de novo."})[c]||"Falha de conexão. Tente de novo."}
+function viewDebate(){
+ if(DB)return renderArena();
+ app.innerHTML=`<section class="hero"><span class="eyebrow"><span class="rub">¶</span> Simulador</span><h1>Arena de debate</h1><p class="lead">Escolha um oponente e defenda sua fé contra objeções reais. ${SAMPLE?"Converse com a IA no papel da pessoa e receba nota em lógica, Bíblia, tom e clareza.":"Responda por escrito e compare com a resposta-modelo."}</p></section>
+ <div class="grid2">${PERSONAS.map(p=>`<button class="persona glass" data-p="${p.id}"><span class="ava" style="background:${p.color}">${p.name.replace("Prof.ª ","")[0]}</span><div><h3>${esc(p.name)}, ${esc(p.role)}</h3><p>"${esc(p.opening.slice(0,96))}..."</p></div></button>`).join("")}</div>
+ <p class="small muted">Debates concluídos: <b>${S.debates}</b>${SAMPLE?"":" · O modo com IA aparece quando você abre o app conectado à sua conta Claude."}</p>`;
+ app.querySelectorAll(".persona").forEach(b=>b.onclick=()=>{const p=PERSONAS.find(x=>x.id===b.dataset.p);DB={p,mode:SAMPLE?"ia":"off",turns:[],busy:false,eval:null,oi:0,reveal:false,draft:""};renderArena();window.scrollTo(0,0)});
+}
+function personaHead(p){return`<div class="row"><span class="ava" style="background:${p.color}">${p.name.replace("Prof.ª ","")[0]}</span><div style="min-width:0;flex:1"><h2 style="font-size:1.2rem">${esc(p.name)}</h2><p class="small muted">${esc(p.role)}</p></div></div>`}
+function markDebate(xp,why){S.debates++;S.debDays=S.debDays||{};S.debDays[today()]=(S.debDays[today()]||0)+1;gain(xp,why)}
+function renderArena(){
+ const p=DB.p;
+ const modeSw=SAMPLE?`<div class="chips" role="group" aria-label="Modo"><button class="chip" aria-pressed="${DB.mode==="ia"}" data-m="ia">Conversa com IA</button><button class="chip" aria-pressed="${DB.mode==="off"}" data-m="off">Treino offline</button></div>`:"";
+ if(DB.mode==="off"){
+  const o=p.obj[DB.oi];
+  app.innerHTML=`<a class="back" href="#debate" id="leave">${IC.back} Oponentes</a>${personaHead(p)}${modeSw}
+  <div class="card stack"><div class="row" style="justify-content:space-between"><span class="eyebrow">Objeção ${DB.oi+1} de ${p.obj.length}</span></div>
+   <p class="quote" style="font-style:normal">"${esc(o.q)}"</p>
+   <label for="ans" class="small" style="font-weight:600">Sua resposta (como você falaria)</label>
+   <textarea id="ans" placeholder="Escreva aqui. Use uma pergunta, um argumento e um texto bíblico.">${esc(DB.draft)}</textarea>
+   ${DB.reveal?`<div class="explain"><b>Pontos-chave de uma boa resposta:</b><ul class="keypoints" style="margin-top:8px">${o.k.map(k=>`<li>${esc(k)}</li>`).join("")}</ul></div>
+   <div class="selfcheck"><p class="small" style="font-weight:700;margin-bottom:4px">Autoavaliação: na sua resposta você...</p>
+    ${["Fez pelo menos uma pergunta à pessoa","Usou um argumento lógico ou um fato","Citou a Bíblia ou uma fonte","Foi gentil e sem ironia"].map((t,i)=>`<label><input type="checkbox" id="sc${i}"> ${t}</label>`).join("")}</div>
+   <div class="row"><button class="btn pri" id="nextObj">${DB.oi+1<p.obj.length?"Próxima objeção":"Concluir treino"}</button></div>`
+   :`<div class="row"><button class="btn pri" id="reveal">Ver resposta-modelo</button></div>`}
+  </div>`;
+  const ta=$("#ans");ta.oninput=()=>DB.draft=ta.value;
+  const rv=$("#reveal");if(rv)rv.onclick=()=>{if(!DB.draft.trim()){toast("Escreva sua resposta antes de ver o modelo.");ta.focus();return}DB.reveal=true;renderArena()};
+  const nx=$("#nextObj");if(nx)nx.onclick=()=>{const n=[0,1,2,3].filter(i=>$("#sc"+i).checked).length;if(DB.oi+1<p.obj.length){gain(5+n*2,"objeção respondida");DB.oi++;DB.reveal=false;DB.draft="";renderArena()}else{markDebate(20,"treino concluído");DB=null;viewDebate()}};
+ }else{
+  app.innerHTML=`<a class="back" href="#debate" id="leave">${IC.back} Oponentes</a>${personaHead(p)}${modeSw}
+  <div class="chat" id="chat"><div class="msg sys">Treino com IA. Responda como responderia na vida real. Depois de 2 ou 3 respostas, peça a avaliação.</div><div class="msg them">${esc(p.opening)}</div>${DB.turns.map(t=>`<div class="msg ${t.role==="user"?"me":"them"}">${esc(t.content)}</div>`).join("")}<div class="msg them" id="typing" hidden>...</div></div>
+  ${DB.eval?evalHTML(DB.eval):`<div class="stack"><label for="msgin" class="small" style="font-weight:600">Sua resposta</label><textarea id="msgin" placeholder="Responda a ${esc(p.name)}...">${esc(DB.draft)}</textarea>
+  <div class="row"><button class="btn pri" id="send">Enviar</button><button class="btn" id="evalb" ${DB.turns.filter(t=>t.role==="user").length?"":"disabled"}>Encerrar e avaliar</button><button class="btn ghost" id="stop" hidden>Parar</button></div></div>`}`;
+  const mi=$("#msgin");if(mi){mi.oninput=()=>DB.draft=mi.value;mi.onkeydown=e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();sendMsg()}}}
+  const sb=$("#send");if(sb)sb.onclick=sendMsg;
+  const eb=$("#evalb");if(eb)eb.onclick=doEval;
+  const again=$("#again");if(again)again.onclick=()=>{DB={...DB,turns:[],eval:null,draft:""};renderArena()};
+  const oth=$("#other");if(oth)oth.onclick=()=>{DB=null;viewDebate();window.scrollTo(0,0)};
+ }
+ app.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{DB.mode=b.dataset.m;renderArena()});
+ $("#leave").onclick=e=>{e.preventDefault();DB?.ctl?.abort();DB=null;viewDebate()};
+}
+function rules(p){return`Você está dentro de "Apologia", um app de treino em defesa da fé cristã para jovens evangélicos brasileiros de 15 a 25 anos. Neste treino, faça o papel de ${p.name}, ${p.persona}.
+Regras: fale em português do Brasil, natural, como uma pessoa real conversando; respostas curtas (no máximo 90 palavras); levante objeções honestas e fortes que essa pessoa realmente faria, uma de cada vez; não ceda fácil, mas reconheça com sinceridade quando um argumento for bom; nunca use palavrões nem ofensas; não saia do personagem e não dê dicas ao jovem. Se a pessoa for a amiga ferida, reaja como alguém de luto reagiria: valorize empatia e se feche diante de respostas frias.
+Você abriu a conversa dizendo: "${p.opening}"
+A seguir vêm as falas do jovem e as suas. Responda à última fala do jovem.`}
+async function sendMsg(){
+ const d=DB;if(!d||d.busy||!SAMPLE)return;const mi=$("#msgin");const txt=mi.value.trim();if(!txt)return;
+ d.turns.push({role:"user",content:txt});d.draft="";d.busy=true;renderArena();
+ const ty=$("#typing");ty.hidden=false;ty.textContent="digitando...";$("#send").disabled=true;$("#evalb").disabled=true;$("#stop").hidden=false;
+ d.ctl=new AbortController();$("#stop").onclick=()=>d.ctl.abort();
+ const input=[{role:"user",content:rules(d.p)},...d.turns.slice(-12)];
+ try{
+  const{text}=await SAMPLE(input,{modelTier:"quick",cache:false,signal:d.ctl.signal,onText:({text})=>{if(DB===d){const t=$("#typing");if(t)t.textContent=text}}});
+  d.turns.push({role:"assistant",content:text});
+ }catch(e){if(e.text)d.turns.push({role:"assistant",content:e.text});else{d.turns.pop();d.draft=txt}if(e.code!=="cancelled")toast(errMsg(e.code));if(["not_granted","sampling_disabled","not_declared","capability_disabled"].includes(e.code)){SAMPLE=null;d.mode="off"}}
+ finally{d.busy=false;if(DB===d){renderArena();const c=$("#chat");if(c)c.lastElementChild?.scrollIntoView({block:"end"})}}
+}
+async function doEval(){
+ const d=DB;if(!d||d.busy||!SAMPLE)return;d.busy=true;const eb=$("#evalb");eb.disabled=true;eb.textContent="Avaliando...";$("#send").disabled=true;
+ const tr=[`${d.p.name}: ${d.p.opening}`,...d.turns.map(t=>(t.role==="user"?"JOVEM: ":d.p.name+": ")+t.content)].join("\n");
+ try{
+  const r=await SAMPLE.json(`Você é um professor experiente de apologética cristã evangélica avaliando o treino de um jovem brasileiro (15 a 25 anos) num app de estudos. O jovem conversou com ${d.p.name}, ${d.p.persona}.
+Avalie SOMENTE as falas marcadas como JOVEM. Seja exigente, justo e encorajador. Critérios (0 a 10): "logica" (argumentos válidos, responde à objeção real), "biblia" (uso correto da Bíblia e de fatos/fontes), "tom" (mansidão, respeito, empatia, 1 Pe 3.15), "clareza" (simples, objetivo, convincente). "nota" é a média ponderada geral.
+Responda apenas com JSON neste formato:
+{"nota":7,"logica":7,"biblia":6,"tom":9,"clareza":7,"fortes":["...","..."],"melhorar":["...","..."],"modelo":"uma resposta-modelo curta (até 110 palavras) para a objeção principal, no estilo falado"}
+
+Conversa:
+${tr.slice(0,12000)}`,{modelTier:"default",cache:false});
+  const n=x=>Math.max(0,Math.min(10,Math.round(Number(x)||0)));
+  d.eval={nota:n(r.nota),logica:n(r.logica),biblia:n(r.biblia),tom:n(r.tom),clareza:n(r.clareza),fortes:(Array.isArray(r.fortes)?r.fortes:[]).slice(0,4).map(String),melhorar:(Array.isArray(r.melhorar)?r.melhorar:[]).slice(0,4).map(String),modelo:String(r.modelo||"")};
+  markDebate(d.eval.nota>=8?30:20,d.eval.nota>=8?"debate excelente":"debate concluído");
+ }catch(e){toast(errMsg(e.code))}
+ finally{d.busy=false;if(DB===d)renderArena()}
+}
+function evalHTML(v){return`<div class="card stack"><div class="row" style="justify-content:space-between"><span class="eyebrow">Sua avaliação</span><span class="score" style="font-size:2rem">${v.nota}<span class="muted" style="font-size:1rem">/10</span></span></div>
+ <div class="scoregrid"><div><b>${v.logica}</b><span>Lógica</span></div><div><b>${v.biblia}</b><span>Bíblia e fontes</span></div><div><b>${v.tom}</b><span>Tom</span></div><div><b>${v.clareza}</b><span>Clareza</span></div></div>
+ ${v.fortes.length?`<div><b>Pontos fortes</b><ul class="keypoints" style="margin-top:6px">${v.fortes.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
+ ${v.melhorar.length?`<div><b>Para melhorar</b><ul class="keypoints" style="margin-top:6px">${v.melhorar.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
+ ${v.modelo?`<div class="explain"><b>Resposta-modelo:</b> ${esc(v.modelo)}</div>`:""}
+ <div class="row"><button class="btn pri" id="again">Treinar de novo</button><button class="btn" id="other">Outro oponente</button></div></div>`}
+
+/* ----- Livros ----- */
+let BF="Todos";
+function viewLivros(){
+ const lv=["Todos","Iniciante","Intermediário","Avançado","Mestre"];
+ const read=BOOKS.filter(b=>S.books[b.id]==="lido").length;
+ app.innerHTML=`<section class="hero"><span class="eyebrow"><span class="rub">¶</span> Biblioteca do defensor</span><h1>Trilha de livros</h1><p class="lead">Dezessete livros em ordem de dificuldade. Comece pelo primeiro de Lewis. Cada livro lido vale 40 XP. Responda às perguntas no grupo de jovens.</p></section>
+ <div class="row" style="justify-content:space-between"><div class="chips" role="group" aria-label="Filtrar nível">${lv.map(k=>`<button class="chip" aria-pressed="${BF===k}" data-l="${k}">${k}</button>`).join("")}</div><span class="ref">${read}/${BOOKS.length} lidos</span></div>
+ <div class="stack">${BOOKS.filter(b=>BF==="Todos"||b.lvl===BF).map((b,i)=>{const s=S.books[b.id]||"";return`<div class="card book"><div class="spine" style="background:${b.col}">${b.y}</div><div>
+  <span class="eyebrow">${b.lvl}</span><h3>${esc(b.t)}</h3><p class="small muted">${esc(b.a)}</p><p style="margin-top:6px">${esc(b.why)}</p>
+  <details><summary>Ideias-chave e perguntas</summary><ul>${b.ideas.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><p class="small" style="font-weight:700;margin-top:8px">Para discutir</p><ul>${b.q.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></details>
+  <div class="seg" role="group" aria-label="Status de leitura">${[["quero","Quero ler"],["lendo","Lendo"],["lido","Lido"]].map(([k,l])=>`<button data-b="${b.id}" data-s="${k}" aria-pressed="${s===k}">${l}</button>`).join("")}</div>
+ </div></div>`}).join("")}</div>`;
+ app.querySelectorAll("[data-l]").forEach(b=>b.onclick=()=>{BF=b.dataset.l;viewLivros()});
+ app.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{const id=b.dataset.b,s=b.dataset.s,was=S.books[id];S.books[id]=was===s?"":s;
+  if(s==="lido"&&was!=="lido"){S.booksXp=S.booksXp||{};if(!S.booksXp[id]){S.booksXp[id]=1;gain(40,"livro lido")}else save()}else save();viewLivros()});
+}
+
+/* ----- Perfil ----- */
+function badges(){const st=Math.max(streak(),S.bestStreak||0);const t=n=>TRACKS[n].mods.filter(passed).length===4;const rd=BOOKS.filter(b=>S.books[b.id]==="lido").length;const perf=Object.values(S.lessons).filter(l=>l.best===1).length;
+ return[["I","Primeiro passo","1 lição aprovada",Object.keys(MODS).some(passed)],["II","Fundamentado","Nível 1 completo",t(0)],["III","Doutrinado","Nível 2 completo",t(1)],["IV","Apologeta","Nível 3 completo",t(2)],["V","Mestre","Nível 4 completo",t(3)],["7","Constante","7 dias seguidos",st>=7],["30","Inabalável","30 dias seguidos",st>=30],["¶","Debatedor","10 debates",S.debates>=10],["L","Leitor","3 livros lidos",rd>=3],["★","Precisão","5 provas perfeitas",perf>=5],["50","Memória","50 cards na caixa 3+",Object.values(S.cards).filter(c=>c.box>=3).length>=50]]}
+function viewPerfil(){
+ S.bestStreak=Math.max(S.bestStreak||0,streak());
+ const L=level();
+ app.innerHTML=`<section class="hero"><span class="eyebrow"><span class="rub">¶</span> Seu progresso</span><h1>${S.name?esc(S.name):"Perfil"}</h1><p class="lead">${L.name} · ${S.xp} XP · recorde de ${S.bestStreak} dia${S.bestStreak===1?"":"s"} seguidos</p></section>
+ <div class="card stack"><label for="nm" style="font-weight:600">Como quer ser chamado?</label><div class="row"><input type="text" id="nm" value="${esc(S.name)}" maxlength="30" style="flex:1;min-width:0"><button class="btn pri" id="nmb">Salvar</button></div></div>
+ <div class="stack"><h2 style="font-size:1.3rem">Medalhas</h2><div class="badges">${badges().map(([s,t,d,ok])=>`<div class="badge glass ${ok?"":"off"}"><div class="seal">${s}</div><b>${t}</b><span>${d}</span></div>`).join("")}</div></div>
+ ${lookPanel()}
+ <div class="card"><h2 style="font-size:1.2rem;margin-bottom:6px">Ajustes</h2>
+  <div class="switch"><div><b>Modo líder</b><p class="small muted">Libera todos os níveis para o líder de jovens conferir o conteúdo.</p></div><input type="checkbox" class="ios" id="ul" ${S.unlockAll?"checked":""} aria-label="Modo líder"></div>
+  <div class="switch"><div><b>Onde seu progresso fica salvo</b><p class="small muted">${SYNC.status==="conta"?"Na sua conta Claude: abre igual em qualquer aparelho.":"Neste aparelho e navegador. Limpar os dados do navegador apaga o progresso."}</p></div></div>
+  <div class="switch"><div><b>Simulador com IA</b><p class="small muted">${SAMPLE?"Disponível. Usa a sua conta Claude.":"Indisponível aqui. O treino offline continua funcionando."}</p></div></div>
+  <div class="switch"><div><b>Recomeçar do zero</b><p class="small muted">Apaga XP, lições, cards e livros.</p></div><button class="btn" id="rs">Recomeçar</button></div>
+  <div id="rsc"></div>
+ </div>`;
+ bindLook();
+ $("#nmb").onclick=()=>{S.name=$("#nm").value.trim().slice(0,30);save();toast("Nome salvo");hdr()};
+ $("#ul").onchange=e=>{S.unlockAll=e.target.checked;save();toast(S.unlockAll?"Todos os níveis liberados":"Níveis voltam a abrir por progresso")};
+ $("#rs").onclick=()=>{$("#rsc").innerHTML=`<div class="explain row" style="justify-content:space-between"><span>Tem certeza? Isso não pode ser desfeito.</span><span class="row"><button class="btn" id="rsn">Cancelar</button><button class="btn red" id="rsy">Apagar tudo</button></span></div>`;
+  $("#rsn").onclick=()=>$("#rsc").innerHTML="";$("#rsy").onclick=()=>{const nm=S.name;const lk=S.look;S=fresh();S.name=nm;S.look=lk;save();hdr();toast("Progresso apagado");route()}};
+}
+
+/* ================== ROTAS ================== */
+function route(){
+ const h=(location.hash||"#inicio").slice(1);
+ let cur=h;
+ if(h.startsWith("m-")){cur="trilha";viewModule(h.slice(2))}
+ else if(h==="trilha")viewTrilha();
+ else if(h==="cards")viewCards();
+ else if(h==="debate")viewDebate();
+ else if(h==="livros")viewLivros();
+ else if(h==="perfil")viewPerfil();
+ else{cur="inicio";viewHome()}
+ tabs(cur);hdr();
+}
+let lastHash=location.hash;
+window.addEventListener("hashchange",()=>{if(location.hash!==lastHash){lastHash=location.hash;if(location.hash!=="#debate")DB=null;route();window.scrollTo(0,0)}});
+applyLook();
+route();
+initSync();initSample();
+</script>
+
+</body>
+</html>

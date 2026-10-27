@@ -251,3 +251,13 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 - SMC-Mixer pronta (padrão Mackie) + modo Aprender para qualquer controle MIDI.
 - Reconexão automática de piano/mesinha; luzes dos botões da mesinha.
 - Áudio com prioridade alta, limitador suave na saída, medidor de CPU e de volume.
+
+## Outro projeto: Apologia (app de estudos para os jovens)
+
+A pasta [`apologia/`](apologia/) guarda o **Apologia**, uma escola de defesa da fé cristã para jovens
+(16 lições do iniciante ao avançado, trilha com "Você está aqui", cards de revisão, treino de debate e trilha de livros).
+Não tem nada a ver com o programa do piano; só mora neste repositório.
+
+- **Abrir no celular:** https://contatojampro5-dot.github.io/piano-sf2/apologia/
+- No iPhone: abra no Safari → Compartilhar → **Adicionar à Tela de Início** para virar um "app".
+- O progresso fica salvo no aparelho. O debate com IA só funciona na versão aberta pelo Claude.

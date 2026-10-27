@@ -33,6 +33,10 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   (`.github/workflows/windows.yml`) e publicado em Releases (`releases/latest/download/PianoSF2.exe`).
 - Print da tela no Linux: Xvfb + `LIBGL_ALWAYS_SOFTWARE=1` + `HOME=<pasta com .config/piano-sf2/config.json>`.
 
+## Pasta `apologia/` (outro projeto)
+- App web separado (Escola Apologia, estudos para jovens), página única `apologia/index.html` servida pelo GitHub Pages
+  (`main`, raiz; `.nojekyll` na raiz). Não faz parte do programa do piano: não mexer nele nas versões do piano.
+
 ## Regras
 - Toda atualização vai para o GitHub (commit + push em `main`) e ganha uma linha em "Versões" no `README.md`.
 - Mensagem de commit curta em português começando pela versão (ex.: `v0.2: ...`).

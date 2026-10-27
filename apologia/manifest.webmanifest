@@ -1,0 +1,23 @@
+{
+ "name": "Apologia",
+ "short_name": "Apologia",
+ "description": "Escola de defesa da fé cristã para jovens",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "background_color": "#0B1026",
+ "theme_color": "#0B1026",
+ "lang": "pt-BR",
+ "icons": [
+  {
+   "src": "apple-touch-icon.png",
+   "sizes": "180x180",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  }
+ ]
+}
