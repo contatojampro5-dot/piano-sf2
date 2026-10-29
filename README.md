@@ -277,4 +277,5 @@ Não tem nada a ver com o programa do piano; só mora neste repositório.
 
 - **Abrir no celular:** https://contatojampro5-dot.github.io/piano-sf2/apologia/
 - No iPhone: abra no Safari → Compartilhar → **Adicionar à Tela de Início** para virar um "app".
-- O progresso fica salvo no aparelho. O debate com IA só funciona na versão aberta pelo Claude.
+- O progresso fica salvo no aparelho. No link do GitHub, o debate acontece no ChatGPT gratuito (o app abre o
+  ChatGPT já com o personagem e as regras); na versão aberta pelo Claude, o debate com IA acontece dentro do app.

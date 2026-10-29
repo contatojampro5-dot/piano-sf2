@@ -399,6 +399,8 @@ input[type="range"]{width:100%;accent-color:var(--accent);height:28px;margin:0}
 .msg.sys{align-self:center;background:transparent;color:var(--muted);font-size:.82rem;text-align:center}
 textarea{width:100%;min-height:96px;resize:vertical;border:1px solid var(--glass-border);border-radius:var(--r-md);background:var(--glass-strong);padding:12px 14px;line-height:1.5}
 textarea:focus{border-color:var(--accent);outline:none}
+.num-in{border:1px solid var(--glass-border);border-radius:var(--r-md);background:var(--glass-strong);padding:11px 14px;min-height:44px;font-size:1.05rem;font-weight:700;text-align:center}
+.num-in:focus{border-color:var(--accent);outline:none}
 input[type="text"]{width:100%;border:1px solid var(--glass-border);border-radius:14px;background:var(--glass-strong);padding:11px 14px;min-height:44px}
 input[type="text"]:focus{border-color:var(--accent);outline:none}
 .scoregrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -3142,17 +3144,18 @@ let DB=null;
 function errMsg(c){return({rate_limited:"Muitas perguntas seguidas. Espere um pouco e tente de novo.",not_granted:"Sem permissão para usar o Claude. Use o treino offline.",sampling_disabled:"O Claude não está disponível nesta conta. Use o treino offline.",session_expired:"Sua sessão expirou. Entre de novo no Claude.",refused:"A IA não respondeu a essa mensagem. Reformule e tente outra vez.",invalid_json:"A avaliação veio num formato inesperado. Tente de novo."})[c]||"Falha de conexão. Tente de novo."}
 function viewDebate(){
  if(DB)return renderArena();
- app.innerHTML=`<section class="hero"><span class="eyebrow"><span class="rub">¶</span> Simulador</span><h1>Arena de debate</h1><p class="lead">Escolha um oponente e ${C.debateLead} contra objeções reais. ${SAMPLE?"Converse com a IA no papel da pessoa e receba nota em lógica, Bíblia, tom e clareza.":"Responda por escrito e compare com a resposta-modelo."}</p></section>
+ app.innerHTML=`<section class="hero"><span class="eyebrow"><span class="rub">¶</span> Simulador</span><h1>Arena de debate</h1><p class="lead">Escolha um oponente e ${C.debateLead} contra objeções reais. ${SAMPLE?"Converse com a IA no papel da pessoa e receba nota em lógica, Bíblia, tom e clareza.":"Debata no ChatGPT gratuito, com o personagem já pronto, ou responda por escrito e compare com a resposta-modelo."}</p></section>
  <a class="card duel-hero" href="#duelo" style="text-decoration:none;color:inherit"><span class="vs">VS</span><div style="min-width:0"><span class="eyebrow">2 jogadores · 1 celular</span><h2 style="font-size:1.2rem;margin-top:2px">Duelo relâmpago</h2><p class="small muted">Desafie um amigo: as mesmas perguntas para os dois, 15 segundos cada.</p></div></a>
  <div class="grid2">${PERSONAS.map(p=>`<button class="persona glass" data-p="${p.id}"><span class="ava" style="background:${p.color}">${p.name.replace("Prof.ª ","")[0]}</span><div><h3>${esc(p.name)}, ${esc(p.role)}</h3><p>"${esc(p.opening.slice(0,96))}..."</p></div></button>`).join("")}</div>
- <p class="small muted">Debates concluídos: <b>${S.debates}</b>${SAMPLE?"":" · O modo com IA aparece quando você abre o app conectado à sua conta Claude."}</p>`;
- app.querySelectorAll(".persona").forEach(b=>b.onclick=()=>{const p=PERSONAS.find(x=>x.id===b.dataset.p);DB={p,mode:SAMPLE?"ia":"off",turns:[],busy:false,eval:null,oi:0,reveal:false,draft:""};renderArena();window.scrollTo(0,0)});
+ <p class="small muted">Debates concluídos: <b>${S.debates}</b></p>`;
+ app.querySelectorAll(".persona").forEach(b=>b.onclick=()=>{const p=PERSONAS.find(x=>x.id===b.dataset.p);DB={p,mode:SAMPLE?"ia":"gpt",turns:[],busy:false,eval:null,oi:0,reveal:false,draft:""};renderArena();window.scrollTo(0,0)});
 }
 function personaHead(p){return`<div class="row"><span class="ava" style="background:${p.color}">${p.name.replace("Prof.ª ","")[0]}</span><div style="min-width:0;flex:1"><h2 style="font-size:1.2rem">${esc(p.name)}</h2><p class="small muted">${esc(p.role)}</p></div></div>`}
 function markDebate(xp,why){S.debates++;S.debDays=S.debDays||{};S.debDays[today()]=(S.debDays[today()]||0)+1;gain(xp,why)}
 function renderArena(){
  const p=DB.p;
- const modeSw=SAMPLE?`<div class="chips" role="group" aria-label="Modo"><button class="chip" aria-pressed="${DB.mode==="ia"}" data-m="ia">Conversa com IA</button><button class="chip" aria-pressed="${DB.mode==="off"}" data-m="off">Treino offline</button></div>`:"";
+ const modeSw=`<div class="chips" role="group" aria-label="Modo">${SAMPLE?`<button class="chip" aria-pressed="${DB.mode==="ia"}" data-m="ia">Conversa com IA</button>`:""}<button class="chip" aria-pressed="${DB.mode==="gpt"}" data-m="gpt">No ChatGPT</button><button class="chip" aria-pressed="${DB.mode==="off"}" data-m="off">Treino offline</button></div>`;
+ if(DB.mode==="gpt")return renderGpt(modeSw);
  if(DB.mode==="off"){
   const o=p.obj[DB.oi];
   app.innerHTML=`<a class="back" href="#debate" id="leave">${IC.back} Oponentes</a>${personaHead(p)}${modeSw}
@@ -3182,6 +3185,38 @@ function renderArena(){
  }
  app.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{DB.mode=b.dataset.m;renderArena()});
  $("#leave").onclick=e=>{e.preventDefault();DB?.ctl?.abort();DB=null;viewDebate()};
+}
+/* Debate no ChatGPT gratuito: o app monta as instruções do personagem e abre o chatgpt.com já com elas. */
+function gptPrompt(p){return`Vamos fazer um treino de debate para o ${C.brand}, um app de estudos para jovens cristãos brasileiros de 15 a 25 anos. Faça o papel de ${p.name}, ${p.persona}.
+Regras: fale em português do Brasil, natural, como uma pessoa real conversando; respostas curtas (no máximo 90 palavras); levante objeções honestas e fortes que essa pessoa realmente faria, uma de cada vez; não ceda fácil, mas reconheça com sinceridade quando um argumento for bom; nunca use palavrões nem ofensas; não saia do personagem e não me dê dicas. ${C.special}
+Comece agora dizendo só a sua primeira fala: "${p.opening}" Depois espere a minha resposta.
+Quando eu escrever AVALIAR, saia do personagem e aja como ${C.evalWho}${C.evalPersp}. Avalie só as minhas falas, de forma exigente, justa e encorajadora: dê notas de 0 a 10 em lógica, ${C.critLabel.toLowerCase()}, tom (mansidão e respeito, 1 Pe 3.15) e clareza, uma NOTA GERAL de 0 a 10, 2 pontos fortes, 2 pontos a melhorar e uma resposta-modelo curta para a objeção principal.`}
+async function copyText(t){try{await navigator.clipboard.writeText(t);return true}catch(e){try{const a=document.createElement("textarea");a.value=t;a.style.cssText="position:fixed;opacity:0";document.body.appendChild(a);a.select();const ok=document.execCommand("copy");a.remove();return ok}catch(e2){return false}}}
+function renderGpt(modeSw){
+ const p=DB.p,pr=gptPrompt(p);
+ app.innerHTML=`<a class="back" href="#debate" id="leave">${IC.back} Oponentes</a>${personaHead(p)}${modeSw}
+ <div class="card stack"><span class="eyebrow">Debate no ChatGPT · grátis</span>
+  <p>O ${esc(C.brand)} prepara o personagem e as regras, e o debate acontece no ChatGPT, com a sua conta gratuita.</p>
+  <ol class="small" style="margin:0;padding-left:20px;display:grid;gap:6px">
+   <li>Toque em <b>Abrir no ChatGPT</b>. As instruções já vão junto${DB.gptOpened?"":" e também ficam copiadas"}.</li>
+   <li>Se o ChatGPT abrir vazio, toque e segure na caixa de mensagem e escolha <b>Colar</b>.</li>
+   <li>Converse com ${esc(p.name)} por 3 ou 4 respostas, como você falaria na vida real.</li>
+   <li>Escreva <b>AVALIAR</b> para receber as notas e a resposta-modelo.</li>
+   <li>Volte aqui e marque a nota geral para ganhar XP.</li>
+  </ol>
+  <div class="row"><button class="btn pri" id="gptOpen">Abrir no ChatGPT</button><button class="btn" id="gptCopy">Copiar instruções</button></div>
+  <details><summary class="small" style="cursor:pointer;font-weight:600">Ver as instruções</summary><p class="small muted" style="white-space:pre-wrap;margin-top:8px">${esc(pr)}</p></details>
+ </div>
+ <div class="card stack"><span class="eyebrow">Terminou o debate?</span>
+  <label for="gptNota" class="small" style="font-weight:600">Nota geral que o ChatGPT deu (0 a 10)</label>
+  <div class="row"><input id="gptNota" type="number" min="0" max="10" step="1" inputmode="numeric" placeholder="8" class="num-in" style="width:96px"><button class="btn pri" id="gptDone">Registrar debate</button></div>
+  <p class="small muted">Seja honesto: a nota é só para o seu treino. Nota 8 ou mais vale 30 XP; as outras valem 20 XP.</p>
+ </div>`;
+ $("#gptOpen").onclick=()=>{copyText(pr);DB.gptOpened=true;window.open("https://chatgpt.com/?q="+encodeURIComponent(pr),"_blank","noopener")};
+ $("#gptCopy").onclick=async()=>{toast(await copyText(pr)?"Instruções copiadas. Cole no ChatGPT.":"Não deu para copiar. Abra “Ver as instruções” e copie à mão.")};
+ $("#gptDone").onclick=()=>{const v=$("#gptNota").value.trim(),n=Math.round(Number(v));if(v===""||!(n>=0&&n<=10)){toast("Digite a nota de 0 a 10.");$("#gptNota").focus();return}markDebate(n>=8?30:20,n>=8?"debate excelente":"debate concluído");toast(n>=8?"Debate excelente! +30 XP":"Debate registrado! +20 XP");DB=null;viewDebate();window.scrollTo(0,0)};
+ app.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{DB.mode=b.dataset.m;renderArena()});
+ $("#leave").onclick=e=>{e.preventDefault();DB=null;viewDebate()};
 }
 function rules(p){return`Você está dentro de ${C.app}. Neste treino, faça o papel de ${p.name}, ${p.persona}.
 Regras: fale em português do Brasil, natural, como uma pessoa real conversando; respostas curtas (no máximo 90 palavras); levante objeções honestas e fortes que essa pessoa realmente faria, uma de cada vez; não ceda fácil, mas reconheça com sinceridade quando um argumento for bom; nunca use palavrões nem ofensas; não saia do personagem e não dê dicas ao jovem. ${C.special}
@@ -3255,7 +3290,7 @@ function viewPerfil(){
  <div class="card"><h2 style="font-size:1.2rem;margin-bottom:6px">Ajustes</h2>
   <div class="switch"><div><b>Modo líder</b><p class="small muted">Libera todos os níveis para o líder de jovens conferir o conteúdo.</p></div><input type="checkbox" class="ios" id="ul" ${S.unlockAll?"checked":""} aria-label="Modo líder"></div>
   <div class="switch"><div><b>Onde seu progresso fica salvo</b><p class="small muted">${SYNC.status==="conta"?"Na sua conta Claude: abre igual em qualquer aparelho.":"Neste aparelho e navegador. Limpar os dados do navegador apaga o progresso."}</p></div></div>
-  <div class="switch"><div><b>Simulador com IA</b><p class="small muted">${SAMPLE?"Disponível. Usa a sua conta Claude.":"Indisponível aqui. O treino offline continua funcionando."}</p></div></div>
+  <div class="switch"><div><b>Simulador com IA</b><p class="small muted">${SAMPLE?"Disponível. Usa a sua conta Claude.":"Aqui o debate acontece no ChatGPT gratuito. O treino offline também funciona."}</p></div></div>
   <div class="switch"><div><b>Mudar o que estudar</b><p class="small muted">Você está em ${C.label} (${C.brand}).</p></div><a class="btn" href="#escolher">Trocar</a></div>
   <div class="switch"><div><b>Recomeçar do zero</b><p class="small muted">Apaga XP, lições, cards e livros deste curso.</p></div><button class="btn" id="rs">Recomeçar</button></div>
   <div id="rsc"></div>
