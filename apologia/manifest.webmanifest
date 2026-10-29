@@ -1,7 +1,7 @@
 {
- "name": "Apologia",
- "short_name": "Apologia",
- "description": "Escola de defesa da fé cristã para jovens",
+ "name": "Firmes",
+ "short_name": "Firmes",
+ "description": "Fé e política para jovens cristãos",
  "start_url": "./",
  "scope": "./",
  "display": "standalone",

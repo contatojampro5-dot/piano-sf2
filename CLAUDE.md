@@ -37,7 +37,7 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 - Print da tela no Linux: Xvfb + `LIBGL_ALWAYS_SOFTWARE=1` + `HOME=<pasta com .config/piano-sf2/config.json>`.
 
 ## Pasta `apologia/` (outro projeto)
-- App web separado (Escola Apologia, estudos para jovens), página única `apologia/index.html` servida pelo GitHub Pages
+- App web separado (Firmes: cursos Apologia e Contracorrente, estudos para jovens), página única `apologia/index.html` servida pelo GitHub Pages
   (`main`, raiz; `.nojekyll` na raiz). Não faz parte do programa do piano: não mexer nele nas versões do piano.
 
 ## Regras
