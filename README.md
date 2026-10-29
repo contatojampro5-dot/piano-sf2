@@ -273,6 +273,8 @@ A pasta [`apologia/`](apologia/) guarda o **Firmes**, um app de estudos para jov
 **Apologia** (defesa da fé, com Pedro, Paulo, Lucas e Daniel) e **Contracorrente** (formação política, com Samuel,
 Elias, Ester, Neemias, José, Moisés, Débora e Salomão). Tem trilha com "Você está aqui", lições em stories com
 minijogos, figurinhas, cards de revisão, treino de debate, livros e a aba Tempo (presidentes, quem é quem, STF).
+Na tela inicial de cada curso há um teste: "Onde você se encaixa hoje?" (27 situações, espectro da extrema
+esquerda à extrema direita e famílias de ideias) e "Com qual tradição cristã você mais se parece?" (17 perguntas, 12 tradições).
 Não tem nada a ver com o programa do piano; só mora neste repositório.
 
 - **Abrir no celular:** https://contatojampro5-dot.github.io/piano-sf2/apologia/

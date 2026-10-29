@@ -399,6 +399,29 @@ input[type="range"]{width:100%;accent-color:var(--accent);height:28px;margin:0}
 .msg.sys{align-self:center;background:transparent;color:var(--muted);font-size:.82rem;text-align:center}
 textarea{width:100%;min-height:96px;resize:vertical;border:1px solid var(--glass-border);border-radius:var(--r-md);background:var(--glass-strong);padding:12px 14px;line-height:1.5}
 textarea:focus{border-color:var(--accent);outline:none}
+/* Testes (político e de tradição cristã) */
+.t-home{display:flex;gap:14px;align-items:center;text-decoration:none;color:inherit;flex-wrap:wrap;border:1.5px solid var(--accent-soft)}
+.t-home .grow{min-width:0;flex:1 1 200px}.t-home b{display:block;font-size:1.08rem;margin:2px 0 4px}
+.t-ic{width:48px;height:48px;flex:none;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;color:#fff;background:linear-gradient(140deg,var(--accent),var(--accent-2))}
+.t-home.done .t-ic{background:linear-gradient(140deg,var(--ok),var(--ok-2))}
+.t-bar{height:6px;border-radius:99px;background:var(--fill);overflow:hidden;margin:10px 0 14px}.t-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:99px;transition:width .3s}
+.t-q{font-size:clamp(1.15rem,4.6vw,1.4rem);line-height:1.3}
+.t-opt{text-align:left;width:100%;border:1px solid var(--glass-border);background:var(--glass-strong);border-radius:var(--r-md);padding:13px 15px;line-height:1.42;cursor:pointer;min-height:48px;transition:transform .12s,border-color .12s,background .12s}
+.t-opt:hover{border-color:var(--accent)}.t-opt:active{transform:scale(.99)}
+.t-opt.on{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
+.t-sel{width:100%;border:1px solid var(--glass-border);border-radius:var(--r-md);background:var(--glass-strong);padding:12px 14px;min-height:46px}
+.t-spec{display:flex}.t-spec span{padding:6px 14px;border-radius:99px;background:var(--accent);color:var(--on-accent);font-weight:700;font-size:.9rem}
+.t-track b{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.7);transform:translateX(-1px)}
+.t-ticks{display:flex;justify-content:space-between;gap:8px}.t-ticks span:nth-child(2){text-align:center}.t-ticks span:last-child{text-align:right}
+.t-track{position:relative;height:10px;border-radius:99px;background:linear-gradient(90deg,#D64545,#E8A33B 35%,#9AA3B5 50%,#5B8DEF 65%,#2F55F5);margin:8px 0 4px}
+.t-track i{z-index:1;position:absolute;top:50%;width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid var(--ink);transform:translate(-50%,-50%);box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.t-axis{display:grid;gap:4px;padding:10px 0;border-top:1px solid var(--hair)}.t-axis:first-of-type{border-top:0}
+.t-axis .t-track{background:linear-gradient(90deg,var(--fill),var(--accent-soft),var(--fill))}
+.t-fam{border-top:1px solid var(--hair);padding:10px 0}.t-fam:first-of-type{border-top:0}
+.t-fam summary{display:flex;align-items:center;gap:12px;cursor:pointer;list-style:none}.t-fam summary::-webkit-details-marker{display:none}
+.t-fam summary .grow{display:grid;gap:6px;min-width:0;flex:1}.t-fam p{margin-top:8px}
+.t-pbar{display:block;height:7px;border-radius:99px;background:var(--fill);overflow:hidden}.t-pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:99px}
+.t-dif{border-left:3px solid var(--gold);padding:4px 0 4px 10px;display:grid;gap:3px}
 .num-in{border:1px solid var(--glass-border);border-radius:var(--r-md);background:var(--glass-strong);padding:11px 14px;min-height:44px;font-size:1.05rem;font-weight:700;text-align:center}
 .num-in:focus{border-color:var(--accent);outline:none}
 input[type="text"]{width:100%;border:1px solid var(--glass-border);border-radius:14px;background:var(--glass-strong);padding:11px 14px;min-height:44px}
@@ -2713,7 +2736,7 @@ function setCourse(id){
  if(D.MENTORS){MENTORS=D.MENTORS;MKEYS=D.MKEYS;FIGS=D.FIGS;STORIES=D.STORIES;RANKS=D.RANKS}
  if(typeof ST!=="undefined"&&ST)closeStory(false);
  S=loadState(C);normState();
- CS={filter:"Todos",queue:[],cur:null,shown:false,free:false};DB=null;QZ=null;BF="Todos";TF="Todos";TSEG="ideias";trailScrolled=false;FIGL=null;DU=null;
+ CS={filter:"Todos",queue:[],cur:null,shown:false,free:false};DB=null;QZ=null;BF="Todos";TF="Todos";TSEG="ideias";trailScrolled=false;FIGL=null;DU=null;TQ=null;
  SYNC={on:false,ref:null,timer:null,status:"local"};
  G.last=id;saveG();setBrand();syncCourse();
 }
@@ -2917,6 +2940,7 @@ function viewHome(){
   <h1>${C.h1}</h1>
   <p class="lead">${C.lead}</p>
  </section>
+ ${testCardHTML()}
  ${FEAT()?mentorsRow():""}
  <a class="card mini" href="#trilha" style="text-decoration:none;color:inherit">
   <div class="row" style="justify-content:space-between;flex-wrap:nowrap">
@@ -5160,6 +5184,369 @@ function bindSlide(s){
 }
 
 /* ================== ROTAS ================== */
+/* ================== TESTES: "Onde você se encaixa hoje?" (Política) e "Sua tradição cristã" (Cristianismo) ==================
+   Regra de escrita: cada opção é dita do jeito que quem a defende explicaria, com o custo que ela aceita pagar.
+   As opções aparecem embaralhadas. Política: cada opção soma em 3 eixos v=[Economia, Costumes, Poder]
+   (- = mais Estado / progressista / mais liberdade; + = mais mercado / tradicional / mais ordem e autoridade).
+   Fé: cada opção dá pontos (0..1) às tradições que a ensinam. */
+const POLT={
+ axes:[
+  {k:"E",n:"Economia",l:"Mais Estado",r:"Mais mercado",dl:"Você confia mais no governo para distribuir renda e garantir serviços.",dr:"Você confia mais em empresas, trabalho e trocas livres para gerar prosperidade.",dc:"Você mistura soluções do governo e do mercado, caso a caso."},
+  {k:"C",n:"Costumes",l:"Progressista",r:"Tradicional",dl:"Você tende a apoiar mudanças nos costumes e a ampliar escolhas individuais.",dr:"Você tende a preservar a família, a fé e os costumes que vieram das gerações anteriores.",dc:"Você é moderado nos costumes: aceita algumas mudanças e preserva outras."},
+  {k:"P",n:"Poder do governo",l:"Mais liberdade",r:"Mais ordem",dl:"Você desconfia de dar poder ao governo sobre a vida das pessoas, mesmo para coisas boas.",dr:"Você aceita um governo forte, com mais controle, para garantir ordem e resultados.",dc:"Você aceita autoridade, mas com limites e regras claras."}
+ ],
+ spectrum:["Extrema esquerda","Esquerda","Centro-esquerda","Centro","Centro-direita","Direita","Extrema direita"],
+ q:[
+ {t:"Economia",q:"O posto de saúde do seu bairro vive lotado. Qual caminho você apoiaria?",o:[
+  ["Ampliar o SUS com mais médicos e hospitais públicos, mesmo que seja preciso aumentar impostos.",[-2,0,0]],
+  ["Investir mais no SUS com o dinheiro que já existe e deixar os planos privados como estão.",[-1,0,0]],
+  ["Manter o SUS e contratar hospitais privados e filantrópicos para atender mais rápido pelo próprio SUS.",[0,0,0]],
+  ["Dar aos mais pobres um vale para escolher onde se tratar e cobrar menos imposto de quem já paga plano.",[1,0,0]],
+  ["Deixar a saúde com famílias, igrejas, caridade e mercado. O governo sai da área e cobra bem menos imposto.",[2,0,-1]]]},
+ {t:"Economia",q:"O governo vai definir o salário mínimo do ano que vem. O que você faria?",o:[
+  ["Um aumento forte acima da inflação: renda na mão do trabalhador move a economia, mesmo que algumas empresas sofram.",[-2,0,0]],
+  ["Dar um ganho real todo ano, um pouco acima da inflação, mesmo nos anos de crise.",[-1,0,0]],
+  ["Repor a inflação e dar ganho real só quando a economia crescer.",[0,0,0]],
+  ["Aumentos pequenos: um mínimo alto demais empurra os menos experientes para o desemprego ou a informalidade.",[1,0,0]],
+  ["Não deveria existir salário mínimo por lei: patrão e empregado combinam o valor livremente.",[2,0,-1]]]},
+ {t:"Economia",q:"Uma grande estatal, como os Correios ou uma empresa de energia, dá prejuízo em alguns anos e lucro em outros. O que fazer?",o:[
+  ["Manter estatal e investir mais: setores estratégicos devem pertencer ao povo, não a acionistas.",[-2,0,.5]],
+  ["Manter estatal, mas com gestão profissional, metas e sem indicações políticas.",[-.5,0,0]],
+  ["Privatizar, com uma agência reguladora fiscalizando preços e qualidade.",[1,0,0]],
+  ["Privatizar e abrir o setor para a concorrência, sem agência controlando preços.",[2,0,-.5]]]},
+ {t:"Economia",q:"As contas do governo não fecham. Qual seria a sua primeira medida?",o:[
+  ["Criar imposto sobre grandes fortunas e heranças altas: quem tem mais deve contribuir mais.",[-2,0,0]],
+  ["Cobrar um pouco mais de imposto de renda de quem ganha muito e menos de quem ganha pouco.",[-1,0,0]],
+  ["Revisar isenções e benefícios fiscais de vários setores, sem criar imposto novo.",[0,0,0]],
+  ["Cortar gastos e privilégios do próprio governo antes de pensar em qualquer imposto.",[1,0,0]],
+  ["Reduzir bastante os impostos de todos e encolher o governo, mesmo que alguns serviços deixem de existir.",[2,0,-1]]]},
+ {t:"Economia",q:"Sobre programas de renda como o Bolsa Família, qual frase é mais próxima do que você pensa?",o:[
+  ["Devem crescer até virar uma renda básica para todos os brasileiros.",[-2,0,0]],
+  ["Devem continuar, cobrando frequência escolar e vacinação dos filhos.",[-.5,0,0]],
+  ["Devem existir por um tempo, com porta de saída: curso, emprego e prazo para terminar.",[.5,0,0]],
+  ["O ideal é que acabem: ajudar os pobres cabe à família, à igreja e à comunidade.",[2,0,-.5]]]},
+ {t:"Economia",q:"Uma empresa quer contratar mais jovens, mas diz que as regras trabalhistas (CLT) encarecem cada vaga. O que você apoiaria?",o:[
+  ["Manter e ampliar as proteções da CLT: sem elas, o trabalhador fica sem defesa.",[-2,0,0]],
+  ["Manter a CLT e fiscalizar melhor as empresas que não cumprem a lei.",[-1,0,0]],
+  ["Manter a CLT, mas criar um contrato mais simples para o primeiro emprego.",[0,0,0]],
+  ["Deixar patrão e empregado negociarem quase tudo, com poucos direitos mínimos.",[1.5,0,0]],
+  ["Acabar com a CLT: cada contrato de trabalho é um acordo livre entre as partes.",[2,0,-.5]]]},
+ {t:"Economia",q:"Qual destas metas é a mais importante para um país mais justo?",o:[
+  ["Diminuir a distância entre ricos e pobres, mesmo que o país cresça mais devagar.",[-2,0,0]],
+  ["Diminuir a distância aos poucos, com escola de qualidade e impostos mais justos.",[-1,0,0]],
+  ["Crescer e, ao mesmo tempo, diminuir essa distância, com equilíbrio.",[0,0,0]],
+  ["Aumentar a renda dos mais pobres, mesmo que os ricos fiquem ainda mais ricos.",[1,0,0]],
+  ["Garantir que cada um fique com o fruto do seu trabalho: a desigualdade, por si só, não é injustiça.",[2,0,0]]]},
+ {t:"Economia",q:"A universidade pública é gratuita para todos, inclusive para quem poderia pagar. O que você acha?",o:[
+  ["Deve continuar gratuita para todos e ter muito mais vagas.",[-2,0,0]],
+  ["Continuar gratuita para todos, ampliando as vagas com cursos a distância e parcerias.",[-1,0,0]],
+  ["Gratuita para quem não pode pagar; quem tem renda alta paga mensalidade.",[0,0,0]],
+  ["O governo deveria financiar o aluno, e não a universidade: bolsas e crédito para estudar onde ele quiser.",[1,0,0]],
+  ["O governo não deveria manter universidades: o ensino superior é escolha e custo de cada um.",[2,0,-.5]]]},
+ {t:"Economia",q:"O aluguel subiu muito na sua cidade. O que deveria ser feito?",o:[
+  ["Limitar o valor dos aluguéis por lei e construir moradias públicas.",[-2,0,.5]],
+  ["Ampliar programas de casa própria com subsídio do governo para baixa renda.",[-.5,0,0]],
+  ["Facilitar a construção, cortando burocracia e regras que impedem prédios novos, para aumentar a oferta.",[1,0,-.5]],
+  ["Não interferir: o preço sobe e desce com a oferta e a procura.",[2,0,0]]]},
+ {t:"Costumes",q:"Hoje a lei brasileira permite o aborto em caso de estupro, de risco de vida da mãe e de anencefalia. O que você faria?",o:[
+  ["Permitir o aborto até 12 semanas, por escolha da mulher.",[0,-2,0]],
+  ["Manter a lei atual e garantir que os casos já permitidos sejam atendidos de verdade no SUS.",[0,-1,0]],
+  ["Manter a lei como está.",[0,0,0]],
+  ["Restringir mais, deixando só o caso de risco de vida da mãe, com apoio real às gestantes.",[0,1.5,0]],
+  ["Proibir em todos os casos.",[0,2,.5]]]},
+ {t:"Costumes",q:"Sobre o casamento civil entre pessoas do mesmo sexo, o que o Estado deveria fazer?",o:[
+  ["Reconhecer igual a qualquer outro casamento, com os mesmos direitos.",[0,-2,0]],
+  ["Garantir direitos civis, como herança e plano de saúde, mas com outro nome que não casamento.",[0,0,0]],
+  ["Sair do assunto: cada um faz seu contrato, e cada igreja celebra o casamento como entende.",[0,0,-1.5]],
+  ["Reconhecer como casamento só a união entre um homem e uma mulher.",[0,2,.5]]]},
+ {t:"Costumes",q:"Sobre a maconha, qual destas leis você apoiaria?",o:[
+  ["Legalizar produção e venda, com regras como as do álcool e do cigarro.",[.3,-1.5,-1.5]],
+  ["Não prender o usuário, mas manter a venda proibida.",[0,-.5,-.5]],
+  ["Manter como está: proibida.",[0,1,.5]],
+  ["Endurecer: penas maiores para usuários e traficantes.",[0,1.5,1.5]]]},
+ {t:"Costumes",q:"Na escola pública, quem deveria decidir como se ensinam sexualidade e temas morais?",o:[
+  ["A escola e os especialistas, com base em diretrizes nacionais, mesmo que alguns pais discordem.",[0,-1.5,.5]],
+  ["A escola e os pais juntos, com conteúdo combinado e transparente.",[0,0,0]],
+  ["Os pais: a escola ensina biologia e deixa os valores para as famílias.",[0,1,-.5]],
+  ["Os pais devem poder escolher outra escola ou educar em casa, levando junto o dinheiro público do aluno.",[0,1,-1]]]},
+ {t:"Costumes",q:"A câmara de vereadores da sua cidade faz uma oração antes de cada sessão. O que você acha?",o:[
+  ["Não deveria: o Estado é laico e não pode favorecer nenhuma religião.",[0,-1.5,0]],
+  ["Pode, se for voluntária e aberta a pessoas de todas as religiões.",[0,0,0]],
+  ["Deve: a fé do povo faz parte da nossa cultura e da nossa história.",[0,1.5,0]]]},
+ {t:"Costumes",q:"O governo deveria incentivar o casamento e as famílias com filhos, por exemplo com menos impostos para elas?",o:[
+  ["Não: o governo não deve dar preferência a nenhum modelo de família.",[0,-1.5,0]],
+  ["Deve ajudar as famílias com filhos, de qualquer tipo, sem preferir o casamento.",[0,-.3,0]],
+  ["Sim: famílias estáveis fazem bem às crianças e à sociedade, e o Estado pode incentivá-las.",[0,1.5,.5]],
+  ["Não é papel do governo. O melhor incentivo é cobrar menos imposto de todo mundo.",[.5,.5,-1]]]},
+ {t:"Costumes",q:"Sobre cotas raciais em universidades e concursos públicos, qual opção você escolheria?",o:[
+  ["Devem continuar e crescer: corrigem séculos de exclusão.",[-.5,-2,0]],
+  ["Melhor trocar por cotas de renda e de escola pública, que incluem pobres de todas as cores.",[0,.5,0]],
+  ["Não deveria haver cotas: todos entram por mérito, e o investimento vai para a escola básica.",[.5,1.5,0]]]},
+ {t:"Costumes",q:"Muitos venezuelanos e haitianos chegam ao Brasil procurando trabalho. O que o país deveria fazer?",o:[
+  ["Acolher todos, com documentos e ajuda do governo para recomeçar.",[-.5,-1.5,0]],
+  ["Acolher com controle, triagem e foco em integração e trabalho.",[0,0,0]],
+  ["Receber poucos, priorizar os brasileiros e fechar a fronteira quando faltar estrutura.",[0,1.5,1]],
+  ["Deixar entrar quem quiser trabalhar, sem ajuda do governo e sem barreiras.",[.5,-.5,-1]]]},
+ {t:"Costumes",q:"Em geral, quando a sociedade discute mudar costumes antigos, você pensa que:",o:[
+  ["Mudanças são bem-vindas: muitos costumes antigos eram injustos.",[0,-2,0]],
+  ["Em geral sou a favor de mudar, mas sem pressa e com diálogo.",[0,-1,0]],
+  ["Cada caso é um caso: algumas mudanças são boas, outras não.",[0,0,0]],
+  ["É melhor ser prudente: costumes que duraram muito tempo costumam ter um motivo.",[0,1.5,0]],
+  ["A sociedade deveria voltar aos valores de antigamente.",[0,2,.5]]]},
+ {t:"Segurança",q:"A violência aumentou no seu bairro. O que você apoiaria primeiro?",o:[
+  ["Investir em escola, emprego e cultura nas periferias: a polícia não resolve a raiz do problema.",[-1,-.5,-1]],
+  ["Polícia mais bem paga e treinada, com câmeras no uniforme e mais investigação.",[0,0,0]],
+  ["Penas maiores, menos benefícios para presos e mais liberdade para a polícia agir.",[0,.5,1.5]],
+  ["Facilitar que o cidadão se defenda e que o bairro contrate segurança privada.",[.5,0,-1]]]},
+ {t:"Segurança",q:"Um adolescente de 16 anos comete um homicídio. Como ele deveria responder?",o:[
+  ["Como menor, com medidas educativas: o foco é recuperar.",[0,-1,-1]],
+  ["Como menor, mas com medidas mais longas para crimes graves.",[0,0,.5]],
+  ["Como adulto, em crimes graves.",[0,1,1.5]]]},
+ {t:"Segurança",q:"Sobre o cidadão comum ter arma em casa, qual regra você escolheria?",o:[
+  ["Proibir: arma é assunto da polícia.",[0,-1,1]],
+  ["Permitir com regras rígidas: curso, exame psicológico e ficha limpa.",[0,0,0]],
+  ["É um direito: quem cumpre a lei deve poder ter e portar arma com facilidade.",[0,1,-1.5]]]},
+ {t:"Democracia",q:"Imagine um presidente que você admira muito. O Congresso e o STF travam os projetos dele, e ele propõe governar por decreto durante dois anos para resolver a crise. Você seria:",o:[
+  ["Contra: as regras valem mesmo quando atrapalham quem eu apoio.",[0,0,-1.5]],
+  ["Contra, mas entendo a frustração. O caminho é eleger um Congresso melhor.",[0,0,-1]],
+  ["A favor, se for temporário e por uma causa boa.",[0,0,1.5]],
+  ["A favor: um país precisa de um líder forte que resolva as coisas.",[0,0,2]]]},
+ {t:"Democracia",q:"Sobre notícias falsas e discursos ofensivos nas redes sociais, o que deveria acontecer?",o:[
+  ["O governo ou a Justiça devem obrigar as plataformas a apagar rapidamente o que for falso ou ofensivo.",[0,-1,1.5]],
+  ["As plataformas têm regras claras, e só a Justiça manda apagar algo, caso a caso.",[0,0,0]],
+  ["Quase nada deveria ser apagado: o remédio para uma ideia ruim é mais liberdade de expressão.",[0,.5,-1.5]]]},
+ {t:"Estado",q:"Qual frase descreve melhor o governo ideal para você?",o:[
+  ["Um governo grande, que garante saúde, educação, emprego e renda para todos.",[-2,0,1]],
+  ["Um governo forte nos serviços públicos, mas que deixa espaço para as empresas privadas.",[-1,0,.5]],
+  ["Um governo que cuida do básico (saúde, educação e segurança) e deixa o resto com o mercado.",[0,0,0]],
+  ["Um governo mínimo: só segurança, justiça e defesa.",[1.5,0,-1.5]],
+  ["Nenhum governo: até segurança e justiça poderiam ser serviços privados e voluntários.",[2,0,-2]]]},
+ {t:"Estado",q:"Sua cidade quer instalar câmeras com reconhecimento facial em todas as ruas para achar criminosos. Você:",o:[
+  ["Apoia: quem não deve não teme.",[0,.5,1.5]],
+  ["Apoia só com regras: dados apagados rapidamente e uso apenas com ordem judicial.",[0,0,0]],
+  ["É contra: é vigilância demais sobre pessoas inocentes.",[0,-.3,-1.5]]]},
+ {t:"Estado",q:"Numa epidemia grave, o governo pode obrigar o comércio a fechar e as pessoas a se vacinarem?",o:[
+  ["Sim: a saúde de todos vem antes da escolha individual.",[-.5,-.5,1.5]],
+  ["Só em casos extremos, por pouco tempo e com aprovação do Congresso.",[0,0,0]],
+  ["Não: o governo informa e recomenda, mas a decisão é de cada pessoa e de cada comerciante.",[.5,.5,-1.5]]]},
+ {t:"Democracia",q:"Como mudanças grandes deveriam acontecer num país?",o:[
+  ["Por eleições e leis, aos poucos, mesmo que demore.",[0,0,-.5]],
+  ["Com forte pressão popular, greves e ocupações, se for necessário.",[-.5,-.5,.5]],
+  ["Por um governo forte, com poder para impor as reformas.",[0,0,2]],
+  ["Por uma ruptura com o sistema (uma revolução), se ele for injusto demais.",[0,0,1.5]]]}
+ ],
+ fam:[
+  {id:"comunista",n:"Comunismo",p:[-.9,-.3,.8],d:"Defende o fim da propriedade privada dos meios de produção e uma economia planejada pelo Estado, guiada por um partido revolucionário, rumo a uma sociedade sem classes.",nm:"Marx, Lênin, Mao; no Brasil, partidos como PCB e PCO",cr:"Onde governou (URSS, China de Mao, Camboja, Cuba), houve partido único, fome e perseguição. Os defensores dizem que foram desvios ou cercos externos."},
+  {id:"anarq",n:"Anarquismo de esquerda",p:[-.8,-.8,-.9],d:"Quer abolir tanto o Estado quanto o capitalismo, trocando-os por comunidades e cooperativas organizadas de baixo para cima.",nm:"Proudhon, Bakunin, Kropotkin",cr:"Críticos perguntam quem protegeria as pessoas e os acordos sem nenhuma autoridade. As poucas experiências duraram pouco."},
+  {id:"socialista",n:"Socialismo democrático",p:[-.75,-.6,.1],d:"Quer transformar a economia por meio de eleições: muitas empresas públicas ou coletivas, serviços gratuitos amplos e forte redistribuição, mantendo a democracia.",nm:"Bernie Sanders (EUA); no Brasil, partidos como PSOL",cr:"Críticos apontam o custo fiscal, a fuga de investimentos e o risco de o Estado ficar grande demais."},
+  {id:"socdem",n:"Social-democracia",p:[-.4,-.3,0],d:"Aceita a economia de mercado, mas com Estado de bem-estar: impostos altos e progressivos, saúde e educação públicas fortes e proteção ao trabalhador.",nm:"Países nórdicos; no Brasil, o PT e o PSDB se apresentavam como social-democratas",cr:"Críticos apontam a carga tributária, o peso da burocracia e a dificuldade de manter o modelo com a população envelhecendo."},
+  {id:"progr",n:"Progressismo liberal",p:[-.2,-.85,-.3],d:"Põe a ênfase em direitos individuais e de minorias, mudanças nos costumes e Estado laico, com uma economia mista.",nm:"Os “liberals” dos EUA; parte da centro-esquerda brasileira",cr:"Conservadores dizem que ele enfraquece a família e a religião e usa o Estado para impor novos valores."},
+  {id:"centro",n:"Centrismo / moderação",p:[0,0,0],d:"Prefere soluções práticas e acordos entre os lados, desconfia de ideologias fechadas e decide caso a caso.",nm:"Muitos eleitores sem partido; partidos de centro",cr:"Uns dizem que falta clareza de princípios; outros, que é sabedoria prudente. Às vezes o “meio-termo” não é o certo."},
+  {id:"democr",n:"Democracia cristã",p:[-.15,.55,.15],d:"Inspirada na doutrina social cristã: dignidade da pessoa, família, subsidiariedade e solidariedade, com economia social de mercado.",nm:"Adenauer e Schuman (Europa do pós-guerra); Ludwig Erhard",cr:"Liberais acham que ela aceita Estado demais; progressistas, que é conservadora demais nos costumes."},
+  {id:"liberal",n:"Liberalismo clássico",p:[.65,-.1,-.4],d:"Liberdade individual, propriedade, Estado de direito, livre mercado e governo limitado. Nos costumes, costuma deixar cada um decidir.",nm:"Locke, Adam Smith, Tocqueville; no Brasil, Roberto Campos e o Partido Novo",cr:"Críticos dizem que ele confia demais no mercado; conservadores, que esquece a importância da tradição e da fé."},
+  {id:"conserv",n:"Conservadorismo liberal",p:[.5,.7,.2],d:"Une economia de mercado e governo limitado com a defesa da família, da fé, da tradição e de mudanças prudentes.",nm:"Burke, Reagan, Thatcher, Roger Scruton",cr:"Progressistas dizem que resiste a mudanças necessárias; libertários, que ele usa o Estado nos costumes."},
+  {id:"nacpop",n:"Nacional-conservadorismo",p:[-.1,.75,.6],d:"Ênfase na soberania nacional, no controle da imigração, na segurança, nos valores tradicionais e na crítica às elites globais. Aceita Estado ativo na economia quando protege o país.",nm:"Trump, Orbán, Meloni",cr:"Críticos, inclusive à direita, apontam o risco de personalismo, de protecionismo e de enfraquecer instituições."},
+  {id:"libert",n:"Libertarianismo",p:[.85,-.2,-.75],d:"Estado mínimo: só segurança, justiça e defesa. Liberdade quase total na economia e também na vida privada.",nm:"Mises, Rothbard, Nozick; Javier Milei se apresenta assim",cr:"Conservadores criticam a liberalização dos costumes; a esquerda, a falta de proteção aos mais pobres."},
+  {id:"ancap",n:"Anarcocapitalismo",p:[1,0,-1],d:"Nenhum Estado: até segurança, justiça e estradas seriam oferecidas por empresas e associações voluntárias, num mercado totalmente livre.",nm:"Murray Rothbard, Hans-Hermann Hoppe",cr:"Críticos perguntam como proteger os mais fracos e evitar que grupos armados privados virem um novo Estado."},
+  {id:"autorit",n:"Direita autoritária",p:[.1,1,.95],d:"Ordem acima de tudo: governo forte, costumes rígidos impostos por lei e pouca paciência com a oposição e com as regras democráticas.",nm:"Regimes militares e líderes autoritários de direita do século XX",cr:"Censura, perseguição a opositores e abuso de poder. A direita democrática também a rejeita."}
+ ]
+};
+
+const FET={
+ trads:[
+  {id:"catolica",n:"Católica Romana",ex:"Igreja Católica",d:"Bíblia e Tradição interpretadas pelo papa e pelos bispos, sete sacramentos, presença real de Cristo na Eucaristia, intercessão de Maria e dos santos, purgatório.",at:"Protestantes discordam sobretudo da autoridade do papa, da salvação que inclui obras e sacramentos e da oração aos santos."},
+  {id:"ortodoxa",n:"Ortodoxa",ex:"Igrejas Ortodoxas (grega, russa, antioquina)",d:"A Tradição viva dos concílios e dos pais da igreja, liturgia antiga, ícones, salvação como união com Deus (theosis) e bispos em sucessão apostólica.",at:"Protestantes questionam o peso da Tradição e a veneração de ícones e santos; católicos, a recusa da autoridade do papa."},
+  {id:"anglicana",n:"Anglicana",ex:"Igreja Episcopal Anglicana do Brasil e anglicanos tradicionais",d:"Bíblia em primeiro lugar, junto com a tradição e a razão. Culto litúrgico (Livro de Oração Comum), bispos e uma ponte entre o catolicismo e a Reforma.",at:"A tradição abriga visões muito diferentes, das mais conservadoras às mais liberais, o que divide a comunhão anglicana."},
+  {id:"luterana",n:"Luterana",ex:"IECLB e IELB",d:"Salvação só pela graça, mediante a fé; Lei e Evangelho; batismo de crianças; presença real de Cristo “em, com e sob” o pão e o vinho; culto litúrgico.",at:"Reformados discordam da visão da Ceia; batistas e pentecostais, do batismo infantil e da liturgia."},
+  {id:"presbiteriana",n:"Presbiteriana / Reformada",ex:"IPB, IPI, igrejas reformadas",d:"Soberania de Deus na salvação (calvinismo), batismo de crianças como sinal da aliança, governo por presbíteros, culto simples centrado na pregação.",at:"Arminianos discordam da predestinação; pentecostais, do cessacionismo comum nessas igrejas."},
+  {id:"batref",n:"Batista Reformada",ex:"Igrejas batistas reformadas e calvinistas",d:"Teologia calvinista com o batismo só de quem crê, por imersão; congregação com presbíteros; muitas seguem a Confissão de Fé Batista de 1689.",at:"Presbiterianos discordam do batismo só de adultos; arminianos, da predestinação."},
+  {id:"batista",n:"Batista",ex:"Convenção Batista Brasileira, batistas independentes",d:"Bíblia como única regra, batismo de quem crê por imersão, autonomia da igreja local, Ceia como memorial e segurança da salvação.",at:"Igrejas históricas discordam do batismo só de adultos; pentecostais, da cautela com os dons. Há batistas mais calvinistas e outros menos."},
+  {id:"metodista",n:"Metodista / Wesleyana",ex:"Igreja Metodista, Igreja do Nazareno",d:"Graça oferecida a todos e livre resposta humana (arminianismo), busca da santidade, ação social, batismo de crianças e bispos.",at:"Calvinistas discordam da visão da salvação; alguns criticam a abertura teológica de parte do metodismo mundial."},
+  {id:"pentecostal",n:"Pentecostal clássica",ex:"Assembleia de Deus, Congregação Cristã, Evangelho Quadrangular",d:"Batismo no Espírito Santo com o falar em línguas, dons espirituais hoje, culto avivado, evangelismo e, muitas vezes, arrebatamento antes da tribulação.",at:"Cessacionistas discordam dos dons hoje; outros criticam excessos de emoção ou de usos e costumes."},
+  {id:"carismatica",n:"Evangélica renovada / carismática",ex:"Batistas renovadas, Lagoinha, comunidades evangélicas",d:"Teologia evangélica com abertura aos dons do Espírito, louvor contemporâneo e espontâneo, liderança pastoral forte.",at:"Tradicionais apontam o risco de valorizar a experiência acima da doutrina; pentecostais clássicos, a falta de ênfase nas línguas."},
+  {id:"neopent",n:"Neopentecostal",ex:"Universal, Internacional da Graça, Mundial do Poder de Deus",d:"Ênfase em batalha espiritual, cura, libertação e prosperidade; liderança centralizada em bispos ou apóstolos; muita presença na mídia.",at:"Muitos evangélicos criticam a teologia da prosperidade e a centralização de poder. Os fiéis relatam vidas transformadas."},
+  {id:"adventista",n:"Adventista do Sétimo Dia",ex:"Igreja Adventista do Sétimo Dia",d:"Guarda do sábado, foco na volta de Jesus, cuidado com a saúde, sono da alma até a ressurreição e batismo por imersão.",at:"Outros evangélicos discordam da guarda do sábado como mandamento, do estado dos mortos e do peso dos escritos de Ellen White."}
+ ],
+ q:[
+ {t:"Autoridade",q:"Surgiu uma dúvida séria sobre doutrina. Quem tem a palavra final?",o:[
+  ["Só a Bíblia. Pastores, credos e tradição ajudam, mas podem errar.",{luterana:1,presbiteriana:1,batref:1,batista:1,metodista:.5,pentecostal:1,carismatica:1,neopent:.6,adventista:1,anglicana:.5}],
+  ["A Bíblia em primeiro lugar, lida junto com a tradição da igreja, a razão e a experiência.",{anglicana:1,metodista:1}],
+  ["A Bíblia e a Tradição, interpretadas com autoridade pelo papa e pelos bispos.",{catolica:1}],
+  ["A Bíblia dentro da Tradição viva da igreja: os concílios antigos e os pais da igreja.",{ortodoxa:1,anglicana:.3}],
+  ["A Bíblia, mas Deus também revela direções novas hoje por meio dos apóstolos e profetas da igreja.",{neopent:1,carismatica:.4,pentecostal:.2}]]},
+ {t:"Salvação",q:"Como uma pessoa é salva?",o:[
+  ["Somente pela fé em Cristo. As boas obras são fruto da salvação, não parte do pagamento.",{luterana:1,presbiteriana:1,batref:1,batista:1,metodista:1,pentecostal:1,carismatica:1,neopent:.8,adventista:1,anglicana:1}],
+  ["Pela graça, recebida pela fé e pelos sacramentos. A pessoa coopera com a graça e cresce em santidade.",{catolica:1,ortodoxa:.7,anglicana:.2}],
+  ["Pela graça, num caminho de união com Deus vivido na igreja, nos sacramentos e na oração.",{ortodoxa:1,catolica:.4}]]},
+ {t:"Salvação",q:"Por que algumas pessoas creem em Jesus e outras não?",o:[
+  ["Deus escolheu soberanamente quem seria salvo, e a graça dele sempre alcança os escolhidos.",{presbiteriana:1,batref:1,anglicana:.4,batista:.3}],
+  ["A salvação é toda obra de Deus, e quem se perde, se perde por culpa própria. Não dá para explicar tudo.",{luterana:1,batista:.6,anglicana:.6}],
+  ["Deus oferece a graça a todos e dá a cada pessoa a capacidade de aceitar ou rejeitar.",{metodista:1,pentecostal:1,carismatica:.8,neopent:1,adventista:1,batista:.6,catolica:.7,ortodoxa:.7}],
+  ["Deus e a pessoa cooperam: a graça vem primeiro, e a liberdade humana responde a ela.",{catolica:1,ortodoxa:1,metodista:.5}]]},
+ {t:"Salvação",q:"Uma pessoa verdadeiramente salva pode perder a salvação?",o:[
+  ["Não. Quem foi salvo de verdade vai perseverar até o fim.",{presbiteriana:1,batref:1,batista:1,anglicana:.3,carismatica:.5}],
+  ["Sim. Se a pessoa abandona a fé de forma consciente e persistente, pode se perder.",{metodista:1,pentecostal:1,adventista:1,luterana:1,neopent:1,catolica:1,ortodoxa:1,carismatica:.5,anglicana:.7}]]},
+ {t:"Batismo",q:"Quem deve ser batizado?",o:[
+  ["Os bebês de famílias cristãs e os adultos que se convertem.",{catolica:1,ortodoxa:1,anglicana:1,luterana:1,presbiteriana:1,metodista:1}],
+  ["Só quem já crê e confessa a fé, por imersão.",{batista:1,batref:1,pentecostal:1,carismatica:1,neopent:1,adventista:1}]]},
+ {t:"Batismo",q:"O que o batismo faz?",o:[
+  ["Lava o pecado e faz nascer de novo: é um meio da graça de Deus.",{catolica:1,ortodoxa:1,luterana:1,anglicana:.6}],
+  ["É sinal e selo da aliança de Deus, como a circuncisão no Antigo Testamento.",{presbiteriana:1,metodista:.8,anglicana:.6,batref:.5}],
+  ["É o testemunho público de obediência de quem já foi salvo.",{batista:1,batref:.8,pentecostal:1,carismatica:1,neopent:1,adventista:1}]]},
+ {t:"Ceia",q:"Na Santa Ceia (Eucaristia), o que acontece com o pão e o vinho?",o:[
+  ["Tornam-se de verdade o corpo e o sangue de Cristo, mesmo mantendo a aparência de pão e vinho.",{catolica:1,ortodoxa:.8}],
+  ["Cristo está realmente presente, mas isso é um mistério que não precisa ser explicado.",{ortodoxa:1,anglicana:1,luterana:.5,metodista:.3}],
+  ["O corpo e o sangue de Cristo estão presentes “em, com e sob” o pão e o vinho.",{luterana:1}],
+  ["Cristo está presente pelo Espírito, e o fiel se alimenta dele pela fé.",{presbiteriana:1,batref:1,metodista:1,anglicana:.6}],
+  ["É um memorial: lembramos com gratidão o sacrifício de Jesus.",{batista:1,pentecostal:1,carismatica:1,neopent:1,adventista:1,batref:.3}]]},
+ {t:"Espírito Santo",q:"Línguas, profecias e curas milagrosas continuam acontecendo hoje, como na igreja do livro de Atos?",o:[
+  ["Sim, e devem ser buscadas e praticadas nos cultos.",{pentecostal:1,carismatica:1,neopent:1}],
+  ["Deus pode fazer milagres hoje, mas esses dons não são o centro da vida da igreja.",{metodista:1,anglicana:1,catolica:1,ortodoxa:1,batista:.7,adventista:1,luterana:.6}],
+  ["Esses dons especiais foram para a época dos apóstolos e terminaram quando a Bíblia foi completada.",{presbiteriana:1,batref:1,batista:.7,luterana:.6}]]},
+ {t:"Espírito Santo",q:"Depois da conversão, existe uma experiência chamada batismo no Espírito Santo, com o sinal de falar em línguas?",o:[
+  ["Sim, e falar em línguas é a evidência inicial dela.",{pentecostal:1,neopent:.7,carismatica:.5}],
+  ["Existe uma experiência posterior com o Espírito, mas as línguas não são o sinal obrigatório.",{carismatica:1,metodista:.6,neopent:.6,pentecostal:.2,catolica:.3}],
+  ["Não: todo cristão recebe o Espírito Santo quando se converte.",{presbiteriana:1,batref:1,batista:1,luterana:1,anglicana:1,catolica:.8,ortodoxa:1,adventista:1,metodista:.5}]]},
+ {t:"Vida cristã",q:"Um irmão fiel, dizimista e que ora muito continua pobre e doente. O que você pensa?",o:[
+  ["Talvez falte fé ou algum passo de obediência: Deus quer que seus filhos prosperem e tenham saúde.",{neopent:1,carismatica:.2,pentecostal:.2}],
+  ["Deus pode curar e abençoar, mas não prometeu riqueza. O sofrimento também pode fazer parte da vida do fiel.",{catolica:1,ortodoxa:1,anglicana:1,luterana:1,presbiteriana:1,batref:1,batista:1,metodista:1,pentecostal:1,carismatica:1,neopent:.3,adventista:1}]]},
+ {t:"Igreja",q:"Quem deve tomar as decisões mais importantes da igreja?",o:[
+  ["Os bispos, em sucessão desde os apóstolos.",{catolica:1,ortodoxa:1,anglicana:1,metodista:.4,luterana:.3}],
+  ["Um conselho de presbíteros (anciãos) e concílios regionais.",{presbiteriana:1,batref:.6,adventista:.3}],
+  ["A própria congregação, em assembleia dos membros.",{batista:1,batref:.8,carismatica:.3}],
+  ["O pastor presidente, ou um apóstolo ou bispo principal, com sua equipe.",{pentecostal:1,neopent:1,carismatica:.8}],
+  ["Uma organização mundial, com conferências e associações que representam as igrejas.",{adventista:1,metodista:.6,luterana:.5}]]},
+ {t:"Igreja",q:"Qual é o dia de guarda do cristão?",o:[
+  ["O sábado, o sétimo dia, do pôr do sol de sexta ao de sábado.",{adventista:1}],
+  ["O domingo, dia do Senhor, guardado como mandamento de descanso e culto.",{presbiteriana:1,batref:1,catolica:1,ortodoxa:1}],
+  ["O domingo, por tradição de culto, mas nenhum dia é lei para o cristão.",{batista:1,pentecostal:1,carismatica:1,neopent:1,metodista:1,luterana:1,anglicana:1}]]},
+ {t:"Morte",q:"O que acontece com quem morre em Cristo?",o:[
+  ["Vai imediatamente estar com o Senhor, consciente, esperando a ressurreição.",{luterana:1,presbiteriana:1,batref:1,batista:1,metodista:1,pentecostal:1,carismatica:1,neopent:1,anglicana:1}],
+  ["Pode passar por uma purificação (o purgatório) antes do céu, e as nossas orações ajudam.",{catolica:1}],
+  ["Entra num estado de espera; a igreja ora pelos falecidos, sem definir um purgatório.",{ortodoxa:1,anglicana:.3}],
+  ["Dorme, sem consciência, até a ressurreição na volta de Jesus.",{adventista:1}]]},
+ {t:"Maria e os santos",q:"É certo pedir a Maria e aos santos que orem por nós?",o:[
+  ["Sim, e honramos Maria de um modo especial.",{catolica:1,ortodoxa:1,anglicana:.2}],
+  ["Honramos Maria como exemplo de fé, mas oramos só a Deus.",{luterana:1,presbiteriana:1,batref:1,batista:1,metodista:1,pentecostal:1,carismatica:1,neopent:1,adventista:1,anglicana:.8}]]},
+ {t:"Ministério",q:"Mulheres podem ser pastoras?",o:[
+  ["Sim, em qualquer função.",{metodista:1,anglicana:1,luterana:.7,neopent:1,carismatica:.7,pentecostal:.3,batista:.3}],
+  ["Podem ensinar e liderar ministérios, mas o pastorado é para homens.",{presbiteriana:1,batref:1,batista:.8,pentecostal:.8,adventista:.8,luterana:.3,carismatica:.4}],
+  ["Não, e o sacerdócio é só para homens, por tradição apostólica.",{catolica:1,ortodoxa:1}]]},
+ {t:"Culto",q:"Qual culto mais se parece com o que você entende como certo?",o:[
+  ["Litúrgico: leituras, orações e ritos fixos, com a Ceia (Eucaristia) no centro.",{catolica:1,ortodoxa:1,anglicana:1,luterana:.8,metodista:.4}],
+  ["Reverente e simples: hinos, leitura da Bíblia e pregação no centro.",{presbiteriana:1,batref:1,batista:.8,adventista:.8,luterana:.3,metodista:.5}],
+  ["Avivado: louvor longo, oração em voz alta, espontaneidade e manifestações do Espírito.",{pentecostal:1,carismatica:1,neopent:1,metodista:.2}]]},
+ {t:"Últimas coisas",q:"Sobre a volta de Jesus, o que você entende?",o:[
+  ["Antes da grande tribulação, a igreja será arrebatada; depois Jesus reina mil anos na terra.",{batista:.7,pentecostal:1,carismatica:.8,neopent:.7}],
+  ["Jesus volta uma vez, depois da tribulação, e então começa um reino de mil anos.",{adventista:.7,batref:.6,batista:.4}],
+  ["O milênio é simbólico: Cristo já reina, e na volta dele vêm o juízo final e a nova criação.",{catolica:1,ortodoxa:1,luterana:1,presbiteriana:1,anglicana:1,metodista:.8,batref:.6}]]}
+ ]
+};
+
+let TQ=null;
+const TEST=()=>C.id==="pol"?POLT:FET;
+function testCardHTML(){
+ const r=S.teste&&S.teste.res,pol=C.id==="pol";
+ if(r){const top=pol?`${esc(r.label)} · ${esc(POLT.fam.find(f=>f.id===r.fam[0][0]).n)}`:`${esc(FET.trads.find(t=>t.id===r.top[0][0]).n)} (${r.top[0][1]}%)`;
+  return`<a class="card t-home done" href="#teste"><span class="t-ic" aria-hidden="true">${pol?"◐":"✚"}</span><div class="grow"><span class="eyebrow">${pol?"Seu teste político":"Seu teste de tradição cristã"}</span><b>${top}</b><p class="small muted">Feito em ${fmtDay(r.at)}. Toque para ver o resultado ou refazer.</p></div></a>`}
+ return`<a class="card t-home" href="#teste"><span class="t-ic" aria-hidden="true">${pol?"◐":"✚"}</span><div class="grow"><span class="eyebrow">Faça o teste</span><b>${pol?"Onde você se encaixa hoje?":"Com qual tradição cristã você mais se parece?"}</b><p class="small muted">${pol?`${POLT.q.length} situações do dia a dia, sem resposta certa. Descubra se você está mais à esquerda, ao centro ou à direita, e qual família de ideias combina com você.`:`${FET.q.length} perguntas sobre o que você crê. Descubra com qual tradição você mais se parece e se a sua igreja crê no mesmo que você.`}</p></div><span class="btn pri">Começar</span></a>`;
+}
+function viewTeste(){
+ const T=TEST(),pol=C.id==="pol";
+ if(!TQ&&S.teste&&S.teste.res)return testResult();
+ if(!TQ)TQ={i:-1,self:null,ans:{},ord:T.q.map(q=>shuf(q.o.map((_,j)=>j)))};
+ if(TQ.i<0){
+  const opts=pol?[...POLT.spectrum,"Não sei dizer"]:[...FET.trads.map(t=>t.n),"Outra igreja / não sei","Não frequento igreja"];
+  app.innerHTML=`<a class="back" href="#inicio">${IC.back} Início</a>
+  <section class="hero"><span class="eyebrow">${pol?"Teste político":"Teste de tradição cristã"}</span><h1>${pol?"Onde você se encaixa hoje?":"Com qual tradição você mais se parece?"}</h1>
+  <p class="lead">${pol?"Quase todo mundo quer a mesma coisa: um país próspero, seguro e justo, com oportunidade para todos. O que muda é o caminho e o preço que cada um aceita pagar. Cada pergunta é uma situação real, e cada resposta está escrita do jeito que quem a defende explicaria.":"Cristãos sinceros discordam em vários pontos: batismo, Ceia, dons, salvação. Responda o que você realmente crê hoje, não o que acha que deveria responder."}</p></section>
+  <div class="card stack"><b>Não existe resposta certa.</b><p class="small muted">${pol?`São ${T.q.length} situações, cerca de 7 minutos. Se nenhuma opção servir, toque em “Nenhuma / não sei”.`:`São ${T.q.length} perguntas, cerca de 5 minutos. Se não souber, toque em “Não sei”.`} As opções aparecem em ordem aleatória.</p></div>
+  <div class="card stack"><label for="tself" class="small" style="font-weight:700">${pol?"Antes de começar: como você se vê hoje?":"Qual é a sua igreja hoje?"}</label>
+   <select id="tself" class="t-sel">${opts.map((o,i)=>`<option value="${i}"${TQ.self===i?" selected":""}>${esc(o)}</option>`).join("")}</select>
+   <p class="small muted">${pol?"No fim, você compara como se vê com o que as suas respostas mostram.":"No fim, você vê se a sua igreja crê no mesmo que você."}</p>
+   <div class="row"><button class="btn pri" id="tgo">Começar o teste</button></div></div>`;
+  $("#tgo").onclick=()=>{TQ.self=+$("#tself").value;TQ.i=0;viewTeste();window.scrollTo(0,0)};
+  return;
+ }
+ if(TQ.i>=T.q.length)return finishTeste();
+ const q=T.q[TQ.i],ord=TQ.ord[TQ.i],cur=TQ.ans[TQ.i],pct=Math.round(TQ.i/T.q.length*100);
+ app.innerHTML=`<div class="row" style="justify-content:space-between"><button class="back" id="tback" style="background:none;border:0;padding:0;cursor:pointer">${IC.back} ${TQ.i?"Voltar":"Início do teste"}</button><span class="small muted">${TQ.i+1} de ${T.q.length}</span></div>
+ <div class="t-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
+ <div class="card stack"><span class="eyebrow">${esc(q.t)}</span><h2 class="t-q">${esc(q.q)}</h2>
+  <div class="stack" style="gap:8px">${ord.map(j=>`<button class="t-opt${cur===j?" on":""}" data-j="${j}">${esc(q.o[j][0])}</button>`).join("")}</div>
+  <button class="btn ghost" id="tskip" style="align-self:flex-start">${pol?"Nenhuma / não sei":"Não sei"}</button></div>`;
+ const go=v=>{TQ.ans[TQ.i]=v;TQ.i++;setTimeout(()=>{viewTeste();window.scrollTo(0,0)},v==null?0:180)};
+ app.querySelectorAll(".t-opt").forEach(b=>b.onclick=()=>{app.querySelectorAll(".t-opt").forEach(x=>x.classList.toggle("on",x===b));go(+b.dataset.j)});
+ $("#tskip").onclick=()=>go(null);
+ $("#tback").onclick=()=>{TQ.i--;viewTeste();window.scrollTo(0,0)};
+}
+function polScore(ans){
+ const s=[0,0,0],m=[0,0,0];
+ POLT.q.forEach((q,i)=>{const a=ans[i];if(a==null)return;const v=q.o[a][1];for(let k=0;k<3;k++){const mx=Math.max(...q.o.map(o=>Math.abs(o[1][k])));if(mx){s[k]+=v[k];m[k]+=mx}}});
+ const ax=s.map((x,k)=>m[k]?Math.max(-1,Math.min(1,x/m[k])):0);
+ const lr=.5*ax[0]+.5*ax[1];
+ let b=lr<=-.7?0:lr<=-.4?1:lr<=-.15?2:lr<.15?3:lr<.4?4:lr<.7?5:6;
+ /* "extremo" = lado muito marcado + aceitar romper regras democráticas (decreto, ruptura) ou dar poder demais ao governo; igual para os dois lados */
+ const rupt=POLT.q.some((q,i)=>q.t==="Democracia"&&ans[i]!=null&&q.o[ans[i]][1][2]>=1.5),auth=rupt||ax[2]>=.6;
+ if(auth&&lr<=-.45&&Math.min(ax[0],ax[1])<=-.6)b=0;else if(auth&&lr>=.3&&Math.max(ax[0],ax[1])>=.65)b=6;else if(b===0)b=1;else if(b===6)b=5;
+ const fam=POLT.fam.map(f=>{const d=Math.hypot(ax[0]-f.p[0],ax[1]-f.p[1],ax[2]-f.p[2]);return[f.id,Math.max(0,Math.round(100*(1-d/1.8)))]}).sort((a,b)=>b[1]-a[1]);
+ return{ax:ax.map(x=>Math.round(x*100)/100),lr:Math.round(lr*100)/100,b,label:POLT.spectrum[b],fam:fam.slice(0,4)};
+}
+function feScore(ans){
+ const tot={},mx={};FET.trads.forEach(t=>{tot[t.id]=0;mx[t.id]=0});
+ FET.q.forEach((q,i)=>{const a=ans[i];if(a==null)return;FET.trads.forEach(t=>{const m=Math.max(...q.o.map(o=>o[1][t.id]||0));if(m){mx[t.id]+=m;tot[t.id]+=q.o[a][1][t.id]||0}})});
+ return{top:FET.trads.map(t=>[t.id,mx[t.id]?Math.round(100*tot[t.id]/mx[t.id]):0]).sort((a,b)=>b[1]-a[1])};
+}
+function finishTeste(){
+ const pol=C.id==="pol",n=Object.values(TQ.ans).filter(v=>v!=null).length;
+ if(n<(pol?8:6)){toast("Poucas respostas para um resultado. Responda pelo menos "+(pol?8:6)+" perguntas.");TQ.i=0;return viewTeste()}
+ const res=Object.assign(pol?polScore(TQ.ans):feScore(TQ.ans),{at:today(),self:TQ.self,n,ans:Object.assign({},TQ.ans)});
+ const first=!S.teste||!S.teste.res;S.teste={res};if(first)gain(15,"teste concluído");save();TQ=null;testResult();window.scrollTo(0,0);
+}
+function axisBar(a,v){const p=Math.round((v+1)*50);return`<div class="t-axis"><div class="row" style="justify-content:space-between"><b>${a.n}</b><span class="small muted">${v<=-.2?a.l:v>=.2?a.r:"Meio-termo"}</span></div>
+ <div class="t-track"><i style="left:${p}%"></i></div><div class="row small muted" style="justify-content:space-between"><span>${a.l}</span><span>${a.r}</span></div>
+ <p class="small">${v<=-.2?a.dl:v>=.2?a.dr:a.dc}</p></div>`}
+function testResult(){
+ const pol=C.id==="pol",r=S.teste.res;
+ let h=`<a class="back" href="#inicio">${IC.back} Início</a>`;
+ if(pol){
+  const pos=Math.round((r.lr+1)*50),self=r.self!=null&&r.self<7?r.self:null,f0=POLT.fam.find(f=>f.id===r.fam[0][0]);
+  h+=`<section class="hero"><span class="eyebrow">Seu resultado de hoje</span><h1>Você está mais para <em>${esc(r.label)}</em></h1>
+  <p class="lead">E a família de ideias mais parecida com você é <b>${esc(f0.n)}</b>.</p></section>
+  <div class="card stack"><div class="t-spec"><span class="on">${esc(r.label)}</span></div>
+   <div class="t-track wide"><i style="left:${pos}%"></i>${[1,2,3,4,5,6].map(k=>`<b style="left:${(k*100/7).toFixed(1)}%"></b>`).join("")}</div>
+   <div class="t-ticks small muted"><span>Extrema esquerda</span><span>Centro</span><span>Extrema direita</span></div>
+   ${self!=null?`<p class="small">${self===r.b?`Você disse que se via como <b>${esc(POLT.spectrum[self])}</b>, e as suas respostas confirmam isso.`:`Você disse que se via como <b>${esc(POLT.spectrum[self])}</b>, mas as suas respostas ficaram mais perto de <b>${esc(r.label)}</b>. Vale a pena pensar no porquê.`}</p>`:""}
+   <p class="small muted">Aqui, “extrema” só aparece para quem, além de posições muito fortes, aceita romper as regras democráticas (governar por decreto, fazer uma ruptura) ou dar poder demais ao governo. A regra é a mesma para a esquerda e para a direita.</p></div>
+  <div class="card stack"><h2 style="font-size:1.15rem">Seus três eixos</h2>${POLT.axes.map((a,k)=>axisBar(a,r.ax[k])).join("")}</div>
+  <div class="card stack"><h2 style="font-size:1.15rem">Famílias de ideias mais parecidas</h2>
+   ${r.fam.slice(0,3).map(([id,p],i)=>{const f=POLT.fam.find(x=>x.id===id);return`<details class="t-fam"${i?"":" open"}><summary><span class="grow"><b>${esc(f.n)}</b><span class="t-pbar"><i style="width:${p}%"></i></span></span><b>${p}%</b></summary>
+    <p class="small">${esc(f.d)}</p><p class="small"><b>Nomes conhecidos:</b> ${esc(f.nm)}.</p><p class="small"><b>Críticas comuns:</b> ${esc(f.cr)}</p></details>`}).join("")}</div>`;
+  const w=trackOf("w1");if(w&&trackUnlocked(w))h+=`<a class="card st-cta" href="#m-w1"><div><b>Entenda as vertentes da direita</b><p class="small muted">Lição 8.1: conservadores, liberais, libertários, democratas-cristãos e outros.</p></div><span class="btn">Abrir</span></a>`;
+ }else{
+  const T=FET.trads,top=T.find(t=>t.id===r.top[0][0]);
+  h+=`<section class="hero"><span class="eyebrow">Seu resultado de hoje</span><h1>Você se parece mais com a tradição <em>${esc(top.n)}</em></h1>
+  <p class="lead">Afinidade de ${r.top[0][1]}% com o que essa tradição costuma ensinar nos pontos do teste.</p></section>
+  <div class="card stack"><h2 style="font-size:1.15rem">As mais parecidas com você</h2>
+   ${r.top.slice(0,3).map(([id,p],i)=>{const t=T.find(x=>x.id===id);return`<details class="t-fam"${i?"":" open"}><summary><span class="grow"><b>${esc(t.n)}</b><span class="t-pbar"><i style="width:${p}%"></i></span></span><b>${p}%</b></summary>
+    <p class="small">${esc(t.d)}</p><p class="small"><b>Exemplos no Brasil:</b> ${esc(t.ex)}.</p><p class="small"><b>Onde outros discordam:</b> ${esc(t.at)}</p></details>`}).join("")}
+   <details><summary class="small" style="cursor:pointer;font-weight:600">Ver todas as tradições</summary><div class="stack" style="gap:6px;margin-top:8px">${r.top.map(([id,p])=>`<div class="row small" style="flex-wrap:nowrap"><span style="flex:1;min-width:0">${esc(T.find(x=>x.id===id).n)}</span><span class="t-pbar" style="width:40%"><i style="width:${p}%"></i></span><b style="width:42px;text-align:right">${p}%</b></div>`).join("")}</div></details></div>`;
+  const mine=r.self!=null&&r.self<T.length?T[r.self]:null;
+  if(mine){
+   const pts=[];FET.q.forEach((q,i)=>{const a=r.ans[i];if(a==null)return;const ws=q.o.map(o=>o[1][mine.id]||0),m=Math.max(...ws);if(!m)return;const ok=ws[a]>=m*.7;pts.push({q,a,ok,best:ws.indexOf(m)})});
+   const ok=pts.filter(p=>p.ok).length,dif=pts.filter(p=>!p.ok);
+   h+=`<div class="card stack"><span class="eyebrow">Sua igreja: ${esc(mine.n)}</span><h2 style="font-size:1.15rem">Você concorda com a posição mais comum da sua tradição em ${ok} de ${pts.length} pontos</h2>
+   ${dif.length?`<p class="small muted">Onde você pensa diferente:</p>${dif.map(p=>`<div class="t-dif"><b class="small">${esc(p.q.t)}: ${esc(p.q.q)}</b><p class="small">Você: ${esc(p.q.o[p.a][0])}</p><p class="small muted">Posição mais comum na tradição ${esc(mine.n)}: ${esc(p.q.o[p.best][0])}</p></div>`).join("")}`:`<p class="small">Você está em sintonia com a sua tradição em todos os pontos do teste.</p>`}
+   <p class="small muted">Cada igreja local pode ter as suas particularidades. Leve as diferenças para uma conversa com o seu pastor ou líder: é assim que a fé amadurece.</p></div>`;
+  }
+  h+=`<div class="card stack"><p class="small">Essas diferenças são reais, mas as tradições históricas confessam juntas a mesma fé central: um só Deus em três pessoas, Jesus verdadeiro Deus e verdadeiro homem, sua morte e ressurreição e a salvação pela graça de Deus.</p></div>`;
+ }
+ h+=`<div class="card stack"><b>O teste não pega tudo.</b><p class="small muted">É um retrato aproximado de como você pensa hoje, a partir de ${r.n} respostas. As pessoas amadurecem e mudam, e ninguém cabe inteiro num rótulo. Use o resultado para conhecer melhor o que você pensa e estudar mais.</p>
+ <div class="row"><button class="btn pri" id="tredo">Refazer o teste</button><a class="btn" href="#inicio">Voltar ao início</a></div></div>`;
+ app.innerHTML=h;
+ $("#tredo").onclick=()=>{TQ=null;const keep=S.teste;S.teste=null;TQ={i:-1,self:keep&&keep.res?keep.res.self:null,ans:{},ord:TEST().q.map(q=>shuf(q.o.map((_,j)=>j)))};S.teste=keep;viewTeste();window.scrollTo(0,0)};
+}
+
 function renderView(h){
  document.querySelectorAll(".figmodal").forEach(x=>x.remove());
  if(h!=="duelo")stopDuelTimer();
@@ -5167,6 +5554,7 @@ function renderView(h){
  if(h.startsWith("m-")){cur="trilha";viewModule(h.slice(2))}
  else if(h==="trilha")viewTrilha();
  else if(h==="tempo")viewTempo();
+ else if(h==="teste"){cur="inicio";viewTeste()}
  else if(h==="cards")viewCards();
  else if(h==="debate")viewDebate();
  else if(h==="duelo"){cur="debate";viewDuelo()}
