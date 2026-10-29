@@ -2758,7 +2758,26 @@ async function syncCourse(){
 }
 function queueSync(){if(!SYNC.on)return;const ref=SYNC.ref,st=S;clearTimeout(SYNC.timer);SYNC.timer=setTimeout(async()=>{SYNC.timer=null;try{await ref.set({state:st})}catch(e){if(SYNC.ref===ref){SYNC.on=false;SYNC.status="local"}}},2500)}
 function flushSync(){if(SYNC.on&&SYNC.timer){clearTimeout(SYNC.timer);SYNC.timer=null;SYNC.ref.set({state:S}).catch(()=>{})}}
+/* IA própria fora do Claude: o intermediário gratuito do Gemini (apologia/servidor-ia/worker.js).
+   AI_URL vazio = sem IA própria. Para testar outro endereço: abra o app com ?ia=https://... (fica salvo; ?ia= vazio apaga). */
+const AI_URL="";
+let AIX=false;
+function aiUrl(){let u="";try{const q=new URLSearchParams(location.search).get("ia");if(q!==null){if(q)localStorage.setItem("firmes.ia",q);else localStorage.removeItem("firmes.ia")}u=localStorage.getItem("firmes.ia")||""}catch(e){}return u||AI_URL}
+function extAI(){
+ const url=aiUrl();if(!/^https:\/\//.test(url))return null;
+ const call=async(input,o,json)=>{
+  const messages=typeof input==="string"?[{role:"user",content:input}]:input.map(m=>({role:m.role,content:String(m.content)}));
+  let r;try{r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages,json}),signal:o.signal})}
+  catch(e){const er=new Error("network");er.code=e.name==="AbortError"?"cancelled":"network";throw er}
+  let d={};try{d=await r.json()}catch(e){}
+  if(!r.ok||d.error||!d.text){const er=new Error(d.error||"http");er.code=["quota","rate_limited","refused"].includes(d.error)?d.error:"network";throw er}
+  return String(d.text)};
+ const f=async(input,o={})=>{const text=await call(input,o,false);if(o.onText)o.onText({text});return{text}};
+ f.json=async(p,o={})=>{const t=await call(p,o,true),m=t.match(/\{[\s\S]*\}/);try{return JSON.parse(m?m[0]:t)}catch(e){const er=new Error("json");er.code="invalid_json";throw er}};
+ AIX=true;return f;
+}
 async function initSample(){try{if(window.claude&&window.claude.use)SAMPLE=await claude.use("sample")}catch(e){SAMPLE=null}
+ if(!SAMPLE)SAMPLE=extAI();
  if(!SAMPLE||!C)return;const h=location.hash;
  if(/^#m-/.test(h))renderTutor(h.slice(3));else if(h==="#debate"&&!DB)viewDebate();else if(h==="#perfil")viewPerfil();}
 
@@ -3141,7 +3160,7 @@ function rate(r){
 
 /* ----- Debate ----- */
 let DB=null;
-function errMsg(c){return({rate_limited:"Muitas perguntas seguidas. Espere um pouco e tente de novo.",not_granted:"Sem permissão para usar o Claude. Use o treino offline.",sampling_disabled:"O Claude não está disponível nesta conta. Use o treino offline.",session_expired:"Sua sessão expirou. Entre de novo no Claude.",refused:"A IA não respondeu a essa mensagem. Reformule e tente outra vez.",invalid_json:"A avaliação veio num formato inesperado. Tente de novo."})[c]||"Falha de conexão. Tente de novo."}
+function errMsg(c){return({rate_limited:"Muitas perguntas seguidas. Espere um pouco e tente de novo.",not_granted:"Sem permissão para usar o Claude. Use o treino offline.",sampling_disabled:"O Claude não está disponível nesta conta. Use o treino offline.",session_expired:"Sua sessão expirou. Entre de novo no Claude.",refused:"A IA não respondeu a essa mensagem. Reformule e tente outra vez.",invalid_json:"A avaliação veio num formato inesperado. Tente de novo.",quota:"A IA gratuita do app chegou ao limite de agora. Tente mais tarde ou use o modo No ChatGPT."})[c]||"Falha de conexão. Tente de novo."}
 function viewDebate(){
  if(DB)return renderArena();
  app.innerHTML=`<section class="hero"><span class="eyebrow"><span class="rub">¶</span> Simulador</span><h1>Arena de debate</h1><p class="lead">Escolha um oponente e ${C.debateLead} contra objeções reais. ${SAMPLE?"Converse com a IA no papel da pessoa e receba nota em lógica, Bíblia, tom e clareza.":"Debata no ChatGPT gratuito, com o personagem já pronto, ou responda por escrito e compare com a resposta-modelo."}</p></section>
@@ -3290,7 +3309,7 @@ function viewPerfil(){
  <div class="card"><h2 style="font-size:1.2rem;margin-bottom:6px">Ajustes</h2>
   <div class="switch"><div><b>Modo líder</b><p class="small muted">Libera todos os níveis para o líder de jovens conferir o conteúdo.</p></div><input type="checkbox" class="ios" id="ul" ${S.unlockAll?"checked":""} aria-label="Modo líder"></div>
   <div class="switch"><div><b>Onde seu progresso fica salvo</b><p class="small muted">${SYNC.status==="conta"?"Na sua conta Claude: abre igual em qualquer aparelho.":"Neste aparelho e navegador. Limpar os dados do navegador apaga o progresso."}</p></div></div>
-  <div class="switch"><div><b>Simulador com IA</b><p class="small muted">${SAMPLE?"Disponível. Usa a sua conta Claude.":"Aqui o debate acontece no ChatGPT gratuito. O treino offline também funciona."}</p></div></div>
+  <div class="switch"><div><b>Simulador com IA</b><p class="small muted">${SAMPLE?(AIX?"Disponível. IA gratuita do próprio app (Gemini).":"Disponível. Usa a sua conta Claude."):"Aqui o debate acontece no ChatGPT gratuito. O treino offline também funciona."}</p></div></div>
   <div class="switch"><div><b>Mudar o que estudar</b><p class="small muted">Você está em ${C.label} (${C.brand}).</p></div><a class="btn" href="#escolher">Trocar</a></div>
   <div class="switch"><div><b>Recomeçar do zero</b><p class="small muted">Apaga XP, lições, cards e livros deste curso.</p></div><button class="btn" id="rs">Recomeçar</button></div>
   <div id="rsc"></div>
