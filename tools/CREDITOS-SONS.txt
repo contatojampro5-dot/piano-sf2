@@ -1,0 +1,21 @@
+Sons gratuitos do Piano SF2
+===========================
+
+Todos os sons vêm do projeto FreePats (https://freepats.zenvoid.org), montados por Roberto (zenvoid.org).
+Foram só juntados num arquivo (PacoteIgreja.sf2) e renomeados; o som é o original.
+
+PacoteIgreja.sf2 — domínio público (CC0 1.0, https://creativecommons.org/publicdomain/zero/1.0/):
+  Piano de Armario ......... Upright Piano KW (FreePats)
+  Piano Eletrico (4) ....... FM Piano 1 (FreePats)
+  Orgao de Igreja .......... Church Organ Emulation (FreePats)
+  Orgao Hammond ............ Drawbar Organ Emulation (FreePats)
+  Pad Coral ................ Synth Pad Choir (FreePats)
+  Pad Cordas Arco .......... Synth Pad Bowed (FreePats)
+  Pad New Age .............. New Age (FreePats)
+  Pad Varredura ............ Sweep Pad (FreePats)
+  Cordas ................... Synth Strings 1 (FreePats)
+  Harpa .................... Concert Harp (FreePats)
+  Sinos .................... Tubular Bells (FreePats)
+
+PianoSalamander.sf2 — Salamander Grand Piano V3 (Yamaha C5), criado por Alexander Holm,
+versão SF2 do FreePats. Licença Creative Commons Atribuição 3.0 (https://creativecommons.org/licenses/by/3.0/).

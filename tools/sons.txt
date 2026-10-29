@@ -1,0 +1,13 @@
+# id|nome do timbre no pacote|endereço oficial (FreePats). A ordem aqui é a ordem dos timbres no Pacote Igreja.
+upright|Piano de Armario|https://freepats.zenvoid.org/Piano/UprightPianoKW/UprightPianoKW-SF2-20220221.7z
+epiano|Piano Eletrico|https://github.com/freepats/fm-piano1/releases/download/2019-09-16/FM-Piano1-SF2-20190916.7z
+organ|Orgao de Igreja|https://freepats.zenvoid.org/Organ/ChurchOrganEmulation/ChurchOrganEmulation-SF2-20190924.tar.xz
+drawbar|Orgao Hammond|https://freepats.zenvoid.org/Organ/DrawbarOrganEmulation/DrawbarOrganEmulation-SF2-20190712.tar.xz
+choir|Pad Coral|https://github.com/freepats/synth-pad-choir/releases/download/2020-05-16/SynthPadChoir-SF2-20200516.7z
+bowed|Pad Cordas Arco|https://github.com/freepats/synth-pad-bowed/releases/download/2019-07-19/SynthPadBowed-SF2-20190719.7z
+newage|Pad New Age|https://github.com/freepats/new-age/releases/download/2019-07-30/NewAge-SF2-20190730.7z
+sweep|Pad Varredura|https://github.com/freepats/sweep-pad/releases/download/2019-08-13/SweepPad-SF2-20190813.7z
+strings|Cordas|https://github.com/freepats/synth-strings-1/releases/download/2020-05-28/SynthStrings1-SF2-20200528.7z
+harp|Harpa|https://freepats.zenvoid.org/OrchestralStrings/ConcertHarp/ConcertHarp-SF2-20200702.tar.xz
+bells|Sinos|https://github.com/freepats/tubular-bells1/releases/download/2024-11-30/TubularBells-SF2-20241130.7z
+salamander|Piano de Cauda Salamander|https://freepats.zenvoid.org/Piano/SalamanderGrandPiano/SalamanderGrandPiano-SF2-V3+20200602.tar.xz

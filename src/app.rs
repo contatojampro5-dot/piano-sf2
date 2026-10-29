@@ -16,6 +16,7 @@ use crate::engine::{Cmd, Engine, Garbage, Stats};
 use crate::midi::{self, BtCmd, SharedMidiStatus};
 use crate::model::*;
 use crate::pads;
+use crate::sons;
 use crate::theme::{self, th};
 
 // ---------- Cores ----------
@@ -50,6 +51,13 @@ struct UiState {
     /// Pedidos que só podem rodar com o `core` destravado (abrir arquivo trava a tela até escolher).
     open_sf2_dialog: bool,
     pad_file_dialog: Option<(usize, usize)>,
+    /// SF2 para abrir assim que o `core` destravar (ex.: botão "Usar este som").
+    load_sf2: Option<String>,
+    /// Janela "Sons grátis" e o download em andamento.
+    sons_open: bool,
+    download: Option<sons::Download>,
+    dl_frac: f32,
+    sons_msg: Option<(bool, String)>,
     /// Nota do som próprio do Pad Vivo (0 = C ... 11 = B).
     vivo_root_key: usize,
     /// Sequência de acordes mostrada na ajuda de escala.
@@ -146,6 +154,11 @@ impl PianoApp {
                 audio_devices: Vec::new(),
                 open_sf2_dialog: false,
                 pad_file_dialog: None,
+                load_sf2: None,
+                sons_open: false,
+                download: None,
+                dl_frac: 0.0,
+                sons_msg: None,
                 vivo_root_key: 0,
                 prog_idx: 0,
                 kb_open: false,
@@ -292,7 +305,11 @@ impl eframe::App for PianoApp {
         );
         rename_window(&ctx, &mut core, &mut self.ui);
         bt_window(&ctx, &mut self.ui, &self.midi_status, &self.bt);
+        sons_window(&ctx, &core, &mut self.ui);
         drop(core);
+        if let Some(path) = self.ui.load_sf2.take() {
+            load_sf2_async(self.core.clone(), path);
+        }
         if restart {
             self.restart_audio();
         }
@@ -718,10 +735,16 @@ fn top_bar(
                     .text(format!("Carregando {} · {:.0}%", l.file, frac * 100.0)),
             );
         } else {
-            let label = core
+            let full = core
                 .sf2_name
                 .clone()
                 .unwrap_or_else(|| "Abrir SF2...".into());
+            // Nome comprido não empurra o resto da barra (o nome inteiro aparece ao passar o mouse).
+            let label = if full.chars().count() > 20 {
+                format!("{}…", full.chars().take(18).collect::<String>())
+            } else {
+                full.clone()
+            };
             let btn = egui::Button::new(RichText::new(format!("📂 {label}")).size(15.0)).fill(
                 if core.sf2_name.is_some() {
                     th().glass_hi
@@ -731,11 +754,21 @@ fn top_bar(
             );
             if ui
                 .add(btn)
-                .on_hover_text("Escolher o arquivo .sf2")
+                .on_hover_text(format!("{full}\nClique para escolher outro arquivo .sf2"))
                 .clicked()
             {
                 // Não abre aqui: o `core` está travado por esta tela e o carregamento também precisa dele.
                 st.open_sf2_dialog = true;
+            }
+            if !core.cfg.is_hidden("sons_button")
+                && ui
+                    .add(egui::Button::new("⬇ Sons grátis").fill(th().glass_hi))
+                    .on_hover_text(
+                        "Baixar sons gratuitos (piano, órgão, pads...) prontos para usar",
+                    )
+                    .clicked()
+            {
+                st.sons_open = !st.sons_open;
             }
         }
         if let Some(e) = &core.load_error {
@@ -816,41 +849,7 @@ fn top_bar(
             }
             ui.add_space(10.0);
 
-            // CPU do áudio
-            let cpu = stats.cpu_permille.load(Ordering::Relaxed) as f32 / 10.0;
-            let cpu_color = if cpu < 60.0 {
-                GREEN
-            } else if cpu < 85.0 {
-                YELLOW
-            } else {
-                RED
-            };
-            ui.label(
-                RichText::new(format!("CPU {cpu:.0}%"))
-                    .color(cpu_color)
-                    .monospace(),
-            );
-
-            // Áudio
-            match &audio.info {
-                Some(info) => {
-                    let ms = info
-                        .buffer_frames
-                        .map(|f| f as f32 * 1000.0 / info.sample_rate as f32);
-                    let txt = match ms {
-                        Some(ms) => format!("🔊 {} kHz · {:.1} ms", info.sample_rate / 1000, ms),
-                        None => format!("🔊 {} kHz", info.sample_rate / 1000),
-                    };
-                    ui.label(RichText::new(txt).color(th().dim))
-                        .on_hover_text(&info.device);
-                }
-                None => {
-                    let err = audio.error.clone().unwrap_or_else(|| "sem saída".into());
-                    ui.label(RichText::new("🔇 Sem áudio").color(RED))
-                        .on_hover_text(err);
-                }
-            }
-
+            // Pouco espaço (tela pequena): mostra primeiro Mesinha/Piano, depois o áudio, e a CPU só se couber.
             // Aparelhos MIDI
             let ports = midi_status
                 .lock()
@@ -881,6 +880,48 @@ fn top_bar(
                 piano.map(|p| p.name.as_str()),
                 blink(core.piano_activity),
             );
+
+            // Áudio
+            match &audio.info {
+                Some(info) if ui.available_width() > 170.0 => {
+                    let ms = info
+                        .buffer_frames
+                        .map(|f| f as f32 * 1000.0 / info.sample_rate as f32);
+                    let txt = match ms {
+                        Some(ms) => format!("🔊 {} kHz · {:.1} ms", info.sample_rate / 1000, ms),
+                        None => format!("🔊 {} kHz", info.sample_rate / 1000),
+                    };
+                    ui.label(RichText::new(txt).color(th().dim))
+                        .on_hover_text(&info.device);
+                }
+                Some(_) => {}
+                None => {
+                    let err = audio.error.clone().unwrap_or_else(|| "sem saída".into());
+                    let txt = if ui.available_width() > 110.0 {
+                        "🔇 Sem áudio"
+                    } else {
+                        "🔇"
+                    };
+                    ui.label(RichText::new(txt).color(RED)).on_hover_text(err);
+                }
+            }
+
+            // CPU do áudio
+            let cpu = stats.cpu_permille.load(Ordering::Relaxed) as f32 / 10.0;
+            let cpu_color = if cpu < 60.0 {
+                GREEN
+            } else if cpu < 85.0 {
+                YELLOW
+            } else {
+                RED
+            };
+            if ui.available_width() > 80.0 {
+                ui.label(
+                    RichText::new(format!("CPU {cpu:.0}%"))
+                        .color(cpu_color)
+                        .monospace(),
+                );
+            }
         });
     });
     if st.editing {
@@ -1330,6 +1371,127 @@ fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: 
 
 // ---------- Bluetooth (conectar a mesinha direto) ----------
 
+fn sons_window(ctx: &egui::Context, core: &Core, st: &mut UiState) {
+    if let Some(dl) = &mut st.download {
+        match dl.poll() {
+            sons::Poll::Running(f) => {
+                st.dl_frac = f;
+                ctx.request_repaint_after(std::time::Duration::from_millis(250));
+            }
+            sons::Poll::Done => {
+                let p = &sons::CATALOG[dl.idx];
+                st.sons_msg = Some((
+                    true,
+                    format!("{} baixado! Clique em \"Usar este som\".", p.name),
+                ));
+                st.download = None;
+            }
+            sons::Poll::Failed(e) => {
+                st.sons_msg = Some((false, e));
+                st.download = None;
+            }
+        }
+    }
+    if !st.sons_open {
+        return;
+    }
+    let mut open = true;
+    let current = core.cfg.sf2_path.clone().unwrap_or_default();
+    egui::Window::new("Sons grátis")
+        .open(&mut open)
+        .collapsible(false)
+        .resizable(false)
+        .default_width(560.0)
+        .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+        .show(ctx, |ui| {
+            ui.label(RichText::new("Sons livres, que podem ser usados à vontade (até na igreja). 1) Baixar   2) Usar este som.").size(14.0));
+            ui.label(
+                RichText::new("Depois de usar, escolha o timbre de cada camada clicando no nome dela, como sempre. Seu SF2 de sempre continua aí: é só abrir ele de novo no 📂.")
+                    .size(12.0)
+                    .color(th().dim),
+            );
+            ui.add_space(6.0);
+            for (i, p) in sons::CATALOG.iter().enumerate() {
+                let path = sons::path(p).to_string_lossy().to_string();
+                let have = sons::installed(p);
+                let in_use = have && current == path;
+                egui::Frame::new()
+                    .fill(th().glass)
+                    .corner_radius(10.0)
+                    .inner_margin(10.0)
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(p.name).size(16.0).strong());
+                            ui.label(RichText::new(format!("{:.0} MB", p.bytes as f64 / 1e6)).color(th().dim));
+                            if in_use {
+                                ui.label(RichText::new("✔ tocando agora").color(GREEN));
+                            }
+                        });
+                        ui.label(RichText::new(p.about).size(13.0));
+                        ui.label(RichText::new(p.license).size(11.0).color(th().dim));
+                        let busy = st.download.as_ref().map(|d| d.idx);
+                        ui.horizontal(|ui| {
+                            if busy == Some(i) {
+                                let frac = st.dl_frac;
+                                ui.add(
+                                    egui::ProgressBar::new(frac)
+                                        .desired_width(300.0)
+                                        .text(format!("Baixando · {:.0}%", frac * 100.0)),
+                                );
+                                if ui.button("Cancelar").clicked() {
+                                    if let Some(dl) = st.download.take() {
+                                        dl.cancel();
+                                    }
+                                }
+                            } else if have {
+                                if !in_use
+                                    && ui
+                                        .add(egui::Button::new(RichText::new("▶ Usar este som").color(th().ink)).fill(GREEN))
+                                        .clicked()
+                                {
+                                    st.load_sf2 = Some(path.clone());
+                                    st.sons_msg = None;
+                                }
+                                if !in_use
+                                    && ui
+                                        .small_button("Apagar")
+                                        .on_hover_text("Tirar do notebook para liberar espaço")
+                                        .clicked()
+                                {
+                                    sons::remove(p);
+                                }
+                            } else if ui
+                                .add_enabled(busy.is_none(), egui::Button::new(RichText::new("⬇ Baixar").color(th().ink)).fill(ORANGE))
+                                .clicked()
+                            {
+                                match sons::Download::start(i) {
+                                    Ok(d) => {
+                                        st.download = Some(d);
+                                        st.dl_frac = 0.0;
+                                        st.sons_msg = None;
+                                    }
+                                    Err(e) => st.sons_msg = Some((false, e)),
+                                }
+                            }
+                        });
+                    });
+                ui.add_space(4.0);
+            }
+            if let Some((ok, m)) = &st.sons_msg {
+                ui.label(RichText::new(m).color(if *ok { GREEN } else { RED }));
+            }
+            ui.label(
+                RichText::new(format!("Ficam guardados em {}", sons::dir().display()))
+                    .size(11.0)
+                    .color(th().dim),
+            );
+        });
+    if !open {
+        st.sons_open = false;
+    }
+}
+
 fn bt_window(
     ctx: &egui::Context,
     st: &mut UiState,
@@ -1673,6 +1835,7 @@ fn edit_banner(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                         ("bt_button", "Botão Bluetooth"),
                         ("wizard_button", "Botão Configurar mesinha"),
                         ("learn_button", "Botão Aprender"),
+                        ("sons_button", "Botão Sons grátis"),
                     ];
                     for (id, label) in others {
                         if !core.cfg.is_hidden(id) && ui.button(label).clicked() {

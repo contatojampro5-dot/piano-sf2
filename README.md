@@ -115,6 +115,16 @@ textura curta e toca milhares de pedacinhos dela ao mesmo tempo, em qualquer tom
   diga em que nota ele está ("Seu som está em") e o Vivo vira pad de todos os tons com esse som.
 - Bem leve: Pad Vivo + reverb de igreja usam menos de 1% do processador.
 
+## Sons grátis (botão ⬇ Sons grátis)
+
+Sons livres (podem ser usados à vontade, até na igreja), todos do projeto [FreePats](https://freepats.zenvoid.org):
+- **Pacote Igreja** (224 MB): 14 timbres num SF2 só — piano de armário, 4 pianos elétricos, órgão de igreja, Hammond,
+  pads (coral, cordas, New Age, varredura), cordas, harpa e sinos. Domínio público (CC0).
+- **Piano de Cauda Salamander** (1,3 GB): Yamaha C5 de Alexander Holm (CC BY 3.0). Bonito, mas ocupa muito espaço.
+
+Clique em **⬇ Baixar**, espere a barra chegar ao fim e clique em **▶ Usar este som**. Ficam em `%APPDATA%\PianoSF2\sons`
+(o botão **Apagar** libera o espaço). Para voltar ao seu SF2 de sempre, abra ele de novo no 📂. Créditos: `tools/CREDITOS-SONS.txt`.
+
 ## Mesinha SMC-Mixer (padrão Mackie)
 
 | Na mesinha | No programa |
@@ -183,6 +193,11 @@ Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B)
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.12 — sons grátis
+- Botão **⬇ Sons grátis**: baixa o Pacote Igreja (14 timbres livres) ou o piano Salamander e abre com um clique.
+- O GitHub baixa os sons das fontes oficiais e guarda em Releases (`sons-v1`, workflow `sons.yml`, montador `tools/montar_pacote.py`).
+- Barra de cima não se embola em tela pequena (nome do SF2 encurtado; CPU/áudio somem se não couber).
 
 ### v0.11 — sequências de acordes
 - Linha discreta "Sequência" na ajuda de escala: as progressões mais usadas no louvor, já no tom do pad (◀ ▶ troca).

@@ -6,6 +6,7 @@ pub mod engine;
 pub mod granular;
 pub mod model;
 pub mod pads;
+pub mod sons;
 pub mod teoria;
 
 #[cfg(feature = "app")]

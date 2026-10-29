@@ -1,0 +1,62 @@
+# Baixa os sons gratuitos das fontes oficiais (FreePats), junta num pacote e guarda em Releases (tag "sons-v1").
+# O programa baixa daqui pela janela "Sons grátis". Roda só quando a lista ou o montador mudam (ou na mão).
+name: Sons gratis
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/sons.txt
+      - tools/montar_pacote.py
+      - .github/workflows/sons.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sons:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar e abrir os pacotes
+        run: |
+          sudo apt-get install -y p7zip-full >/dev/null
+          mkdir -p baixados abertos saida
+          grep -v '^#' tools/sons.txt | while IFS='|' read -r id nome url; do
+            [ -z "$id" ] && continue
+            echo "== $nome"
+            arq="baixados/$id.${url##*.}"
+            curl -fL --retry 4 -o "$arq" "$url"
+            mkdir -p "abertos/$id"
+            case "$url" in
+              *.7z) 7z x -y -o"abertos/$id" "$arq" >/dev/null ;;
+              *) tar -xf "$arq" -C "abertos/$id" ;;
+            esac
+          done
+
+      - name: Montar o Pacote Igreja e separar o piano Salamander
+        run: |
+          args=()
+          while IFS='|' read -r id nome url; do
+            [ -z "$id" ] && continue
+            [ "$id" = salamander ] && continue
+            f=$(find "abertos/$id" -iname '*.sf2' | head -1)
+            args+=("$nome=$f")
+          done < <(grep -v '^#' tools/sons.txt)
+          python3 tools/montar_pacote.py saida/PacoteIgreja.sf2 "${args[@]}"
+          cp "$(find abertos/salamander -iname '*.sf2' | head -1)" saida/PianoSalamander.sf2
+          cp tools/CREDITOS-SONS.txt saida/CREDITOS.txt
+          ls -l saida
+
+      - name: Publicar em Releases (sons-v1)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: sons-v1
+          name: Sons grátis (para o Piano SF2)
+          make_latest: false
+          files: saida/*
+          body: |
+            Sons gratuitos para o Piano SF2. Não precisa baixar daqui: no programa, clique em **⬇ Sons grátis**.
+            Todos vêm do projeto FreePats (https://freepats.zenvoid.org). Licenças e créditos em CREDITOS.txt.

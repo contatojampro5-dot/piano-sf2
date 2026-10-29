@@ -463,3 +463,96 @@ fn bench_vivo_and_church() {
         t.elapsed().as_secs_f64() / 10.0 * 100.0
     );
 }
+
+/// Abre cada SF2 de uma pasta, lista os timbres e toca uma nota (para conferir pacotes novos).
+/// `PIANO_SF2_DIR=pasta cargo test --release --no-default-features check_sf2_dir -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn check_sf2_dir() {
+    let Ok(dir) = std::env::var("PIANO_SF2_DIR") else {
+        return;
+    };
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    fn walk(p: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for e in std::fs::read_dir(p).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(&p, out);
+            } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("sf2")) {
+                out.push(p);
+            }
+        }
+    }
+    walk(std::path::Path::new(&dir), &mut files);
+    files.sort();
+    for f in files {
+        let t = std::time::Instant::now();
+        let sf = match SoundFont::new(&mut std::io::BufReader::new(
+            std::fs::File::open(&f).unwrap(),
+        )) {
+            Ok(s) => Arc::new(s),
+            Err(e) => {
+                println!("ERRO {}: {e}", f.display());
+                continue;
+            }
+        };
+        let names: Vec<String> = sf
+            .get_presets()
+            .iter()
+            .map(|p| {
+                format!(
+                    "{}:{} {}",
+                    p.get_bank_number(),
+                    p.get_patch_number(),
+                    p.get_name().trim()
+                )
+            })
+            .collect();
+        let (tx, rx) = unbounded::<Cmd>();
+        let (gtx, _g) = unbounded();
+        let mut engine = Engine::new(rx, gtx, Arc::new(Stats::default()));
+        let mut core = Core::new(Config::default(), tx);
+        core.sample_rate = 48_000;
+        core.install_sound_font(sf.clone(), "x".into());
+        let mut out = vec![0.0; 512];
+        engine.render_interleaved(&mut out, 2);
+        core.note_on(60, 100);
+        let mut all = Vec::new();
+        for _ in 0..80 {
+            engine.render_interleaved(&mut out, 2);
+            all.extend_from_slice(&out);
+        }
+        let mb = std::fs::metadata(&f).unwrap().len() as f64 / 1e6;
+        println!(
+            "OK {:>6.1} MB  {:>4.1}s  som {:.3}  {} timbres: {}  <- {}",
+            mb,
+            t.elapsed().as_secs_f32(),
+            rms(&all),
+            names.len(),
+            names
+                .iter()
+                .take(6)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(" | "),
+            f.file_name().unwrap().to_string_lossy()
+        );
+        // cada timbre sozinho tem que soar
+        for p in sf.get_presets() {
+            let settings = rustysynth::SynthesizerSettings::new(48_000);
+            let mut syn = rustysynth::Synthesizer::new(&sf, &settings).unwrap();
+            syn.process_midi_message(0, 0xB0, 0, p.get_bank_number());
+            syn.process_midi_message(0, 0xC0, p.get_patch_number(), 0);
+            syn.note_on(0, 60, 100);
+            let (mut l, mut r) = (vec![0.0; 24_000], vec![0.0; 24_000]);
+            syn.render(&mut l, &mut r);
+            println!(
+                "   {:.3}  {}:{} {}",
+                rms(&l),
+                p.get_bank_number(),
+                p.get_patch_number(),
+                p.get_name().trim()
+            );
+        }
+    }
+}
