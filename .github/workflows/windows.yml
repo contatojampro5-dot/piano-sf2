@@ -4,6 +4,10 @@ name: Windows
 on:
   push:
     branches: [main]
+    # Mudanças só no app de estudos (apologia/) não precisam remontar o .exe.
+    paths-ignore:
+      - 'apologia/**'
+      - '.nojekyll'
   workflow_dispatch:
 
 permissions:
