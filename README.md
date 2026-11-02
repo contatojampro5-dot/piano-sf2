@@ -269,18 +269,7 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Outro projeto: Firmes (app de estudos para os jovens)
 
-A pasta [`apologia/`](apologia/) guarda o **Firmes**, um app de estudos para jovens cristãos com dois cursos:
-**Apologia** (defesa da fé, com Pedro, Paulo, Lucas e Daniel) e **Contracorrente** (formação política, com Samuel,
-Elias, Ester, Neemias, José, Moisés, Débora e Salomão). Tem trilha com "Você está aqui", lições em stories com
-minijogos, figurinhas, cards de revisão, treino de debate, livros e a aba Tempo (presidentes, quem é quem, STF).
-Na tela inicial de cada curso há um teste: "Onde você se encaixa hoje?" (27 situações, espectro da extrema
-esquerda à extrema direita e famílias de ideias) e "Com qual tradição cristã você mais se parece?" (17 perguntas, 12 tradições).
-Na trilha de livros da Política, "O mínimo que você precisa saber para não ser um idiota" tem leitura guiada:
-os 181 artigos originais, gratuitos no site do autor, na ordem dos capítulos, com marcação de lidos.
-Não tem nada a ver com o programa do piano; só mora neste repositório.
+O app de estudos **Firmes** (cursos Apologia e Contracorrente) mudou para o repositório próprio
+[`escola-apologia-`](https://github.com/contatojampro5-dot/escola-apologia-).
 
-- **Abrir no celular:** https://contatojampro5-dot.github.io/piano-sf2/apologia/
-- No iPhone: abra no Safari → Compartilhar → **Adicionar à Tela de Início** para virar um "app".
-- O progresso fica salvo no aparelho. Na versão aberta pelo Claude, o debate com IA acontece dentro do app.
-- IA própria grátis no link do GitHub (Gemini, via um intermediário na Cloudflare): passo a passo em
-  [`apologia/servidor-ia/GUIA.md`](apologia/servidor-ia/GUIA.md). Sem ela, o app oferece o debate no ChatGPT gratuito.
+- **Abrir no celular:** https://contatojampro5-dot.github.io/escola-apologia-/
