@@ -276,7 +276,7 @@ minijogos, figurinhas, cards de revisão, treino de debate, livros e a aba Tempo
 Na tela inicial de cada curso há um teste: "Onde você se encaixa hoje?" (27 situações, espectro da extrema
 esquerda à extrema direita e famílias de ideias) e "Com qual tradição cristã você mais se parece?" (17 perguntas, 12 tradições).
 Na trilha de livros da Política, "O mínimo que você precisa saber para não ser um idiota" tem leitura guiada:
-os 180 artigos originais, gratuitos no site do autor, na ordem dos capítulos, com marcação de lidos.
+os 181 artigos originais, gratuitos no site do autor, na ordem dos capítulos, com marcação de lidos.
 Não tem nada a ver com o programa do piano; só mora neste repositório.
 
 - **Abrir no celular:** https://contatojampro5-dot.github.io/piano-sf2/apologia/
