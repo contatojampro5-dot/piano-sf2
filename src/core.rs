@@ -13,7 +13,7 @@ use rustysynth::SoundFont;
 use crate::engine::{Cmd, Engine};
 use crate::granular::{GrainParams, GrainSource, GranularVoice};
 use crate::model::*;
-use crate::pads::{self, PadClip, ALL_BANKS, PAD_BANKS, PAD_KEYS};
+use crate::pads::{self, PadClip, ALL_BANKS, MY_BANK, PAD_BANKS, PAD_KEYS};
 
 /// Pedido de carregar um pad: (banco, tom, arquivo próprio).
 pub type PadJob = (usize, usize, Option<String>);
@@ -108,6 +108,8 @@ pub struct Core {
     pub last_signal: Option<String>,
     /// Texturas do Pad Vivo já carregadas (3).
     pub textures: Vec<Option<Arc<GrainSource>>>,
+    /// Som do "Meu pad" (um arquivo para os 12 tons) e se já está sendo carregado.
+    pub my_pad_clips: Vec<Option<Arc<PadClip>>>,
     tex_jobs: std::collections::HashSet<usize>,
     grain_seed: u32,
     pub wizard: Option<Wizard>,
@@ -164,6 +166,7 @@ impl Core {
             pad_loader: None,
             last_signal: None,
             textures: vec![None, None, None],
+            my_pad_clips: vec![None; pads::MY_SLOTS],
             tex_jobs: Default::default(),
             grain_seed: 0x1234_5678,
             wizard: None,
@@ -320,6 +323,167 @@ impl Core {
         }
     }
 
+    // ---------- Meus pads (um arquivo em todos os tons, até 4, com nome) ----------
+
+    fn request_my_pad(&mut self, i: usize) {
+        let Some(path) = self.cfg.my_pads.get(i).map(|m| m.path.clone()) else {
+            return;
+        };
+        if self.my_pad_clips[i].is_some() || !self.pad_jobs.insert((MY_BANK + i, 0)) {
+            return;
+        }
+        match &self.pad_loader {
+            Some(tx) => {
+                let _ = tx.send((MY_BANK + i, 0, Some(path)));
+            }
+            None => {
+                let r = pads::load_my_pad(&path);
+                self.my_pad_loaded(i, &path, r);
+            }
+        }
+    }
+
+    /// `path` = arquivo que foi carregado (se o Theo trocou no meio, o resultado velho é jogado fora).
+    pub fn my_pad_loaded(&mut self, i: usize, path: &str, result: Result<Arc<PadClip>, String>) {
+        self.pad_jobs.remove(&(MY_BANK + i, 0));
+        if self.cfg.my_pads.get(i).map(|m| m.path.as_str()) != Some(path) {
+            self.request_my_pad(i);
+            return;
+        }
+        match result {
+            Ok(clip) => {
+                let m = &mut self.cfg.my_pads[i];
+                if m.auto_key {
+                    m.key = pads::detect_key(&clip);
+                    m.auto_key = false;
+                    self.dirty = true;
+                    let msg = format!("{}: o som está em {}", m.name, pads::KEY_NAMES[m.key]);
+                    self.notify(msg);
+                }
+                self.my_pad_clips[i] = Some(clip);
+                if self.pad_pending.is_some_and(|(b, _)| b == MY_BANK + i) {
+                    let key = self.pad_pending.unwrap().1;
+                    self.start_pad(key);
+                }
+            }
+            Err(e) => {
+                let name = self.cfg.my_pads[i].name.clone();
+                self.notify(format!("{name}: {e}"));
+                self.remove_my_pad(i);
+            }
+        }
+        self.request_repaint();
+    }
+
+    /// Põe um arquivo novo nos "Meus pads" (vira o estilo escolhido). Cheio (4) = troca o último.
+    /// `key` = None: o programa descobre o tom pelo som.
+    pub fn add_my_pad(&mut self, path: String, key: Option<usize>) {
+        let name = pads::name_from_file(&path);
+        if self.cfg.my_pads.len() >= pads::MY_SLOTS {
+            self.cfg.my_pads.pop();
+        }
+        self.cfg.my_pads.push(MyPad {
+            name,
+            path,
+            key: key.unwrap_or(0) % PAD_KEYS,
+            auto_key: key.is_none(),
+        });
+        let i = self.cfg.my_pads.len() - 1;
+        self.my_pad_clips[i] = None;
+        self.dirty = true;
+        self.cfg.pad_bank = MY_BANK + i;
+        self.request_my_pad(i);
+        if let Some(k) = self.pad_active {
+            self.start_pad(k);
+        }
+    }
+
+    /// Põe de volta um pad da parceria que foi tirado.
+    pub fn restore_partner_pad(&mut self, n: usize) {
+        let Some(p) = pads::PARTNER_PADS.get(n) else {
+            return;
+        };
+        let path = pads::partner_path(n);
+        if self.cfg.my_pads.len() >= pads::MY_SLOTS
+            || self.cfg.my_pads.iter().any(|m| m.path == path)
+        {
+            return;
+        }
+        self.cfg.my_pads.push(MyPad {
+            name: p.name.into(),
+            path,
+            key: p.key,
+            auto_key: false,
+        });
+        let i = self.cfg.my_pads.len() - 1;
+        self.my_pad_clips[i] = None;
+        self.dirty = true;
+        self.cfg.pad_bank = MY_BANK + i;
+        self.request_my_pad(i);
+        if let Some(k) = self.pad_active {
+            self.start_pad(k);
+        }
+    }
+
+    /// Tira um dos "Meus pads" (os de depois sobem uma posição).
+    pub fn remove_my_pad(&mut self, i: usize) {
+        if i >= self.cfg.my_pads.len() {
+            return;
+        }
+        let was = pads::my_slot(self.cfg.pad_bank);
+        self.cfg.my_pads.remove(i);
+        self.my_pad_clips.remove(i);
+        self.my_pad_clips.push(None);
+        self.dirty = true;
+        match was {
+            Some(j) if j == i => {
+                self.pad_stop();
+                self.cfg.pad_bank = 0;
+            }
+            Some(j) if j > i => self.cfg.pad_bank -= 1,
+            _ => {}
+        }
+    }
+
+    pub fn rename_my_pad(&mut self, i: usize, name: &str) {
+        if let Some(m) = self.cfg.my_pads.get_mut(i) {
+            if m.name != name {
+                m.name = name.chars().take(28).collect();
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// Estilos de pad do programa (Escuro, Coral, Suave, Vivos) estão na tela? (v0.13: escondidos,
+    /// ficam só os "Meus pads"; voltam pelo ✏ Editar.)
+    pub fn builtin_pads(&self) -> bool {
+        !self.cfg.is_hidden("pad_styles")
+    }
+
+    /// Nome do estilo para a tela (os "Meus pads" aparecem com o nome que o Theo deu).
+    pub fn pad_bank_label(&self, bank: usize) -> String {
+        match pads::my_slot(bank % ALL_BANKS).and_then(|i| self.cfg.my_pads.get(i)) {
+            Some(m) => m.name.clone(),
+            None => pads::bank_name(bank).to_string(),
+        }
+    }
+
+    /// Corrige em que tom o som do "Meu pad" `i` está.
+    pub fn set_my_pad_key(&mut self, i: usize, key: usize) {
+        let Some(m) = self.cfg.my_pads.get_mut(i) else {
+            return;
+        };
+        if m.key == key % PAD_KEYS {
+            return;
+        }
+        m.key = key % PAD_KEYS;
+        m.auto_key = false;
+        self.dirty = true;
+        if let Some(k) = self.pad_active.filter(|_| self.cfg.pad_bank == MY_BANK + i) {
+            self.start_pad(k);
+        }
+    }
+
     // ---------- Pads ----------
 
     fn request_pad(&mut self, bank: usize, key: usize) {
@@ -340,6 +504,13 @@ impl Core {
 
     /// Deixa os 12 tons do banco prontos (em segundo plano).
     pub fn preload_pad_bank(&mut self, bank: usize) {
+        if let Some(i) = pads::my_slot(bank % ALL_BANKS) {
+            self.request_my_pad(i);
+            return;
+        }
+        if !self.builtin_pads() {
+            return; // escondidos: nem ocupam memória
+        }
         if pads::is_vivo(bank % ALL_BANKS) {
             self.request_texture(bank % ALL_BANKS - PAD_BANKS);
             return;
@@ -384,8 +555,36 @@ impl Core {
     }
 
     fn start_pad(&mut self, key: usize) {
+        if self.cfg.pad_bank < MY_BANK && !self.builtin_pads() {
+            if self.cfg.my_pads.is_empty() {
+                self.pad_active = None;
+                self.notify(
+                    "Pads: ponha um pad seu em \"+ Pôr um pad meu\" (aba Pads).".to_string(),
+                );
+                return;
+            }
+            self.cfg.pad_bank = MY_BANK;
+            self.dirty = true;
+        }
         let bank = self.cfg.pad_bank;
         self.pad_active = Some(key);
+        if let Some(i) = pads::my_slot(bank) {
+            match (self.my_pad_clips[i].clone(), self.cfg.my_pads.get(i)) {
+                (Some(clip), Some(m)) => {
+                    self.pad_pending = None;
+                    self.send(Cmd::PadPlay(clip, pads::my_pad_pitch(m.key, key)));
+                }
+                (None, Some(_)) => {
+                    self.pad_pending = Some((bank, key));
+                    self.request_my_pad(i);
+                }
+                _ => {
+                    self.pad_active = None;
+                    self.notify("Meu pad: escolha o arquivo primeiro (aba Pads).".to_string());
+                }
+            }
+            return;
+        }
         if pads::is_vivo(bank) {
             let n = bank - PAD_BANKS;
             match self.textures[n].clone() {
@@ -413,7 +612,7 @@ impl Core {
         match self.pad_clips[bank][key].clone() {
             Some(clip) => {
                 self.pad_pending = None;
-                self.send(Cmd::PadPlay(clip));
+                self.send(Cmd::PadPlay(clip, 1.0));
             }
             None => {
                 self.pad_pending = Some((bank, key));
@@ -453,7 +652,13 @@ impl Core {
     }
 
     pub fn set_pad_bank(&mut self, bank: usize) {
-        let bank = bank % ALL_BANKS;
+        let mut bank = bank % ALL_BANKS;
+        if pads::my_slot(bank).is_some_and(|i| i >= self.cfg.my_pads.len()) {
+            bank = 0; // só entram na volta dos estilos os "Meus pads" que têm arquivo
+        }
+        if bank < MY_BANK && !self.builtin_pads() && !self.cfg.my_pads.is_empty() {
+            bank = MY_BANK; // estilos do programa escondidos: a volta é só entre os pads do Theo
+        }
         if bank == self.cfg.pad_bank {
             return;
         }
@@ -463,13 +668,13 @@ impl Core {
         if let Some(k) = self.pad_active {
             self.start_pad(k); // troca suave para o mesmo tom no outro banco
         }
-        self.notify(format!("Pads: {}", pads::bank_name(bank)));
+        self.notify(format!("Pads: {}", self.pad_bank_label(bank)));
     }
 
     /// Põe um arquivo próprio num botão (None = volta ao som padrão).
     pub fn set_pad_file(&mut self, bank: usize, key: usize, path: Option<String>) {
-        if pads::is_vivo(bank) {
-            return; // Vivo usa um arquivo só para todos os tons: set_vivo_file
+        if bank >= PAD_BANKS {
+            return; // Vivo e Meu pad usam um arquivo só para todos os tons
         }
         self.cfg
             .pad_files
@@ -486,6 +691,9 @@ impl Core {
     }
 
     pub fn pad_ready(&self, bank: usize, key: usize) -> bool {
+        if let Some(i) = pads::my_slot(bank) {
+            return self.my_pad_clips[i].is_some();
+        }
         if pads::is_vivo(bank) {
             return self.textures[bank - PAD_BANKS].is_some();
         }
@@ -1125,6 +1333,14 @@ pub fn start_pad_loader(core: SharedCore) {
         .spawn(move || {
             while let Ok(job) = rx.recv() {
                 let (bank, key, custom) = &job;
+                if let Some(i) = pads::my_slot(*bank) {
+                    let path = custom.clone().unwrap_or_default();
+                    let r = pads::load_my_pad(&path);
+                    if let Ok(mut c) = worker.lock() {
+                        c.my_pad_loaded(i, &path, r);
+                    }
+                    continue;
+                }
                 if *bank >= PAD_BANKS {
                     let r = load_job_texture(&job);
                     if let Ok(mut c) = worker.lock() {

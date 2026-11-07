@@ -61,17 +61,138 @@ macro_rules! bank {
 
 static BUILTIN: [[&[u8]; PAD_KEYS]; PAD_BANKS] = [bank!("escuro"), bank!("coral"), bank!("suave")];
 
-/// Estilos ao todo: 3 de loop (Escuro, Coral, Suave) + 3 "Vivos" (motor granular).
-pub const ALL_BANKS: usize = PAD_BANKS + 3;
+/// "Meus pads": arquivos do Theo (ex.: pad do YouTube em G) tocados nos 12 tons, mudando a altura.
+/// Bancos 6..9 (até 4, cada um com nome).
+pub const MY_BANK: usize = PAD_BANKS + 3;
+pub const MY_SLOTS: usize = 4;
+
+/// Estilos ao todo: 3 de loop (Escuro, Coral, Suave) + 3 "Vivos" (motor granular) + 4 "Meus pads".
+pub const ALL_BANKS: usize = MY_BANK + MY_SLOTS;
+
+/// Banco de um "Meu pad"? Devolve qual (0..4).
+pub fn my_slot(bank: usize) -> Option<usize> {
+    (MY_BANK..ALL_BANKS).contains(&bank).then(|| bank - MY_BANK)
+}
+
+/// Nome inicial a partir do arquivo: "Pad + Reverse em G - Em _ 30 Minutos _ [Bx5PwBH1oGA].mp3" → "Pad + Reverse em G - Em".
+pub fn name_from_file(path: &str) -> String {
+    let stem = std::path::Path::new(path)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    // id do YouTube no fim sem colchetes ("..._YLDh18SZQv0")
+    let mut stem = stem;
+    if let Some(i) = stem
+        .len()
+        .checked_sub(12)
+        .filter(|i| stem.is_char_boundary(*i))
+    {
+        let (head, id) = stem.split_at(i);
+        let id = &id[1..];
+        if (stem.as_bytes()[i] == b'_' || stem.as_bytes()[i] == b' ')
+            && id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            && id.chars().any(|c| c.is_ascii_uppercase())
+            && id.chars().any(|c| c.is_ascii_digit())
+        {
+            stem = head.to_string();
+        }
+    }
+    let mut s = stem.replace('_', " ");
+    // tira [id do YouTube] e (coisas entre parênteses)
+    for (a, b) in [('[', ']'), ('(', ')')] {
+        while let (Some(i), Some(j)) = (s.find(a), s.find(b)) {
+            if j < i {
+                break;
+            }
+            s.replace_range(i..=j, " ");
+        }
+    }
+    // corta no "|" ou em "30 Minutos" e afins
+    let lower = s.to_lowercase();
+    let mut end = s.len();
+    for cut in ["|", " minutos", " min ", " hora"] {
+        if let Some(i) = lower.find(cut) {
+            end = end.min(i);
+        }
+    }
+    let s = s[..end].to_string();
+    let mut words: Vec<&str> = s.split_whitespace().collect();
+    // número solto no fim ("... 30") sai também
+    while words.len() > 1
+        && words
+            .last()
+            .is_some_and(|w| w.chars().all(|c| c.is_ascii_digit()))
+    {
+        words.pop();
+    }
+    let mut s = words.join(" ");
+    s = s
+        .trim_matches(|c: char| c == '-' || c == '+' || c == ' ')
+        .to_string();
+    // tira o código do começo que alguns programas colocam ("9b497964-Pad ...")
+    if let Some((head, rest)) = s.split_once('-') {
+        if head.len() == 8 && head.chars().all(|c| c.is_ascii_hexdigit()) {
+            s = rest.trim().to_string();
+        }
+    }
+    let s: String = s.chars().take(28).collect();
+    if s.trim().is_empty() {
+        "Meu pad".into()
+    } else {
+        s.trim().to_string()
+    }
+}
+
+/// Tom escrito no nome do arquivo ("... em G - Em", "Pad Ab"), se tiver.
+pub fn key_from_name(name: &str) -> Option<usize> {
+    let words: Vec<String> = name
+        .replace(['_', '-', '|', '(', ')', '[', ']'], " ")
+        .split_whitespace()
+        .map(str::to_string)
+        .collect();
+    let parse = |w: &str| -> Option<usize> {
+        let w = w.trim_end_matches('m');
+        let mut c = w.chars();
+        let base = match c.next()? {
+            'C' => 0,
+            'D' => 2,
+            'E' => 4,
+            'F' => 5,
+            'G' => 7,
+            'A' => 9,
+            'B' => 11,
+            _ => return None,
+        };
+        let acc = match c.as_str() {
+            "" => 0,
+            "#" => 1,
+            "b" => -1,
+            _ => return None,
+        };
+        Some((base + acc + 12) as usize % 12)
+    };
+    // o primeiro tom depois de "em"/"in"; senão, o primeiro tom solto
+    words
+        .windows(2)
+        .find(|w| {
+            matches!(w[0].to_lowercase().as_str(), "em" | "in" | "tom") && parse(&w[1]).is_some()
+        })
+        .and_then(|w| parse(&w[1]))
+        .or_else(|| words.iter().find_map(|w| parse(w)))
+}
 
 /// Estilo "Vivo" (granular)? Bancos 3, 4 e 5.
 pub fn is_vivo(bank: usize) -> bool {
-    bank >= PAD_BANKS
+    (PAD_BANKS..MY_BANK).contains(&bank)
 }
 
 pub fn bank_name(bank: usize) -> &'static str {
     let b = bank % ALL_BANKS;
-    if is_vivo(b) {
+    if my_slot(b).is_some() {
+        "Meu pad"
+    } else if is_vivo(b) {
         VIVO_NAMES[b - PAD_BANKS]
     } else {
         BANK_NAMES[b]
@@ -80,11 +201,145 @@ pub fn bank_name(bank: usize) -> &'static str {
 
 pub fn bank_hint(bank: usize) -> &'static str {
     let b = bank % ALL_BANKS;
-    if is_vivo(b) {
+    if my_slot(b).is_some() {
+        "seu arquivo em todos os tons"
+    } else if is_vivo(b) {
         VIVO_HINTS[b - PAD_BANKS]
     } else {
         BANK_HINTS[b]
     }
+}
+
+/// Quanto acelerar o "Meu pad" (gravado em `root`) para soar no tom `key`: no máximo 6 semitons
+/// para cima ou para baixo, para não mudar demais o jeito do som.
+pub fn my_pad_pitch(root: usize, key: usize) -> f32 {
+    let mut s = (key as i32 - root as i32).rem_euclid(12);
+    if s > 6 {
+        s -= 12;
+    }
+    2f32.powf(s as f32 / 12.0)
+}
+
+/// Pedaço usado do arquivo do "Meu pad": pula o começo (onde costuma entrar aos poucos) e guarda 90 s,
+/// que já dá um loop longo sem pesar na memória (pad de 30 minutos inteiro seria mais de 300 MB).
+const MY_SKIP_S: usize = 8;
+const MY_KEEP_S: usize = 90;
+
+/// Descobre o tom do pad pelo som: as duas notas que mais soam de E1 a B4. Pad quase sempre é
+/// tônica + quinta (G e D, C# e G#): se as duas estão a uma quinta, a de baixo da quinta é o tom.
+/// Nome de arquivo engana ("C_Major_Pad" era C#), o som não.
+pub fn detect_key(clip: &PadClip) -> usize {
+    let frames = clip.frames();
+    // mono, 4 amostras viram 1 (média = filtro simples), ~11 kHz
+    let dec = 4;
+    let sr = clip.rate as f32 / dec as f32;
+    let block = 8192usize;
+    let blocks = 24usize;
+    let mut score = [0f64; 12];
+    let total = frames / dec;
+    if total < block {
+        return 0;
+    }
+    for b in 0..blocks {
+        let start = (total - block) * b / blocks.max(1);
+        let x: Vec<f32> = (0..block)
+            .map(|i| {
+                let f = (start + i) * dec;
+                (0..dec)
+                    .map(|j| {
+                        let p = (f + j).min(frames - 1) * 2;
+                        (clip.data[p] as f32 + clip.data[p + 1] as f32) * 0.5
+                    })
+                    .sum::<f32>()
+                    / dec as f32
+            })
+            .collect();
+        for midi in 28..72 {
+            let freq = 440.0 * 2f32.powf((midi as f32 - 69.0) / 12.0);
+            // Goertzel: energia nesta frequência
+            let w = std::f32::consts::TAU * freq / sr;
+            let c = 2.0 * w.cos();
+            let (mut s1, mut s2) = (0f32, 0f32);
+            for (i, v) in x.iter().enumerate() {
+                let win = 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / block as f32).cos();
+                let s0 = v * win + c * s1 - s2;
+                s2 = s1;
+                s1 = s0;
+            }
+            let p = (s1 * s1 + s2 * s2 - c * s1 * s2) as f64;
+            score[midi % 12] += p;
+        }
+    }
+    let mut order: Vec<usize> = (0..12).collect();
+    order.sort_by(|a, b| score[*b].total_cmp(&score[*a]));
+    let (top, second) = (order[0], order[1]);
+    if top == (second + 7) % 12 {
+        second // ex.: G mais forte que C, mas G é a quinta de C
+    } else {
+        top
+    }
+}
+
+/// Pads da parceria que já vêm dentro do programa (90 s de cada, já sem o começo).
+/// Caminho "embutido:N" nos "Meus pads". Repositório privado: não redistribuir.
+pub struct PartnerPad {
+    pub name: &'static str,
+    pub key: usize,
+    pub credit: &'static str,
+    bytes: &'static [u8],
+}
+
+pub const PARTNER_PADS: [PartnerPad; 3] = [
+    PartnerPad {
+        name: "Pad + Reverse em G - Em",
+        key: 7,
+        credit: "House of Pads",
+        bytes: include_bytes!("../assets/pads/parceria/00.ogg"),
+    },
+    PartnerPad {
+        name: "C# Major Pad",
+        key: 1,
+        credit: "Vishal Bhojane",
+        bytes: include_bytes!("../assets/pads/parceria/01.ogg"),
+    },
+    PartnerPad {
+        name: "Pad + Reverse em C - Am",
+        key: 0,
+        credit: "House of Pads",
+        bytes: include_bytes!("../assets/pads/parceria/02.ogg"),
+    },
+];
+
+pub fn partner_path(n: usize) -> String {
+    format!("embutido:{n}")
+}
+
+/// Carrega o arquivo do "Meu pad" (ou um pad da parceria, "embutido:N").
+pub fn load_my_pad(path: &str) -> Result<Arc<PadClip>, String> {
+    let partner = path
+        .strip_prefix("embutido:")
+        .and_then(|n| n.parse::<usize>().ok())
+        .and_then(|n| PARTNER_PADS.get(n));
+    let clip = match partner {
+        Some(p) => decode_part(Box::new(Cursor::new(p.bytes)), Some("ogg"), 0, MY_KEEP_S)?,
+        None => {
+            let file =
+                std::fs::File::open(path).map_err(|e| format!("Não consegui abrir {path}: {e}"))?;
+            let ext = std::path::Path::new(path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_lowercase());
+            decode_part(Box::new(file), ext.as_deref(), MY_SKIP_S, MY_KEEP_S)?
+        }
+    };
+    let mut data = clip.data;
+    // Emenda longa (2 s): pad que muda devagar não pode "pular" na volta do loop.
+    smooth_loop(&mut data, clip.rate as usize * 2);
+    normalize_level(&mut data);
+    Ok(Arc::new(PadClip {
+        data,
+        rate: clip.rate,
+    }))
 }
 
 /// Texturas do "Pad Vivo" (motor granular), todas em C3.
@@ -170,6 +425,23 @@ pub fn decode(
     ext: Option<&str>,
     smooth: bool,
 ) -> Result<PadClip, String> {
+    // Arquivo próprio muito longo: usa só os 3 primeiros minutos (não estoura a memória).
+    let mut clip = decode_part(source, ext, 0, 180)?;
+    if smooth {
+        // Arquivos do usuário podem não ter emenda perfeita: suaviza o ponto do loop (80 ms).
+        smooth_loop(&mut clip.data, clip.rate as usize * 80 / 1000);
+    }
+    Ok(clip)
+}
+
+/// Decodifica a partir de `skip_s` segundos, guardando no máximo `keep_s` segundos.
+/// Se o arquivo for curto demais para pular, usa desde o começo.
+fn decode_part(
+    source: Box<dyn MediaSource>,
+    ext: Option<&str>,
+    skip_s: usize,
+    keep_s: usize,
+) -> Result<PadClip, String> {
     let mss = MediaSourceStream::new(source, Default::default());
     let mut hint = Hint::new();
     if let Some(e) = ext {
@@ -193,7 +465,14 @@ pub fn decode(
 
     let mut data: Vec<i16> = Vec::new();
     let mut buf: Option<SampleBuffer<f32>> = None;
+    // Começo guardado à parte: se o arquivo acabar antes de passar do pulo, ele é usado.
+    let mut skipped: Vec<i16> = Vec::new();
     loop {
+        let keep = rate as usize * keep_s * 2;
+        if data.len() >= keep {
+            data.truncate(keep);
+            break;
+        }
         let packet = match format.next_packet() {
             Ok(p) => p,
             Err(SymError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
@@ -217,21 +496,44 @@ pub fn decode(
         }
         b.copy_interleaved_ref(decoded);
         let to_i16 = |x: f32| (x.clamp(-1.0, 1.0) * 32767.0) as i16;
+        let skip = rate as usize * skip_s * 2;
         for frame in b.samples().chunks(channels) {
             let l = frame[0];
             let r = if channels > 1 { frame[1] } else { l };
-            data.push(to_i16(l));
-            data.push(to_i16(r));
+            let out = if skipped.len() < skip {
+                &mut skipped
+            } else {
+                &mut data
+            };
+            out.push(to_i16(l));
+            out.push(to_i16(r));
         }
+    }
+    if data.len() < 2 * 4410 {
+        skipped.extend_from_slice(&data);
+        data = skipped;
+        data.truncate(rate as usize * keep_s * 2);
     }
     if data.len() < 2 * 4410 {
         return Err("Áudio curto demais (precisa de pelo menos 0,1 s)".into());
     }
-    if smooth {
-        // Arquivos do usuário podem não ter emenda perfeita: suaviza o ponto do loop (80 ms).
-        smooth_loop(&mut data, rate as usize * 80 / 1000);
-    }
     Ok(PadClip { data, rate })
+}
+
+/// Deixa o pad no mesmo volume dos pads do programa (média ~ -16 dB), sem passar de -1 dB no pico:
+/// trocar de um pad do YouTube para outro não muda o volume na igreja.
+fn normalize_level(data: &mut [i16]) {
+    let n = data.len().max(1) as f64;
+    let rms = (data.iter().map(|&x| (x as f64).powi(2)).sum::<f64>() / n).sqrt() / 32768.0;
+    let peak = data.iter().map(|&x| (x as i32).abs()).max().unwrap_or(0) as f64 / 32768.0;
+    if rms < 1e-5 {
+        return;
+    }
+    let target = 10f64.powf(-16.0 / 20.0);
+    let gain = (target / rms).min(0.89 / peak.max(1e-5));
+    for x in data.iter_mut() {
+        *x = (*x as f64 * gain).clamp(-32768.0, 32767.0) as i16;
+    }
 }
 
 /// Cruza o fim com o começo para o loop não estalar (encurta o áudio em `fade` quadros).
@@ -260,15 +562,18 @@ pub struct PadVoice {
     target: f32,
     /// Variação do ganho por amostra.
     rate: f32,
+    /// Velocidade de leitura (1 = altura original; "Meu pad" muda o tom assim).
+    pitch: f64,
 }
 
 pub const FADE_IN_S: f32 = 2.5;
 pub const FADE_OUT_S: f32 = 3.0;
 
 impl PadVoice {
-    pub fn new(clip: Arc<PadClip>, sample_rate: u32) -> Self {
+    pub fn new(clip: Arc<PadClip>, sample_rate: u32, pitch: f32) -> Self {
         Self {
             clip,
+            pitch: pitch as f64,
             pos: 0.0,
             gain: 0.0,
             target: 1.0,
@@ -292,7 +597,7 @@ impl PadVoice {
         if frames < 2 {
             return;
         }
-        let step = self.clip.rate as f64 / sample_rate as f64;
+        let step = self.clip.rate as f64 / sample_rate as f64 * self.pitch;
         let data = &self.clip.data;
         let k = 1.0 / 32768.0;
         for i in 0..l.len() {

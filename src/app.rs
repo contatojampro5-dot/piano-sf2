@@ -51,6 +51,8 @@ struct UiState {
     /// Pedidos que só podem rodar com o `core` destravado (abrir arquivo trava a tela até escolher).
     open_sf2_dialog: bool,
     pad_file_dialog: Option<(usize, usize)>,
+    /// Janela de arquivo do "＋ Pôr um pad meu".
+    my_pad_dialog: bool,
     /// SF2 para abrir assim que o `core` destravar (ex.: botão "Usar este som").
     load_sf2: Option<String>,
     /// Janela "Sons grátis" e o download em andamento.
@@ -154,6 +156,7 @@ impl PianoApp {
                 audio_devices: Vec::new(),
                 open_sf2_dialog: false,
                 pad_file_dialog: None,
+                my_pad_dialog: false,
                 load_sf2: None,
                 sons_open: false,
                 download: None,
@@ -320,6 +323,18 @@ impl eframe::App for PianoApp {
                 .pick_file()
             {
                 load_sf2_async(self.core.clone(), path.to_string_lossy().to_string());
+            }
+        }
+        if std::mem::take(&mut self.ui.my_pad_dialog) {
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter(
+                    "Áudio",
+                    &["mp3", "wav", "ogg", "flac", "MP3", "WAV", "OGG", "FLAC"],
+                )
+                .pick_file()
+            {
+                let mut c = self.core.lock().unwrap();
+                c.add_my_pad(path.to_string_lossy().to_string(), None);
             }
         }
         if let Some((bank, key)) = self.ui.pad_file_dialog.take() {
@@ -1083,11 +1098,16 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     let side_w = 170.0;
     let gap = 10.0;
 
-    // Estilos: clássicos (loop) e vivos (motor granular)
-    for (title, range) in [
-        ("Clássicos:", 0..pads::PAD_BANKS),
-        ("Vivos ✨:", pads::PAD_BANKS..pads::ALL_BANKS),
-    ] {
+    // Estilos: clássicos (loop) e vivos (motor granular). Escondidos desde a v0.13 (✏ Editar traz de volta).
+    let styles: &[(&str, std::ops::Range<usize>)] = if core.builtin_pads() {
+        &[
+            ("Clássicos:", 0..pads::PAD_BANKS),
+            ("Vivos ✨:", pads::PAD_BANKS..pads::MY_BANK),
+        ]
+    } else {
+        &[]
+    };
+    for (title, range) in styles.iter().cloned() {
         ui.horizontal(|ui| {
             ui.add_sized(
                 [78.0, 34.0],
@@ -1118,6 +1138,105 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                     );
                 });
             }
+        });
+    }
+    // Meus pads: arquivos do Theo (ex.: pads do YouTube), cada um com nome, tocados em todos os tons
+    ui.horizontal(|ui| {
+        ui.add_sized(
+            [78.0, 34.0],
+            egui::Label::new(RichText::new("Meus pads:").color(th().dim)),
+        );
+        for i in 0..core.cfg.my_pads.len() {
+            let b = pads::MY_BANK + i;
+            let sel = core.cfg.pad_bank == b;
+            let m = &core.cfg.my_pads[i];
+            let text = RichText::new(format!("{} · {}", pads::KEY_NAMES[m.key], m.name))
+                .size(14.0)
+                .color(if sel { th().ink } else { th().text });
+            let r = ui.add_sized(
+                [230.0, 34.0],
+                egui::Button::new(text)
+                    .fill(if sel { PAD_COLOR } else { th().glass_hi })
+                    .truncate(),
+            );
+            if !learnable(ui, core, &r, Target::PadBank) && r.clicked() {
+                core.set_pad_bank(b);
+            }
+        }
+        if core.cfg.my_pads.len() < pads::MY_SLOTS
+            && ui
+                .add_sized(
+                    [210.0, 34.0],
+                    egui::Button::new(RichText::new("+ Pôr um pad meu (MP3/WAV)...").size(14.0))
+                        .fill(th().glass),
+                )
+                .on_hover_text("Um pad baixado (ex.: do YouTube) em qualquer tom: o programa descobre o tom e toca nos 12")
+                .clicked()
+        {
+            st.my_pad_dialog = true;
+        }
+        if core.cfg.my_pads.len() < pads::MY_SLOTS {
+            for (n, pp) in pads::PARTNER_PADS.iter().enumerate() {
+                let path = pads::partner_path(n);
+                if !core.cfg.my_pads.iter().any(|m| m.path == path)
+                    && ui
+                        .small_button(format!("↺ {}", pp.name))
+                        .on_hover_text("Pôr de volta este pad da parceria")
+                        .clicked()
+                {
+                    core.restore_partner_pad(n);
+                }
+            }
+        }
+    });
+    if let Some(i) = pads::my_slot(core.cfg.pad_bank).filter(|i| *i < core.cfg.my_pads.len()) {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Nome:").color(th().dim));
+            let mut name = core.cfg.my_pads[i].name.clone();
+            if ui
+                .add(
+                    egui::TextEdit::singleline(&mut name)
+                        .desired_width(220.0)
+                        .char_limit(28),
+                )
+                .changed()
+            {
+                core.rename_my_pad(i, &name);
+            }
+            ui.add_space(8.0);
+            ui.label(RichText::new("O som está em:").color(th().dim));
+            let mut key = core.cfg.my_pads[i].key;
+            egui::ComboBox::from_id_salt("my_pad_key")
+                .width(60.0)
+                .selected_text(pads::KEY_NAMES[key])
+                .show_ui(ui, |ui| {
+                    for k in 0..pads::PAD_KEYS {
+                        ui.selectable_value(&mut key, k, pads::KEY_NAMES[k]);
+                    }
+                });
+            core.set_my_pad_key(i, key);
+            let credit = core.cfg.my_pads[i]
+                .path
+                .strip_prefix("embutido:")
+                .and_then(|n| n.parse::<usize>().ok())
+                .and_then(|n| pads::PARTNER_PADS.get(n))
+                .map(|p| format!("pad de {} (parceria)", p.credit));
+            ui.label(
+                RichText::new(credit.unwrap_or_else(|| {
+                    "(o programa descobriu pelo som; corrija se precisar)".into()
+                }))
+                .size(12.0)
+                .color(th().dim),
+            );
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .small_button("Tirar este pad")
+                    .on_hover_text("Tira da lista (o arquivo continua no seu computador)")
+                    .clicked()
+                {
+                    core.remove_my_pad(i);
+                }
+            });
         });
     }
     // Ajustes ao vivo
@@ -1342,18 +1461,20 @@ fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: 
     let resp = resp.on_hover_text(match &custom {
         Some(c) => format!("Pad {} — arquivo: {c}", pads::KEY_NAMES[key]),
         None => format!(
-            "Pad {} ({}) — som padrão {}",
+            "Pad {} ({}) — {}",
             pads::KEY_NAMES[key],
             pads::KEY_NAMES_PT[key],
-            pads::bank_name(bank)
+            core.pad_bank_label(bank)
         ),
     });
     resp.context_menu(|ui| {
-        if pads::is_vivo(bank) {
+        if bank >= pads::PAD_BANKS {
             ui.label(
-                RichText::new(
-                    "Pad Vivo: o som base vale para todos os tons (veja \"Base do som\" acima).",
-                )
+                RichText::new(if pads::is_vivo(bank) {
+                    "Pad Vivo: o som base vale para todos os tons (veja \"Base do som\" acima)."
+                } else {
+                    "Meu pad: um arquivo só vale para todos os tons (ajustes acima)."
+                })
                 .size(12.0),
             );
             return;
@@ -1836,6 +1957,7 @@ fn edit_banner(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                         ("wizard_button", "Botão Configurar mesinha"),
                         ("learn_button", "Botão Aprender"),
                         ("sons_button", "Botão Sons grátis"),
+                        ("pad_styles", "Estilos de pad do programa"),
                     ];
                     for (id, label) in others {
                         if !core.cfg.is_hidden(id) && ui.button(label).clicked() {
@@ -1907,7 +2029,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) -> Rect {
         core.cfg.tab = 1;
     }
     ui.label(
-        RichText::new(pads::bank_name(core.cfg.pad_bank))
+        RichText::new(core.pad_bank_label(core.cfg.pad_bank))
             .size(12.0)
             .color(th().dim),
     );
@@ -1928,7 +2050,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2) -> Rect {
         [inner.width(), if compact { 24.0 } else { 28.0 }],
         egui::Button::new(RichText::new("ESTILO").size(13.0).color(th().dim)).fill(th().glass),
     );
-    let bank = bank.on_hover_text("Troca Escuro → Coral → Suave");
+    let bank = bank.on_hover_text("Troca o estilo do pad (passa pelos seus pads)");
     if !learnable(ui, core, &bank, Target::PadBank) && bank.clicked() {
         core.set_pad_bank(core.cfg.pad_bank + 1);
     }

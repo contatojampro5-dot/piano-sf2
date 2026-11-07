@@ -194,6 +194,13 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.13 — Meus pads (pads da parceria)
+- Estilos de pad do programa (Escuro, Coral, Suave, Vivos) saem da tela: ficam só os **Meus pads**
+  (voltam pelo ✏ Editar → "Colocar de volta").
+- Já vêm colocados os 3 pads da parceria: *Pad + Reverse em G - Em* e *Pad + Reverse em C - Am* (House of Pads)
+  e *C# Major Pad* (Vishal Bhojane). Tocam nos 12 tons (o programa muda a altura, no máximo 6 semitons).
+- **+ Pôr um pad meu**: até 4 pads, cada um com nome; o programa descobre o tom pelo som e iguala o volume.
+
 ### v0.12 — sons grátis
 - Botão **⬇ Sons grátis**: baixa o Pacote Igreja (14 timbres livres) ou o piano Salamander e abre com um clique.
 - O GitHub baixa os sons das fontes oficiais e guarda em Releases (`sons-v1`, workflow `sons.yml`, montador `tools/montar_pacote.py`).

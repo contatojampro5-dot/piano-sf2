@@ -197,7 +197,7 @@ pub struct Mapping {
 
 /// O que dá para tirar/colocar da tela no modo Editar: (id, nome mostrado).
 /// Camadas são "layer0".."layer5". Ajustes, Editar, GERAL e Pânico nunca saem (para sempre dar para voltar).
-pub const EDITABLE: [(&str, &str); 15] = [
+pub const EDITABLE: [(&str, &str); 16] = [
     ("layer0", "Camada 1"),
     ("layer1", "Camada 2"),
     ("layer2", "Camada 3"),
@@ -213,6 +213,10 @@ pub const EDITABLE: [(&str, &str); 15] = [
     ("learn_button", "Botão Aprender"),
     ("scale_help", "Ajuda de escala (pads)"),
     ("sons_button", "Botão Sons grátis"),
+    (
+        "pad_styles",
+        "Estilos de pad do programa (Escuro, Coral, Vivos...)",
+    ),
 ];
 
 pub fn layer_id(i: usize) -> String {
@@ -381,6 +385,11 @@ pub struct Config {
     pub vivo: VivoCfg,
     /// Ajuda de escala: mostrar o tom do pad como menor (o pad serve para maior e menor).
     pub scale_minor: bool,
+    /// "Meus pads" (até 4): arquivo do Theo, o nome que ele deu e o tom em que o som está (0 = C ... 7 = G).
+    pub my_pads: Vec<MyPad>,
+    /// Já escondeu os estilos de pad do programa (v0.13: o Theo quis só os pads dele)?
+    #[serde(default)]
+    pub pads_v13: bool,
     /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
     #[serde(default)]
     pub mappings_version: u32,
@@ -452,6 +461,16 @@ impl Default for VivoCfg {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MyPad {
+    pub name: String,
+    pub path: String,
+    pub key: usize,
+    /// Tom ainda não conferido: o programa descobre pelo som quando carregar.
+    #[serde(default)]
+    pub auto_key: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PadFile {
     pub bank: usize,
     pub key: usize,
@@ -482,6 +501,8 @@ impl Default for Config {
             hidden: Vec::new(),
             vivo: VivoCfg::default(),
             scale_minor: false,
+            my_pads: Vec::new(),
+            pads_v13: false,
         }
     }
 }
@@ -517,6 +538,36 @@ impl Config {
         self.polyphony = self.polyphony.clamp(16, 256);
         self.pad_volume = self.pad_volume.clamp(0.0, 1.0);
         self.pad_bank %= crate::pads::ALL_BANKS;
+        if !self.pads_v13 {
+            self.pads_v13 = true;
+            if !self.is_hidden("pad_styles") {
+                self.hidden.push("pad_styles".into());
+            }
+            // os 3 pads da parceria já entram colocados
+            if self.my_pads.is_empty() {
+                self.my_pads = crate::pads::PARTNER_PADS
+                    .iter()
+                    .enumerate()
+                    .map(|(n, p)| MyPad {
+                        name: p.name.into(),
+                        path: crate::pads::partner_path(n),
+                        key: p.key,
+                        auto_key: false,
+                    })
+                    .collect();
+                self.pad_bank = crate::pads::MY_BANK;
+            }
+        }
+        self.my_pads.truncate(crate::pads::MY_SLOTS);
+        for m in &mut self.my_pads {
+            m.key %= crate::pads::PAD_KEYS;
+            if m.name.trim().is_empty() {
+                m.name = "Meu pad".into();
+            }
+        }
+        if crate::pads::my_slot(self.pad_bank).is_some_and(|i| i >= self.my_pads.len()) {
+            self.pad_bank = 0;
+        }
         for v in [
             &mut self.vivo.bright,
             &mut self.vivo.shimmer,

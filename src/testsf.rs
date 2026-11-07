@@ -556,3 +556,182 @@ fn check_sf2_dir() {
         }
     }
 }
+
+#[test]
+fn my_pad_plays_in_every_key_with_its_name() {
+    // arquivo de teste: G2 + D3 (sem terça), 12 s, em WAV
+    let dir = std::env::temp_dir().join(format!("piano-sf2-meupad-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("Pad + Reverse em G - Em _ 30 Minutos _ [Bx5PwBH1oGA].wav");
+    let sr = 44_100u32;
+    let mut wav = Vec::new();
+    let n = sr as usize * 12;
+    let data_len = (n * 4) as u32;
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(36 + data_len).to_le_bytes());
+    wav.extend_from_slice(b"WAVEfmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&2u16.to_le_bytes());
+    wav.extend_from_slice(&sr.to_le_bytes());
+    wav.extend_from_slice(&(sr * 4).to_le_bytes());
+    wav.extend_from_slice(&4u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_len.to_le_bytes());
+    for i in 0..n {
+        let t = i as f32 / sr as f32;
+        let x = 0.2 * (t * 98.0 * std::f32::consts::TAU).sin()
+            + 0.15 * (t * 146.8 * std::f32::consts::TAU).sin();
+        let v = (x * 32767.0) as i16;
+        wav.extend_from_slice(&v.to_le_bytes());
+        wav.extend_from_slice(&v.to_le_bytes());
+    }
+    std::fs::write(&path, wav).unwrap();
+    let p = path.to_string_lossy().to_string();
+
+    assert_eq!(crate::pads::name_from_file(&p), "Pad + Reverse em G - Em");
+    assert_eq!(crate::pads::key_from_name(&p), Some(7));
+    assert_eq!(crate::pads::key_from_name("Pad em Ab"), Some(8));
+    assert_eq!(
+        crate::pads::name_from_file("C# Major Pad [YLDh18SZQv0].mp3"),
+        "C# Major Pad"
+    );
+    assert_eq!(
+        crate::pads::name_from_file("Pad de adoração em Dó maior.mp3"),
+        "Pad de adoração em Dó maior"
+    );
+    assert_eq!(
+        crate::pads::name_from_file("dfe9eda4-C_Major_Pad_YLDh18SZQv0.mp3"),
+        "C Major Pad"
+    );
+    assert_eq!(
+        crate::pads::name_from_file("Pad + Reverse em C - Am _ 30 minutos _ [v9br_Qc26Rk].mp3"),
+        "Pad + Reverse em C - Am"
+    );
+    assert!((crate::pads::my_pad_pitch(7, 7) - 1.0).abs() < 1e-6);
+    assert!((crate::pads::my_pad_pitch(7, 9) - 2f32.powf(2.0 / 12.0)).abs() < 1e-5); // A: 2 acima
+    assert!((crate::pads::my_pad_pitch(7, 0) - 2f32.powf(-7.0 / 12.0 + 1.0)).abs() < 1e-5); // C: 5 acima
+
+    let (mut core, mut engine) = pad_rig();
+    core.add_my_pad(p.clone(), None);
+    let bank = crate::pads::MY_BANK;
+    assert_eq!(core.cfg.my_pads[0].key, 7, "achou o tom (G) pelo som");
+    assert_eq!(core.cfg.pad_bank, bank);
+    assert!(core.pad_ready(bank, 0));
+    assert_eq!(core.pad_bank_label(bank), "Pad + Reverse em G - Em");
+    core.rename_my_pad(0, "Reverse G");
+    assert_eq!(core.pad_bank_label(bank), "Reverse G");
+    for k in [7usize, 0, 2, 11] {
+        core.pad_press(k);
+        let a = render_secs(&mut engine, 3.0);
+        assert!(rms(&a[a.len() / 2..]) > 0.02, "Meu pad soa no tom {k}");
+        assert!(a.iter().all(|x| x.is_finite() && x.abs() <= 1.0));
+    }
+    // a volta dos estilos passa pelo Meu pad e pula os vazios
+    core.set_pad_bank(bank + 1);
+    assert_eq!(core.cfg.pad_bank, 0);
+    // v0.13: estilos do programa escondidos → só os pads do Theo
+    core.cfg.set_hidden("pad_styles", true);
+    core.add_my_pad(p.clone(), Some(1));
+    core.set_pad_bank(bank + 1);
+    assert_eq!(core.cfg.pad_bank, bank + 1);
+    core.set_pad_bank(bank + 2); // passou do último: volta ao primeiro pad dele, não ao Escuro
+    assert_eq!(core.cfg.pad_bank, bank);
+    core.cfg.pad_bank = 0;
+    core.pad_press(4);
+    assert_eq!(core.cfg.pad_bank, bank, "Escuro escondido: toca o pad dele");
+    core.remove_my_pad(1);
+    core.remove_my_pad(0);
+    assert!(core.cfg.my_pads.is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Tom dos pads de verdade: `PIANO_SF2_PADS="a.mp3;b.mp3" cargo test --release --no-default-features real_pad_keys -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn real_pad_keys() {
+    let Ok(list) = std::env::var("PIANO_SF2_PADS") else {
+        return;
+    };
+    for f in list.split(';') {
+        let t = std::time::Instant::now();
+        let clip = crate::pads::load_my_pad(f).unwrap();
+        let k = crate::pads::detect_key(&clip);
+        println!(
+            "{} ({:.1}s, {:.0} MB): {}",
+            f,
+            t.elapsed().as_secs_f32(),
+            clip.data.len() as f64 * 2.0 / 1e6,
+            crate::pads::KEY_NAMES[k]
+        );
+    }
+}
+
+#[test]
+fn old_config_hides_builtin_pads_once() {
+    let mut c = Config::default();
+    c.normalize();
+    assert!(c.is_hidden("pad_styles"));
+    c.set_hidden("pad_styles", false); // Theo trouxe de volta no Editar
+    c.normalize();
+    assert!(!c.is_hidden("pad_styles"), "não esconde de novo");
+    assert_eq!(c.my_pads.len(), 3, "pads da parceria já colocados");
+    assert_eq!(c.pad_bank, crate::pads::MY_BANK);
+    for (n, p) in crate::pads::PARTNER_PADS.iter().enumerate() {
+        let clip = crate::pads::load_my_pad(&crate::pads::partner_path(n)).unwrap();
+        assert_eq!(crate::pads::detect_key(&clip), p.key, "{}", p.name);
+        assert!(clip.frames() > 44_100 * 80);
+    }
+}
+
+/// Prévia para ouvir os "Meus pads" em vários tons:
+/// `PIANO_SF2_PADS="a.mp3;b.mp3" PIANO_SF2_OUT=pasta cargo test --release --no-default-features preview_my_pads -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn preview_my_pads() {
+    let (Ok(list), Ok(out)) = (
+        std::env::var("PIANO_SF2_PADS"),
+        std::env::var("PIANO_SF2_OUT"),
+    ) else {
+        return;
+    };
+    for (n, f) in list.split(';').enumerate() {
+        let (mut core, mut engine) = pad_rig();
+        core.add_my_pad(f.to_string(), None);
+        let root = core.cfg.my_pads[0].key;
+        let mut all = Vec::new();
+        // tom original, 2 acima, 2 abaixo, 5 acima (o máximo que muda é 6)
+        for d in [0i32, 2, -2, 5] {
+            let k = (root as i32 + d).rem_euclid(12) as usize;
+            core.pad_press(k);
+            all.extend(render_secs(&mut engine, 9.0));
+            println!("{}: {} ", n, crate::pads::KEY_NAMES[k]);
+        }
+        core.pad_stop();
+        all.extend(render_secs(&mut engine, 3.5));
+        let path = format!("{out}/pad{}.wav", n + 1);
+        write_wav(&path, &all, 48_000);
+    }
+}
+
+fn write_wav(path: &str, stereo: &[f32], sr: u32) {
+    let data_len = (stereo.len() * 2) as u32;
+    let mut w = Vec::with_capacity(44 + data_len as usize);
+    w.extend_from_slice(b"RIFF");
+    w.extend_from_slice(&(36 + data_len).to_le_bytes());
+    w.extend_from_slice(b"WAVEfmt ");
+    w.extend_from_slice(&16u32.to_le_bytes());
+    w.extend_from_slice(&1u16.to_le_bytes());
+    w.extend_from_slice(&2u16.to_le_bytes());
+    w.extend_from_slice(&sr.to_le_bytes());
+    w.extend_from_slice(&(sr * 4).to_le_bytes());
+    w.extend_from_slice(&4u16.to_le_bytes());
+    w.extend_from_slice(&16u16.to_le_bytes());
+    w.extend_from_slice(b"data");
+    w.extend_from_slice(&data_len.to_le_bytes());
+    for x in stereo {
+        w.extend_from_slice(&((x.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+    }
+    std::fs::write(path, w).unwrap();
+}

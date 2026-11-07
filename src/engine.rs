@@ -67,7 +67,8 @@ pub enum Cmd {
     /// Taxa de amostragem da placa de som (os pads precisam dela mesmo sem SF2).
     SetSampleRate(u32),
     /// Toca um pad (o que estiver tocando some devagar).
-    PadPlay(Arc<PadClip>),
+    /// Pad em loop com a velocidade de leitura (1 = altura original).
+    PadPlay(Arc<PadClip>, f32),
     PadStop,
     PadVolume(f32),
     /// Toca um Pad Vivo (granular); o que estiver tocando some devagar. A voz é criada fora daqui.
@@ -334,7 +335,7 @@ impl Engine {
                 self.church_pads = pads.clamp(0.0, 1.0);
                 self.church_sf2 = sf2.clamp(0.0, 1.0);
             }
-            Cmd::PadPlay(clip) => {
+            Cmd::PadPlay(clip, pitch) => {
                 let sr = self.sample_rate;
                 for v in &mut self.pads {
                     v.fade_out(sr);
@@ -347,7 +348,7 @@ impl Engine {
                     let old = self.pads.remove(0);
                     let _ = self.garbage.try_send(Garbage::Pad(old.clip));
                 }
-                self.pads.push(PadVoice::new(clip, sr));
+                self.pads.push(PadVoice::new(clip, sr, pitch));
             }
             Cmd::PadStop => {
                 let sr = self.sample_rate;
