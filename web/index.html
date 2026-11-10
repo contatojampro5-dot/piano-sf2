@@ -1,0 +1,453 @@
+<title>Piano SF2 Pads</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: palco escuro de culto — faixa de pads no alto, grade de 12 tons no centro, controles ao lado (embaixo no celular).
+   Visual único escuro de propósito: é usado no palco, com pouca luz. */
+:root {
+  --bg: #0f0c1d;
+  --bg2: #17132b;
+  --card: #1f1a38;
+  --card-hi: #2a2349;
+  --line: #3a3160;
+  --fg: #ece9f7;
+  --dim: #a39cc4;
+  --pad: #b69cff;
+  --pad-ink: #1a1233;
+  --warm: #ffb547;
+  --stop: #ff6b6b;
+  --f-display: "Outfit", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: radial-gradient(1200px 600px at 70% -10%, #2b2160 0%, transparent 60%), var(--bg);
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--f-body);
+  font-size: 15px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 28px;
+}
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: 1.6rem; margin: 0; letter-spacing: .01em; }
+h1 span { color: var(--pad); }
+.status { color: var(--dim); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.status b { color: var(--fg); font-weight: 600; }
+
+.label { font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 0 0 8px; }
+
+/* Pads (estilos) */
+.styles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.style {
+  text-align: left; border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  border-radius: 14px; padding: 12px 14px; cursor: pointer; display: grid; gap: 2px; min-width: 0;
+  font: inherit; transition: background .15s, border-color .15s;
+}
+.style:hover { background: var(--card-hi); }
+.style .n { font-family: var(--f-display); font-weight: 600; font-size: 1.05rem; overflow-wrap: anywhere; }
+.style .m { color: var(--dim); font-size: .82rem; }
+.style .k { font-variant-numeric: tabular-nums; }
+.style[aria-pressed="true"] { background: var(--pad); color: var(--pad-ink); border-color: var(--pad); }
+.style[aria-pressed="true"] .m { color: #3b2c6e; }
+.style.loading .m::after { content: " · carregando…"; }
+
+/* Grade de tons + lateral */
+.main { display: grid; grid-template-columns: 1fr 220px; gap: 16px; align-items: start; }
+.keys { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.key {
+  aspect-ratio: 1 / 1; max-width: 100%; border-radius: 18px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--card-hi), var(--card)); color: var(--fg); cursor: pointer;
+  display: grid; place-content: center; text-align: center; gap: 2px; font: inherit; position: relative;
+  transition: transform .08s, background .2s, box-shadow .2s;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.key:active { transform: scale(.97); }
+.key .nm { font-family: var(--f-display); font-size: clamp(1.5rem, 4.2vw, 2.6rem); font-weight: 600; line-height: 1; }
+.key .pt { color: var(--dim); font-size: .8rem; }
+.key .st { position: absolute; left: 0; right: 0; bottom: 8px; font-size: .7rem; color: var(--pad-ink); }
+.key.on { background: var(--pad); color: var(--pad-ink); border-color: var(--pad); box-shadow: 0 0 28px rgba(182,156,255,.45); }
+.key.on .pt { color: #3b2c6e; }
+.key kbd { position: absolute; top: 6px; right: 8px; font: 500 .62rem var(--f-body); color: var(--dim); opacity: .7; }
+.key.on kbd { color: #3b2c6e; }
+
+.side { display: grid; gap: 12px; background: var(--bg2); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+.ctl { display: grid; gap: 6px; }
+.ctl .row { display: flex; justify-content: space-between; align-items: baseline; }
+.ctl output { font-variant-numeric: tabular-nums; font-weight: 600; }
+input[type="range"] { width: 100%; accent-color: var(--pad); }
+.btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+button.small {
+  border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 10px;
+  padding: 10px; font: 600 1rem var(--f-body); cursor: pointer;
+}
+button.small:hover { background: var(--card-hi); }
+#stop {
+  border: 0; border-radius: 12px; padding: 14px; font: 700 1rem var(--f-display); letter-spacing: .04em;
+  background: var(--card-hi); color: var(--dim); cursor: pointer;
+}
+#stop.live { background: var(--warm); color: #2a1a00; }
+
+/* Ajuda de escala */
+.scale { background: var(--bg2); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; display: grid; gap: 8px; }
+.scale h2 { font-family: var(--f-display); font-size: 1.15rem; margin: 0; font-weight: 600; }
+.scale .line { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.scale .line > span:first-child { width: 110px; color: var(--dim); font-size: .85rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.chip { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; font-weight: 600; }
+.chip small { color: var(--dim); font-weight: 400; margin-left: 4px; }
+.chip.tonic { background: var(--pad); color: var(--pad-ink); border-color: var(--pad); }
+.chip.tonic small { color: #3b2c6e; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: transparent; color: var(--dim); padding: 6px 12px; font: 600 .85rem var(--f-body); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--pad); color: var(--pad-ink); }
+.hint { color: var(--dim); font-size: .82rem; margin: 0; }
+
+button:focus-visible, input:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+
+@media (max-width: 760px) {
+  .main { grid-template-columns: 1fr; }
+  .keys { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .key kbd { display: none; }
+  .key.on .pt { display: none; }
+  .key .st { bottom: 6px; font-size: .62rem; }
+  .scale .line > span:first-child { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Piano SF2 <span>Pads</span></h1>
+    <div class="status" id="status" aria-live="polite">Toque um tom para começar</div>
+  </header>
+
+  <section aria-labelledby="lbl-pads">
+    <p class="label" id="lbl-pads">Pads</p>
+    <div class="styles" id="styles"></div>
+  </section>
+
+  <section class="main">
+    <div>
+      <p class="label">Tom (o pad muda de altura para cada tom)</p>
+      <div class="keys" id="keys"></div>
+    </div>
+    <aside class="side">
+      <div class="ctl">
+        <div class="row"><label for="vol">Volume</label><output id="volOut">70%</output></div>
+        <input type="range" id="vol" min="0" max="100" value="70">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="rev">Reverb de igreja</label><output id="revOut">35%</output></div>
+        <input type="range" id="rev" min="0" max="100" value="35">
+      </div>
+      <div class="btns">
+        <button class="small" id="prev" aria-label="Tom anterior">◀ Tom</button>
+        <button class="small" id="next" aria-label="Próximo tom">Tom ▶</button>
+      </div>
+      <button id="stop">■ PARAR PAD</button>
+      <p class="hint">A troca de tom é suave (o novo entra enquanto o outro sai). Teclado: Z S X D C V G B H N J M, setas e Esc.</p>
+    </aside>
+  </section>
+
+  <section class="scale" aria-live="polite">
+    <div class="line" style="justify-content: space-between;">
+      <h2 id="tomTitle">Tom: —</h2>
+      <div class="seg" role="group" aria-label="Maior ou menor">
+        <button id="maj" aria-pressed="true">Maior</button>
+        <button id="min" aria-pressed="false">Menor</button>
+      </div>
+    </div>
+    <div class="line"><span>Escala</span><div class="chips" id="escala"></div></div>
+    <div class="line"><span>Pentatônica</span><div class="chips" id="penta"></div></div>
+    <div class="line"><span>Acordes do tom</span><div class="chips" id="acordes"></div></div>
+    <div class="line"><span>Sequência</span><div class="chips" id="seq"></div></div>
+    <p class="hint">Estes pads não têm terça: o pad de G serve para G e para Gm.</p>
+  </section>
+</div>
+
+<script>
+// ---------- Pads (para pôr mais: arquivo em pads/, nome, tom em que o som está (0 = C ... 11 = B) e autor) ----------
+const PADS = [
+  { file: "pads/00.mp3", name: "Pad + Reverse em G - Em", root: 7, credit: "House of Pads" },
+  { file: "pads/01.mp3", name: "C# Major Pad", root: 1, credit: "Vishal Bhojane" },
+  { file: "pads/02.mp3", name: "Pad + Reverse em C - Am", root: 0, credit: "House of Pads" },
+];
+
+const KEYS = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const KEYS_PT = ["Dó","Dó#","Ré","Ré#","Mi","Fá","Fá#","Sol","Sol#","Lá","Lá#","Si"];
+const KBD = ["z","s","x","d","c","v","g","b","h","n","j","m"];
+const FADE_IN = 2.5, FADE_OUT = 3.0, LOOP_XF = 3.0;
+
+let store = {};
+try { store = JSON.parse(localStorage.getItem("pads") || "{}"); } catch (e) { store = {}; }
+const save = () => { try { localStorage.setItem("pads", JSON.stringify(state)); } catch (e) {} };
+const state = {
+  pad: Number.isInteger(store.pad) && store.pad < PADS.length ? store.pad : 0,
+  vol: typeof store.vol === "number" ? store.vol : 0.7,
+  rev: typeof store.rev === "number" ? store.rev : 0.35,
+  minor: !!store.minor,
+};
+let activeKey = null;
+
+// ---------- Áudio ----------
+let ctx = null, master = null, dry = null, wet = null;
+const buffers = PADS.map(() => null);
+const loading = PADS.map(() => null);
+
+function audio() {
+  if (ctx) return ctx;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  master = ctx.createGain();
+  master.gain.value = state.vol;
+  dry = ctx.createGain();
+  wet = ctx.createGain();
+  const verb = ctx.createConvolver();
+  verb.buffer = churchImpulse(ctx);
+  master.connect(dry).connect(ctx.destination);
+  master.connect(verb).connect(wet).connect(ctx.destination);
+  setRev(state.rev);
+  return ctx;
+}
+
+// Reverb de igreja: ruído que some devagar (~4 s), um pouco mais escuro no fim.
+function churchImpulse(c) {
+  const len = Math.floor(c.sampleRate * 4.2);
+  const buf = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    let lp = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / c.sampleRate;
+      const env = Math.pow(1 - i / len, 2.2) * Math.min(1, t / 0.02);
+      const k = 0.55 - 0.4 * (i / len);
+      lp += k * ((Math.random() * 2 - 1) - lp);
+      d[i] = lp * env * 0.6;
+    }
+  }
+  return buf;
+}
+
+function setRev(v) {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  dry.gain.setTargetAtTime(1 - v * 0.35, t, 0.05);
+  wet.gain.setTargetAtTime(v * 0.9, t, 0.05);
+}
+
+function load(i) {
+  if (buffers[i]) return Promise.resolve(buffers[i]);
+  if (loading[i]) return loading[i];
+  const c = audio();
+  render();
+  loading[i] = fetch(PADS[i].file)
+    .then(r => { if (!r.ok) throw new Error("não achei o arquivo"); return r.arrayBuffer(); })
+    .then(a => new Promise((ok, bad) => c.decodeAudioData(a, ok, bad)))
+    .then(b => { buffers[i] = b; render(); return b; })
+    .catch(e => { loading[i] = null; setStatus("Não consegui abrir " + PADS[i].name + ". Confira a internet e toque de novo."); render(); throw e; });
+  return loading[i];
+}
+
+// Quanto acelerar (no máximo 6 semitons para cima ou para baixo).
+function pitch(root, key) {
+  let s = ((key - root) % 12 + 12) % 12;
+  if (s > 6) s -= 12;
+  return Math.pow(2, s / 12);
+}
+
+// Uma voz: o pad em loop, com emendas cruzadas (sem estalo) e entrada/saída suaves.
+class Voice {
+  constructor(buffer, rate) {
+    this.buffer = buffer; this.rate = rate;
+    this.out = ctx.createGain();
+    this.out.gain.value = 0;
+    this.out.connect(master);
+    this.parts = [];
+    this.dead = false;
+    const t = ctx.currentTime + 0.03;
+    // começa num ponto qualquer do som, para não soar sempre igual
+    this.segment(t, Math.random() * buffer.duration * 0.5, false);
+    this.ramp(t, 1, FADE_IN);
+  }
+  ramp(t, to, secs) {
+    const g = this.out.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(to, t + secs);
+  }
+  segment(when, offset, fadeIn) {
+    if (this.dead) return;
+    const src = ctx.createBufferSource();
+    src.buffer = this.buffer;
+    src.playbackRate.value = this.rate;
+    const g = ctx.createGain();
+    src.connect(g).connect(this.out);
+    const realLen = (this.buffer.duration - offset) / this.rate;
+    const xf = Math.min(LOOP_XF, realLen / 3);
+    g.gain.setValueAtTime(fadeIn ? 0 : 1, when);
+    if (fadeIn) g.gain.linearRampToValueAtTime(1, when + xf);
+    g.gain.setValueAtTime(1, when + realLen - xf);
+    g.gain.linearRampToValueAtTime(0, when + realLen);
+    src.start(when, offset);
+    src.stop(when + realLen + 0.05);
+    const part = { src, g };
+    this.parts.push(part);
+    src.onended = () => { this.parts = this.parts.filter(p => p !== part); };
+    const nextAt = when + realLen - xf;
+    const wait = Math.max(0, (nextAt - ctx.currentTime - 2) * 1000);
+    this.timer = setTimeout(() => this.segment(nextAt, 0, true), wait);
+  }
+  stop() {
+    if (this.dead) return;
+    this.dead = true;
+    clearTimeout(this.timer);
+    const t = ctx.currentTime;
+    this.ramp(t, 0, FADE_OUT);
+    setTimeout(() => { this.parts.forEach(p => { try { p.src.stop(); } catch (e) {} }); this.out.disconnect(); }, (FADE_OUT + 0.3) * 1000);
+  }
+}
+
+let voice = null;
+let wakeLock = null;
+
+async function play(key) {
+  const c = audio();
+  if (c.state === "suspended") await c.resume();
+  activeKey = key;
+  render();
+  keepAwake();
+  const i = state.pad;
+  let buf;
+  try { buf = await load(i); } catch (e) { activeKey = null; render(); return; }
+  if (activeKey !== key || state.pad !== i) return; // mudou enquanto carregava
+  if (voice) voice.stop();
+  voice = new Voice(buf, pitch(PADS[i].root, key));
+  setStatus("Tocando <b>" + KEYS[key] + "</b> · " + PADS[i].name);
+  render();
+}
+
+function stop() {
+  activeKey = null;
+  if (voice) { voice.stop(); voice = null; }
+  setStatus("Pad parado");
+  render();
+}
+
+function press(key) { activeKey === key ? stop() : play(key); }
+
+function step(d) { play(((activeKey ?? (d > 0 ? -1 : 0)) + d + 12) % 12); }
+
+async function keepAwake() {
+  try { if (!wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && activeKey !== null) keepAwake(); });
+
+// ---------- Teoria (escala com os nomes certos: Fá maior tem Bb, não A#) ----------
+const LET = ["C","D","E","F","G","A","B"], LET_PC = [0,2,4,5,7,9,11], SOL = ["Dó","Ré","Mi","Fá","Sol","Lá","Si"];
+const MAJ_T = [[0,0],[1,-1],[1,0],[2,-1],[2,0],[3,0],[3,1],[4,0],[5,-1],[5,0],[6,-1],[6,0]];
+const MIN_T = [[0,0],[0,1],[1,0],[2,-1],[2,0],[3,0],[3,1],[4,0],[4,1],[5,0],[6,-1],[6,0]];
+const acc = a => ({"-2":"bb","-1":"b","1":"#","2":"##"})[a] || "";
+function scale(key, minor) {
+  const letter = (minor ? MIN_T : MAJ_T)[key][0];
+  const steps = minor ? [0,2,3,5,7,8,10] : [0,2,4,5,7,9,11];
+  return steps.map((st, i) => {
+    const l = (letter + i) % 7, pc = (key + st) % 12;
+    let a = ((pc - LET_PC[l]) % 12 + 12) % 12; if (a > 6) a -= 12;
+    return { name: LET[l] + acc(a), pt: SOL[l] + acc(a) };
+  });
+}
+function chords(key, minor) {
+  const kinds = minor ? ["m","°","","m","m","",""] : ["","m","m","","","m","°"];
+  return scale(key, minor).map((n, i) => n.name + kinds[i]);
+}
+const PROGS_MAJ = [["a campeã",[1,5,6,4]],["começando triste",[6,4,1,5]],["adoração",[4,1,5,6]],["clássica / hino",[1,4,5,1]],["gospel",[2,5,1]]];
+const PROGS_MIN = [["épica",[1,6,3,7]],["subindo",[1,6,7]],["clássica menor",[1,4,5,1]],["ministração",[6,7,1]]];
+
+// ---------- Tela ----------
+const $ = id => document.getElementById(id);
+function setStatus(html) { $("status").innerHTML = html; }
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+
+function buildStyles() {
+  $("styles").innerHTML = PADS.map((p, i) =>
+    `<button class="style" data-i="${i}"><span class="n">${esc(p.name)}</span>` +
+    `<span class="m">Gravado em <span class="k">${KEYS[p.root]}</span> · ${esc(p.credit)}</span></button>`).join("");
+  $("styles").querySelectorAll(".style").forEach(b => b.addEventListener("click", () => {
+    const i = +b.dataset.i;
+    if (i === state.pad) return;
+    state.pad = i; save();
+    if (activeKey !== null) play(activeKey); else { load(i).catch(() => {}); render(); }
+  }));
+}
+
+function buildKeys() {
+  $("keys").innerHTML = KEYS.map((k, i) =>
+    `<button class="key" data-k="${i}" aria-label="Pad em ${KEYS_PT[i]}"><kbd>${KBD[i].toUpperCase()}</kbd>` +
+    `<span class="nm">${k}</span><span class="pt">${KEYS_PT[i]}</span><span class="st"></span></button>`).join("");
+  $("keys").querySelectorAll(".key").forEach(b => b.addEventListener("click", () => press(+b.dataset.k)));
+}
+
+function render() {
+  document.querySelectorAll(".style").forEach(b => {
+    const i = +b.dataset.i;
+    b.setAttribute("aria-pressed", String(i === state.pad));
+    b.classList.toggle("loading", !!loading[i] && !buffers[i]);
+  });
+  document.querySelectorAll(".key").forEach(b => {
+    const on = +b.dataset.k === activeKey;
+    b.classList.toggle("on", on);
+    b.querySelector(".st").textContent = on ? (buffers[state.pad] ? "tocando" : "carregando…") : "";
+  });
+  $("stop").classList.toggle("live", activeKey !== null);
+  $("maj").setAttribute("aria-pressed", String(!state.minor));
+  $("min").setAttribute("aria-pressed", String(state.minor));
+  renderScale();
+}
+
+function renderScale() {
+  const key = activeKey ?? PADS[state.pad].root;
+  const minor = state.minor;
+  const s = scale(key, minor);
+  $("tomTitle").textContent = "Tom: " + s[0].name + (minor ? "m" : "") + (activeKey === null ? " (toque um tom)" : "");
+  $("escala").innerHTML = s.map((n, i) => `<span class="chip${i ? "" : " tonic"}">${n.name}<small>${n.pt}</small></span>`).join("");
+  const pick = minor ? [0,2,3,4,6] : [0,1,2,4,5];
+  $("penta").innerHTML = pick.map(i => `<span class="chip">${s[i].name}</span>`).join("");
+  const ch = chords(key, minor);
+  $("acordes").innerHTML = ch.map(c => `<span class="chip">${c}</span>`).join("");
+  $("seq").innerHTML = (minor ? PROGS_MIN : PROGS_MAJ).map(([name, d]) =>
+    `<span class="chip">${d.map(x => ch[x - 1]).join(" – ")}<small>${name}</small></span>`).join("");
+}
+
+$("vol").value = Math.round(state.vol * 100); $("volOut").textContent = $("vol").value + "%";
+$("rev").value = Math.round(state.rev * 100); $("revOut").textContent = $("rev").value + "%";
+$("vol").addEventListener("input", e => {
+  state.vol = e.target.value / 100; $("volOut").textContent = e.target.value + "%"; save();
+  if (master) master.gain.setTargetAtTime(state.vol, ctx.currentTime, 0.05);
+});
+$("rev").addEventListener("input", e => {
+  state.rev = e.target.value / 100; $("revOut").textContent = e.target.value + "%"; save(); setRev(state.rev);
+});
+$("stop").addEventListener("click", stop);
+$("prev").addEventListener("click", () => step(-1));
+$("next").addEventListener("click", () => step(1));
+$("maj").addEventListener("click", () => { state.minor = false; save(); render(); });
+$("min").addEventListener("click", () => { state.minor = true; save(); render(); });
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  const k = KBD.indexOf(e.key.toLowerCase());
+  if (k >= 0) { press(k); e.preventDefault(); }
+  else if (e.key === "Escape" || e.key === " ") { stop(); e.preventDefault(); }
+  else if (e.key === "ArrowRight") step(1);
+  else if (e.key === "ArrowLeft") step(-1);
+});
+
+buildStyles();
+buildKeys();
+render();
+</script>

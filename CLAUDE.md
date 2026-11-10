@@ -29,6 +29,9 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   volume igualado, `detect_key` acha o tom pelo som), altura por velocidade (`Cmd::PadPlay(clip, pitch)`).
   Pads da parceria embutidos em `assets/pads/parceria/` (`PARTNER_PADS`, caminho "embutido:N") — **repositório privado,
   não publicar esses sons**. Estilos do programa escondidos por `hidden` "pad_styles".
+- Pads no navegador (v0.14): `web/index.html` (Web Audio, loop com emendas cruzadas, altura por `playbackRate`) + `web/pads/*.mp3`
+  (mesmos pads, volume igualado com loudnorm). Publicada como Artifact privado https://claude.ai/artifact/Csec6zTktwjRpXAC6CmXFj
+  (republicar com o mesmo arquivo). Pad novo = mp3 em `web/pads/` + entrada em `PADS`.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

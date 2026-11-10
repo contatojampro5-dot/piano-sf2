@@ -194,6 +194,11 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.14 — pads no navegador
+- `web/index.html`: página com os pads da parceria nos 12 tons (troca suave, volume, reverb de igreja, ajuda de escala,
+  teclado do computador, tela fica acesa). Publicada como página privada do Claude; para pôr um pad novo: arquivo em
+  `web/pads/` + uma linha na lista `PADS` do começo do script.
+
 ### v0.13 — Meus pads (pads da parceria)
 - Estilos de pad do programa (Escuro, Coral, Suave, Vivos) saem da tela: ficam só os **Meus pads**
   (voltam pelo ✏ Editar → "Colocar de volta").
