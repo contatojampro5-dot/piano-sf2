@@ -81,6 +81,8 @@ struct UiState {
     /// v0.19: janelas de arquivo (só com o `core` destravado): som de um DrumPad, coral do Voice FX.
     drum_file_dialog: Option<usize>,
     voicefx_file_dialog: bool,
+    /// v0.21: lista de pads aberta (a bolinha de planeta na aba Pads).
+    pad_list_open: bool,
 }
 
 pub struct PianoApp {
@@ -182,6 +184,7 @@ impl PianoApp {
                 fx_details: [false; 4],
                 drum_file_dialog: None,
                 voicefx_file_dialog: false,
+                pad_list_open: false,
             },
             last_save: Instant::now(),
             audio_retry: None,
@@ -1238,6 +1241,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     let mut voice_reset = false;
     let mut voice_key: Option<usize> = None;
     let mut st_voice_dialog = false;
+    let mut voice_sel: Option<usize> = None;
 
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
@@ -1366,6 +1370,15 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             if fx_toggle(ui, core, w, core.voicefx_on, "VOZES", VOICE_COLOR, Target::VoiceFxToggle, "Um coral (\"aah\") acompanha cada nota que você tocar") {
                 core.toggle_voicefx();
             }
+            // v0.21: escolher a voz que canta (troca na hora, mesmo ligado)
+            ui.add_space(6.0);
+            let mut voices: Vec<(&str, usize)> = pads::VOICE_NAMES.iter().enumerate().map(|(i, n)| (*n, i)).collect();
+            if e.voicefx_file.is_some() {
+                voices.push(("Minha", VOICE_MINE));
+            }
+            if let Some(v) = fx_choice(ui, "Voz", &voices, e.voicefx_voice, VOICE_COLOR) {
+                voice_sel = Some(v);
+            }
             ui.add_space(6.0);
             ui.label(RichText::new(format!("Volume {:.0}%", e.voicefx_volume * 100.0)).size(12.0).color(th().dim));
             fx_bar(ui, core, w, &mut e.voicefx_volume, VOICE_COLOR, Some(Target::VoiceFxVolume));
@@ -1492,6 +1505,9 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     if let Some(k) = voice_key {
         core.set_voicefx_key(k);
     }
+    if let Some(v) = voice_sel {
+        core.set_voicefx_voice(v);
+    }
     if drum_dialog.is_some() {
         st.drum_file_dialog = drum_dialog;
     }
@@ -1555,22 +1571,48 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     // v0.18: só os pads à vista; nome, tom, reverb, pôr/tirar pad ficam no ⚙.
     let details = st.pad_details;
     ui.horizontal(|ui| {
+        // v0.21: uma bolinha (planeta) abre a lista de pads, pequenos, do tamanho do nome.
+        // Fechada: só a bolinha e o nome do pad escolhido.
+        let open = st.pad_list_open || core.learn.active;
+        let ball = planet_ball(ui, open);
+        if ball
+            .on_hover_text(if open { "Fechar a lista de pads" } else { "Escolher outro pad" })
+            .clicked()
+        {
+            st.pad_list_open = !st.pad_list_open;
+        }
+        let cur = pads::my_slot(core.cfg.pad_bank).filter(|i| *i < core.cfg.my_pads.len());
+        ui.spacing_mut().item_spacing.x = 6.0;
         for i in 0..core.cfg.my_pads.len() {
             let b = pads::MY_BANK + i;
             let sel = core.cfg.pad_bank == b;
-            let m = &core.cfg.my_pads[i];
-            let text = RichText::new(format!("{} · {}", pads::KEY_NAMES[m.key], m.name))
-                .size(14.0)
-                .color(if sel { th().ink } else { th().text });
-            let r = ui.add_sized(
-                [250.0, 40.0],
-                egui::Button::new(text)
-                    .fill(if sel { PAD_COLOR } else { th().glass_hi })
-                    .truncate(),
-            );
-            if !learnable(ui, core, &r, Target::PadBank) && r.clicked() {
-                core.set_pad_bank(b);
+            if !open && !sel {
+                continue;
             }
+            let m = &core.cfg.my_pads[i];
+            let text = RichText::new(&m.name)
+                .size(if sel && !open { 16.0 } else { 14.0 })
+                .strong()
+                .color(if sel { th().ink } else { th().text });
+            let tip = format!("{} · pad em {}", m.name, pads::KEY_NAMES[m.key]);
+            let r = ui
+                .add(
+                    egui::Button::new(text)
+                        .fill(if sel { PAD_COLOR } else { th().glass_hi })
+                        .corner_radius(16)
+                        .min_size(Vec2::new(0.0, 32.0)),
+                )
+                .on_hover_text(tip);
+            if !learnable(ui, core, &r, Target::PadBank) && r.clicked() {
+                if open && !sel {
+                    core.set_pad_bank(b);
+                }
+                // escolheu: a lista fecha (fica só a bolinha e o nome)
+                st.pad_list_open = !st.pad_list_open;
+            }
+        }
+        if cur.is_none() && !open {
+            ui.label(RichText::new("escolha um pad na bolinha").size(13.0).color(th().dim));
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if details_button(ui, st.pad_details, Vec2::new(48.0, 40.0), "Ajustes dos pads: nome, tom, reverb, pôr ou tirar pad, ajuda de escala").clicked() {
@@ -2944,6 +2986,35 @@ fn hold_button(ui: &mut Ui, core: &mut Core, size: Vec2, label: &str, target: Ta
         Stroke::NONE,
     ));
     resp.on_hover_text(target.label());
+}
+
+/// v0.21: bolinha com um planetinha desenhado (abre/fecha a lista de pads).
+fn planet_ball(ui: &mut Ui, open: bool) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(40.0), Sense::click());
+    let p = ui.painter();
+    let c = rect.center();
+    let bg = if open {
+        PAD_COLOR
+    } else if resp.hovered() {
+        th().glass_hi.gamma_multiply(1.3)
+    } else {
+        th().glass_hi
+    };
+    p.circle_filled(c, 19.0, bg);
+    let fg = if open { th().ink } else { PAD_COLOR };
+    // planeta
+    p.circle_filled(c, 7.5, fg);
+    // anel (elipse inclinada)
+    let pts: Vec<Pos2> = (0..=40)
+        .map(|k| {
+            let a = k as f32 / 40.0 * std::f32::consts::TAU;
+            let (x, y) = (a.cos() * 14.0, a.sin() * 4.5);
+            let (s, co) = (0.35f32.sin(), 0.35f32.cos());
+            c + Vec2::new(x * co - y * s, x * s + y * co)
+        })
+        .collect();
+    p.add(egui::Shape::line(pts, Stroke::new(1.8, fg)));
+    resp
 }
 
 /// v0.18: botão ⚙ que abre/fecha os ajustes finos de uma tela ou painel.

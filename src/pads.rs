@@ -324,17 +324,17 @@ pub struct FreePad {
 
 pub const FREE_PADS: [FreePad; 3] = [
     FreePad {
-        name: "Coral Celeste",
+        name: "Vênus",
         key: 0,
         bytes: include_bytes!("../assets/sons-livres/pads/00.ogg"),
     },
     FreePad {
-        name: "Cordas Suaves",
+        name: "Terra",
         key: 0,
         bytes: include_bytes!("../assets/sons-livres/pads/01.ogg"),
     },
     FreePad {
-        name: "Atmosfera",
+        name: "Marte",
         key: 0,
         bytes: include_bytes!("../assets/sons-livres/pads/02.ogg"),
     },
@@ -346,14 +346,48 @@ pub fn free_path(n: usize) -> String {
     format!("livre:{n}")
 }
 
-/// v0.20: coral de verdade do Voice FX (Choir Aahs + Voice Oohs do MuseScore General, em C3).
-static VOICEFX_CHOIR: &[u8] = include_bytes!("../assets/sons-livres/coral_c3.ogg");
+/// v0.21: nome curto (de planeta) de cada pad que vem no programa. Os nomes antigos viram estes uma vez só
+/// (`cfg.pads_v21`); se o Theo renomeou, fica o nome dele.
+pub fn planet_name(path: &str) -> Option<(&'static str, &'static str)> {
+    // (nome novo, nome antigo)
+    match path {
+        "embutido:0" => Some(("Júpiter", "Pad + Reverse em G - Em")),
+        "embutido:1" => Some(("Saturno", "C# Major Pad")),
+        "embutido:2" => Some(("Netuno", "Pad + Reverse em C - Am")),
+        "livre:0" => Some(("Vênus", "Coral Celeste")),
+        "livre:1" => Some(("Terra", "Cordas Suaves")),
+        "livre:2" => Some(("Marte", "Atmosfera")),
+        _ => None,
+    }
+}
 
-pub fn load_voicefx_choir() -> Result<Arc<crate::granular::GrainSource>, String> {
-    let clip = decode(Box::new(Cursor::new(VOICEFX_CHOIR)), Some("ogg"), false)?;
+/// v0.20/v0.21: vozes de verdade do Voice FX (MuseScore General, todas em C3).
+/// 0 Coral (aah + ooh), 1 Aah, 2 Ooh, 3 Celeste, 4 Synth.
+pub const VOICE_NAMES: [&str; 5] = ["Coral", "Aah", "Ooh", "Celeste", "Synth"];
+pub const VOICE_HINTS: [&str; 5] = [
+    "coral misturado (aah + ooh)",
+    "coral cantando \"aah\"",
+    "vozes suaves \"ooh\"",
+    "vozes etéreas, de pad",
+    "voz de sintetizador",
+];
+static VOICES: [&[u8]; 5] = [
+    include_bytes!("../assets/sons-livres/coral_c3.ogg"),
+    include_bytes!("../assets/sons-livres/vozes/00.ogg"),
+    include_bytes!("../assets/sons-livres/vozes/01.ogg"),
+    include_bytes!("../assets/sons-livres/vozes/02.ogg"),
+    include_bytes!("../assets/sons-livres/vozes/03.ogg"),
+];
+
+pub fn load_voice(n: usize) -> Result<Arc<crate::granular::GrainSource>, String> {
+    let clip = decode(Box::new(Cursor::new(VOICES[n % VOICES.len()])), Some("ogg"), false)?;
     Ok(Arc::new(crate::granular::GrainSource::from_stereo_i16(
         &clip.data, clip.rate, 48,
     )))
+}
+
+pub fn load_voicefx_choir() -> Result<Arc<crate::granular::GrainSource>, String> {
+    load_voice(0)
 }
 
 /// Carrega o arquivo do "Meu pad" (ou um pad da parceria, "embutido:N").

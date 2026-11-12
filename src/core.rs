@@ -343,12 +343,18 @@ impl Core {
         }
     }
 
-    /// Coral do Voice FX: o do Theo (se tiver) ou a textura "Coro" que vem no programa.
+    /// Voz do Voice FX: a escolhida na barra "Voz" (do programa) ou a do Theo ("Minha").
     fn load_voicefx_source(&mut self) -> bool {
-        let custom = self.cfg.efeitos.voicefx_file.clone();
+        let voice = self.cfg.efeitos.voicefx_voice;
+        let custom = self
+            .cfg
+            .efeitos
+            .voicefx_file
+            .clone()
+            .filter(|_| voice == VOICE_MINE);
         let result = match &custom {
             Some((path, root)) => pads::load_texture(0, Some((path.as_str(), *root))),
-            None => pads::load_voicefx_choir(),
+            None => pads::load_voice(voice.min(pads::VOICE_NAMES.len() - 1)),
         };
         match result {
             Ok(src) => {
@@ -359,6 +365,7 @@ impl Core {
             Err(e) if custom.is_some() => {
                 // o arquivo do Theo sumiu ou não abre: volta ao coral do programa
                 self.cfg.efeitos.voicefx_file = None;
+                self.cfg.efeitos.voicefx_voice = 0;
                 self.dirty = true;
                 self.notify(format!("Voice FX: {e}. Voltei ao coral do programa."));
                 self.load_voicefx_source()
@@ -367,6 +374,27 @@ impl Core {
                 self.notify(format!("Voice FX: {e}"));
                 false
             }
+        }
+    }
+
+    /// v0.21: escolhe a voz do Voice FX (0..4 do programa, 5 = "Minha"). Troca na hora, mesmo ligado.
+    pub fn set_voicefx_voice(&mut self, voice: usize) {
+        if voice == VOICE_MINE && self.cfg.efeitos.voicefx_file.is_none() {
+            self.notify("Para usar \"Minha\", escolha antes o seu coral no ⚙ do Voice FX");
+            return;
+        }
+        if voice > VOICE_MINE || voice == self.cfg.efeitos.voicefx_voice {
+            return;
+        }
+        self.cfg.efeitos.voicefx_voice = voice;
+        self.dirty = true;
+        if self.load_voicefx_source() {
+            let name = if voice == VOICE_MINE {
+                "a sua".to_string()
+            } else {
+                pads::VOICE_NAMES[voice].to_string()
+            };
+            self.notify(format!("Voice FX: voz {name}"));
         }
     }
 
@@ -404,6 +432,7 @@ impl Core {
                     }
                 };
                 self.cfg.efeitos.voicefx_file = Some((p.clone(), pads::key_midi(key)));
+                self.cfg.efeitos.voicefx_voice = VOICE_MINE; // escolheu um coral: ele já fica selecionado
                 self.dirty = true;
                 if self.load_voicefx_source() {
                     self.notify(format!(
@@ -415,6 +444,7 @@ impl Core {
             }
             None => {
                 self.cfg.efeitos.voicefx_file = None;
+                self.cfg.efeitos.voicefx_voice = 0;
                 self.dirty = true;
                 self.load_voicefx_source();
                 self.notify("Voice FX voltou ao coral do programa");
@@ -852,8 +882,10 @@ impl Core {
         {
             return;
         }
+        // v0.21: volta já com o nome de planeta
+        let name = pads::planet_name(&path).map(|(n, _)| n).unwrap_or(p.name);
         self.cfg.my_pads.push(MyPad {
-            name: p.name.into(),
+            name: name.into(),
             path,
             key: p.key,
             auto_key: false,

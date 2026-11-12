@@ -54,6 +54,8 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 - Sons livres (v0.20): `assets/sons-livres/` (drums/00..07.ogg, coral_c3.ogg, pads/00..02.ogg) gerados do MuseScore_General.sf2 (MIT)
   pelo teste `render_sons_livres` (`PIANO_SF2_MUSESCORE`, `PIANO_RENDER_DIR`) + ffmpeg libvorbis. `DrumKit::build` usa os gravados
   (`build_synth` = reserva), `pads::load_voicefx_choir`, `pads::FREE_PADS` ("livre:N", entram uma vez por `cfg.pads_v20`). `MY_SLOTS = 8`.
+- Planetas e vozes (v0.21): `pads::planet_name` + `cfg.pads_v21` (renomeia uma vez, só nome antigo), `planet_ball` + `UiState.pad_list_open`;
+  `pads::VOICE_NAMES`/`load_voice` (assets/sons-livres/vozes), `cfg.efeitos.voicefx_voice` (5 = `VOICE_MINE`), `core.set_voicefx_voice`.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

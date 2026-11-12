@@ -706,7 +706,7 @@ fn free_sounds_come_inside_the_program() {
     c.normalize();
     assert_eq!(c.my_pads.len(), 4);
     assert_eq!(c.my_pads[0].name, "Meu pad do YouTube");
-    c.my_pads.retain(|m| m.name != "Atmosfera"); // Theo tirou um
+    c.my_pads.retain(|m| m.name != "Marte"); // Theo tirou um
     c.normalize();
     assert_eq!(c.my_pads.len(), 3, "não volta sozinho depois que o Theo tirou");
     // bateria gravada: os 8 sons abrem (nenhum caiu no sintetizado) e são diferentes dos sintetizados
@@ -1319,7 +1319,22 @@ fn render_sons_livres() {
         write(name, &l, &r);
     }
 
-    // ---- Coral do Voice FX: "aah" em C3 (48), segurado, sem o começo ----
+    // ---- v0.21: as 4 vozes do Voice FX, separadas (C3, segurado, sem o começo) ----
+    for (name, patch, rev) in [("voz_00_aah.wav", 52, 40), ("voz_01_ooh.wav", 53, 40), ("voz_02_celeste.wav", 91, 60), ("voz_03_synth.wav", 54, 40)] {
+        let mut s = new_synth();
+        s.set_channel_preset(0, 0, patch);
+        s.process_midi_message(0, 0xB0, 0x5B, rev);
+        s.note_on(0, 48, 100);
+        let (mut l, mut r) = (Vec::new(), Vec::new());
+        render(&mut s, 13.0, &mut l, &mut r);
+        let a = (sr as f32 * 1.5) as usize;
+        let b = (sr as f32 * 12.5) as usize;
+        let (mut l, mut r) = (l[a..b].to_vec(), r[a..b].to_vec());
+        finish(&mut l, &mut r, 0.7);
+        write(name, &l, &r);
+    }
+
+    // ---- Coral do Voice FX (v0.20): "aah" em C3 (48), segurado, sem o começo ----
     {
         let mut s = new_synth();
         s.set_channel_preset(0, 0, 52); // Choir Aahs
@@ -1372,4 +1387,57 @@ fn render_sons_livres() {
         finish(&mut l, &mut r, 0.8);
         write(name, &l, &r);
     }
+}
+
+// ---------- v0.21: escolher a voz do Voice FX e nomes de planeta nos pads ----------
+
+#[test]
+fn voice_fx_voice_can_be_chosen_while_playing() {
+    let mut r = rig();
+    r.core.toggle_voicefx();
+    r.render(64);
+    for v in 0..crate::pads::VOICE_NAMES.len() {
+        r.core.set_voicefx_voice(v);
+        assert_eq!(r.core.cfg.efeitos.voicefx_voice, v);
+        r.core.handle_piano(&[0x90, 60, 100]);
+        let out = r.render(24_000);
+        assert!(rms(&out) > 0.003, "voz {} canta", crate::pads::VOICE_NAMES[v]);
+        r.core.handle_piano(&[0x80, 60, 0]);
+        r.render(60_000);
+    }
+    // "Minha" sem arquivo: avisa e não troca
+    r.core.set_voicefx_voice(crate::model::VOICE_MINE);
+    assert_ne!(r.core.cfg.efeitos.voicefx_voice, crate::model::VOICE_MINE);
+    assert!(r.core.toast.as_ref().unwrap().0.contains("Minha"));
+    // escolhendo um coral próprio, "Minha" já fica selecionada; tirando, volta ao Coral
+    let s: Vec<f32> = (0..48_000 * 3).map(|i| (std::f32::consts::TAU * 130.81 * i as f32 / 48_000.0).sin() * 0.3).collect();
+    let path = write_test_wav("coral_meu.wav", 48_000, &s);
+    r.core.set_voicefx_file(Some(path));
+    assert_eq!(r.core.cfg.efeitos.voicefx_voice, crate::model::VOICE_MINE);
+    r.core.set_voicefx_voice(2);
+    assert_eq!(r.core.cfg.efeitos.voicefx_voice, 2, "dá para voltar a uma voz do programa");
+    r.core.set_voicefx_file(None);
+    assert_eq!(r.core.cfg.efeitos.voicefx_voice, 0);
+}
+
+#[test]
+fn pads_get_planet_names_once_and_keep_mine() {
+    let mut c: Config = serde_json::from_str(
+        r#"{"pads_v13":true,"pads_v20":true,"my_pads":[
+            {"name":"Pad + Reverse em G - Em","path":"embutido:0","key":7},
+            {"name":"Meu C#","path":"embutido:1","key":1},
+            {"name":"Coral Celeste","path":"livre:0","key":0}]}"#,
+    )
+    .unwrap();
+    c.normalize();
+    let names: Vec<&str> = c.my_pads.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(names, vec!["Júpiter", "Meu C#", "Vênus"], "o que o Theo renomeou fica");
+    c.my_pads[0].name = "Sol de domingo".into();
+    c.normalize();
+    assert_eq!(c.my_pads[0].name, "Sol de domingo", "não troca de novo");
+    // config nova já vem com planetas
+    let mut d = Config::default();
+    d.normalize();
+    let names: Vec<&str> = d.my_pads.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(names, vec!["Júpiter", "Saturno", "Netuno", "Vênus", "Terra", "Marte"]);
 }

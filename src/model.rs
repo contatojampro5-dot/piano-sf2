@@ -445,6 +445,9 @@ pub struct Config {
     /// v0.20: já colocou os pads livres (MuseScore General) nos "Meus pads"?
     #[serde(default)]
     pub pads_v20: bool,
+    /// v0.21: já trocou os nomes compridos pelos nomes de planeta?
+    #[serde(default)]
+    pub pads_v21: bool,
     /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
     #[serde(default)]
     pub mappings_version: u32,
@@ -539,7 +542,12 @@ pub struct Efeitos {
     pub drum_files: Vec<(usize, String)>,
     /// v0.19: coral do Theo no Voice FX (arquivo, nota MIDI em que ele está). Sem = coral do programa.
     pub voicefx_file: Option<(String, u8)>,
+    /// v0.21: voz escolhida no Voice FX: 0..4 = vozes do programa (`pads::VOICE_NAMES`), 5 = "Minha" (o arquivo acima).
+    pub voicefx_voice: usize,
 }
+
+/// v0.21: número da voz "Minha" (o arquivo do Theo) no Voice FX.
+pub const VOICE_MINE: usize = 5;
 
 impl Default for Efeitos {
     fn default() -> Self {
@@ -557,6 +565,7 @@ impl Default for Efeitos {
             voicefx_octave: 0,
             drum_files: Vec::new(),
             voicefx_file: None,
+            voicefx_voice: 0,
         }
     }
 }
@@ -580,6 +589,9 @@ impl Efeitos {
         self.drum_volume = self.drum_volume.clamp(0.0, 1.0);
         self.voicefx_volume = self.voicefx_volume.clamp(0.0, 1.0);
         self.voicefx_octave = self.voicefx_octave.clamp(-1, 1);
+        if self.voicefx_voice > VOICE_MINE || (self.voicefx_voice == VOICE_MINE && self.voicefx_file.is_none()) {
+            self.voicefx_voice = 0;
+        }
         self.drum_files.retain(|(i, _)| *i < crate::efeitos::DRUMS);
         self.drum_files.sort_by_key(|(i, _)| *i);
         self.drum_files.dedup_by_key(|(i, _)| *i);
@@ -633,6 +645,7 @@ impl Default for Config {
             my_pads: Vec::new(),
             pads_v13: false,
             pads_v20: false,
+            pads_v21: false,
         }
     }
 }
@@ -702,6 +715,17 @@ impl Config {
                         key: p.key,
                         auto_key: false,
                     });
+                }
+            }
+        }
+        if !self.pads_v21 {
+            // v0.21: nomes curtos de planeta (só onde ainda está o nome antigo: o que o Theo renomeou fica)
+            self.pads_v21 = true;
+            for m in &mut self.my_pads {
+                if let Some((new, old)) = crate::pads::planet_name(&m.path) {
+                    if m.name == old {
+                        m.name = new.into();
+                    }
                 }
             }
         }
