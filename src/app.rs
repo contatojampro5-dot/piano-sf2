@@ -83,6 +83,8 @@ struct UiState {
     voicefx_file_dialog: bool,
     /// v0.21: lista de pads aberta (a bolinha de planeta na aba Pads).
     pad_list_open: bool,
+    /// v0.24: modo "+ Misturar" (o próximo pad clicado entra como segundo pad).
+    pad_mix_mode: bool,
 }
 
 pub struct PianoApp {
@@ -185,6 +187,7 @@ impl PianoApp {
                 drum_file_dialog: None,
                 voicefx_file_dialog: false,
                 pad_list_open: false,
+                pad_mix_mode: false,
             },
             last_save: Instant::now(),
             audio_retry: None,
@@ -1272,7 +1275,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             ui.add_space(6.0);
             let tap = ui.add_sized(
                 [w, (ui.available_height() - 4.0).clamp(50.0, 120.0)],
-                egui::Button::new(RichText::new("TAP").strong().size(24.0)).fill(th().glass_hi),
+                egui::Button::new(RichText::new("TAP TEMPO").strong().size(20.0)).fill(th().glass_hi),
             );
             let tap = tap.on_hover_text("Bata 2 a 4 vezes no tempo da música: o PulsePad e o Arpejador acompanham");
             if !learnable(ui, core, &tap, Target::TapTempo) && tap.clicked() {
@@ -1284,24 +1287,24 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         // ---- PulsePad ----
         fx_card(ui, Vec2::new(card_w, top_h), "💓 PulsePad", PAD_COLOR, Some((&mut d_pulse, "Pulsos por tempo e profundidade")), |ui| {
             let w = ui.available_width();
-            if fx_toggle(ui, core, w, core.pulse_on, "PULSO", PAD_COLOR, Target::PulseToggle, "Os pads e o ❄ congelado pulsam no tempo") {
+            if fx_toggle(ui, core, w, core.pulse_on, "PULSE", PAD_COLOR, Target::PulseToggle, "Os pads e o ❄ Freeze pulsam no tempo") {
                 core.toggle_pulse();
             }
             if o_pulse || learning {
                 ui.add_space(6.0);
-                if let Some(v) = fx_choice(ui, "Pulsos por tempo", &[("1 ♩", 1u32), ("2 ♪", 2), ("4 ♬", 4)], e.pulse_per_beat, PAD_COLOR) {
+                if let Some(v) = fx_choice(ui, "Rate (pulsos por tempo)", &[("1/4", 1u32), ("1/8", 2), ("1/16", 4)], e.pulse_per_beat, PAD_COLOR) {
                     e.pulse_per_beat = v;
                 }
                 ui.add_space(4.0);
-                ui.label(RichText::new(format!("Profundidade {:.0}%", e.pulse_depth * 100.0)).size(12.0).color(th().dim));
+                ui.label(RichText::new(format!("Depth {:.0}%", e.pulse_depth * 100.0)).size(12.0).color(th().dim));
                 fx_bar(ui, core, w, &mut e.pulse_depth, PAD_COLOR, None);
             }
         });
 
         // ---- Arpejador ----
-        fx_card(ui, Vec2::new(card_w, top_h), "🎼 Arpejador", ARP_COLOR, Some((&mut d_arp, "Camada, padrão, velocidade, oitavas e segurar")), |ui| {
+        fx_card(ui, Vec2::new(card_w, top_h), "🎼 Arpeggiator", ARP_COLOR, Some((&mut d_arp, "Layer, padrão (Up/Down), Rate, Octaves e Latch")), |ui| {
             let w = ui.available_width();
-            if fx_toggle(ui, core, w, core.arp_on, "ARPEJO", ARP_COLOR, Target::ArpToggle, "Segure o acorde: a camada escolhida toca as notas uma a uma") {
+            if fx_toggle(ui, core, w, core.arp_on, "ARP", ARP_COLOR, Target::ArpToggle, "Segure o acorde: a camada escolhida toca as notas uma a uma") {
                 core.toggle_arp();
             }
             let layer = e.arp_layer;
@@ -1321,10 +1324,10 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                         format!("{} · {p}", i + 1)
                     })
                     .collect();
-                let speeds: [(&str, u32); 3] = [("♪ colcheia", 2), ("tercina", 3), ("♬ semicolcheia", 4)];
+                let speeds: [(&str, u32); 3] = [("1/8", 2), ("1/8T (tercina)", 3), ("1/16", 4)];
                 let combo_w = (w - 88.0).max(80.0);
                 egui::Grid::new("arp_grid").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-                    ui.label(RichText::new("Camada").size(13.0).color(th().dim));
+                    ui.label(RichText::new("Layer").size(13.0).color(th().dim)).on_hover_text("Camada que arpeja");
                     egui::ComboBox::from_id_salt("arp_layer")
                         .width(combo_w)
                         .selected_text(format!("{}", e.arp_layer + 1))
@@ -1334,7 +1337,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                             }
                         });
                     ui.end_row();
-                    ui.label(RichText::new("Padrão").size(13.0).color(th().dim));
+                    ui.label(RichText::new("Pattern").size(13.0).color(th().dim)).on_hover_text("Up = sobe, Down = desce, Up/Down = sobe e desce, Random = aleatório");
                     egui::ComboBox::from_id_salt("arp_pattern")
                         .width(combo_w)
                         .selected_text(crate::efeitos::ARP_PATTERNS[e.arp_pattern as usize % 4])
@@ -1344,8 +1347,8 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                             }
                         });
                     ui.end_row();
-                    ui.label(RichText::new("Velocidade").size(13.0).color(th().dim));
-                    let cur = speeds.iter().find(|(_, v)| *v == e.arp_per_beat).map(|(n, _)| *n).unwrap_or("♪ colcheia");
+                    ui.label(RichText::new("Rate").size(13.0).color(th().dim)).on_hover_text("Velocidade das notas");
+                    let cur = speeds.iter().find(|(_, v)| *v == e.arp_per_beat).map(|(n, _)| *n).unwrap_or("1/8");
                     egui::ComboBox::from_id_salt("arp_speed")
                         .width(combo_w)
                         .selected_text(cur)
@@ -1355,7 +1358,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                             }
                         });
                     ui.end_row();
-                    ui.label(RichText::new("Oitavas").size(13.0).color(th().dim));
+                    ui.label(RichText::new("Octaves").size(13.0).color(th().dim)).on_hover_text("Quantas oitavas o arpejo sobe");
                     egui::ComboBox::from_id_salt("arp_oct")
                         .width(combo_w)
                         .selected_text(format!("{}", e.arp_octaves))
@@ -1367,14 +1370,14 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                     ui.end_row();
                 });
                 ui.add_space(2.0);
-                ui.checkbox(&mut e.arp_latch, "Segurar depois de soltar");
+                ui.checkbox(&mut e.arp_latch, "Latch").on_hover_text("Continua arpejando depois de soltar as teclas, até o próximo acorde");
             }
         });
 
         // ---- Voice FX ----
         fx_card(ui, Vec2::new(card_w, top_h), "🎤 Voice FX", VOICE_COLOR, Some((&mut d_voice, "Oitava do coral")), |ui| {
             let w = ui.available_width();
-            if fx_toggle(ui, core, w, core.voicefx_on, "VOZES", VOICE_COLOR, Target::VoiceFxToggle, "Um coral (\"aah\") acompanha cada nota que você tocar") {
+            if fx_toggle(ui, core, w, core.voicefx_on, "VOICE", VOICE_COLOR, Target::VoiceFxToggle, "Um coral (\"aah\") acompanha cada nota que você tocar") {
                 core.toggle_voicefx();
             }
             // v0.21: escolher a voz que canta (troca na hora, mesmo ligado)
@@ -1434,10 +1437,10 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         });
 
         // ---- v0.23: Abrir / fechar (filtro) + Swell ----
-        fx_card(ui, Vec2::new(card_w, top_h), "Abrir / fechar", PITCH_COLOR, Some((&mut d_filt, "Ressonância, tempo do swell e onde vale")), |ui| {
+        fx_card(ui, Vec2::new(card_w, top_h), "Filter Sweep", PITCH_COLOR, Some((&mut d_filt, "Resonance, tempo do swell e onde vale")), |ui| {
             let w = ui.available_width();
             ui.horizontal(|ui| {
-                ui.label(RichText::new("Filtro").size(13.0).strong());
+                ui.label(RichText::new("Cutoff").size(13.0).strong()).on_hover_text("O filtro: fechado = escuro e abafado; aberto = brilhante");
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let t = if e.filtro >= 0.995 { "aberto".to_string() } else if e.filtro <= 0.005 { "fechado".to_string() } else { format!("{:.0}%", e.filtro * 100.0) };
                     ui.label(RichText::new(t).size(12.0).color(th().dim));
@@ -1457,7 +1460,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                 });
             });
             ui.add_space(8.0);
-            let label = if core.swell_in { "SAIR SUAVE" } else { "ENTRAR SUAVE" };
+            let label = if core.swell_in { "FADE OUT" } else { "SWELL IN" };
             if fx_toggle(ui, core, w, core.swell_in, label, PITCH_COLOR, Target::SwellToggle, "Swell: o som sai devagar (fechando o filtro) ou entra devagar (abrindo)") {
                 core.toggle_swell();
             }
@@ -1468,7 +1471,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             );
             if o_filt || learning {
                 ui.add_space(6.0);
-                ui.label(RichText::new(format!("Ressonância {:.0}%", e.filtro_res * 100.0)).size(12.0).color(th().dim));
+                ui.label(RichText::new(format!("Resonance {:.0}%", e.filtro_res * 100.0)).size(12.0).color(th().dim));
                 fx_bar(ui, core, w, &mut e.filtro_res, PITCH_COLOR, None);
                 let secs: [(&str, u32); 4] = [("2 s", 2), ("4 s", 4), ("8 s", 8), ("16 s", 16)];
                 let cur = e.swell_secs.round() as u32;
@@ -1639,33 +1642,97 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             st.pad_list_open = !st.pad_list_open;
         }
         let cur = pads::my_slot(core.cfg.pad_bank).filter(|i| *i < core.cfg.my_pads.len());
+        let second = core.cfg.pad_bank2;
         ui.spacing_mut().item_spacing.x = 6.0;
+        // v0.24: segundo pad (tocando junto) em lilás claro; no modo "Misturar", clicar escolhe o segundo
+        const PAD2_COLOR: Color32 = Color32::from_rgb(0xe0, 0xc8, 0xff);
+        let mut remove_second = false;
         for i in 0..core.cfg.my_pads.len() {
             let b = pads::MY_BANK + i;
             let sel = core.cfg.pad_bank == b;
-            if !open && !sel {
+            let sel2 = second == Some(b);
+            if !open && !sel && !sel2 {
                 continue;
+            }
+            if !open && sel2 {
+                ui.label(RichText::new("+").size(16.0).strong().color(th().dim));
             }
             let m = &core.cfg.my_pads[i];
             let text = RichText::new(&m.name)
-                .size(if sel && !open { 16.0 } else { 14.0 })
+                .size(if (sel || sel2) && !open { 16.0 } else { 14.0 })
                 .strong()
-                .color(if sel { th().ink } else { th().text });
+                .color(if sel || sel2 { th().ink } else { th().text });
             let tip = format!("{} · pad em {}", m.name, pads::KEY_NAMES[m.key]);
+            let fill = if sel {
+                PAD_COLOR
+            } else if sel2 {
+                PAD2_COLOR
+            } else {
+                th().glass_hi
+            };
             let r = ui
                 .add(
                     egui::Button::new(text)
-                        .fill(if sel { PAD_COLOR } else { th().glass_hi })
+                        .fill(fill)
                         .corner_radius(16)
                         .min_size(Vec2::new(0.0, 32.0)),
                 )
                 .on_hover_text(tip);
             if !learnable(ui, core, &r, Target::PadBank) && r.clicked() {
-                if open && !sel {
+                if open && st.pad_mix_mode && !sel {
+                    core.set_pad_bank2(Some(b));
+                    st.pad_mix_mode = false;
+                    st.pad_list_open = false;
+                } else if open && !sel {
                     core.set_pad_bank(b);
+                    st.pad_list_open = false;
+                } else {
+                    // clicou no nome com a lista fechada (ou no que já era): abre/fecha a lista
+                    st.pad_list_open = !st.pad_list_open;
+                    st.pad_mix_mode = false;
                 }
-                // escolheu: a lista fecha (fica só a bolinha e o nome)
-                st.pad_list_open = !st.pad_list_open;
+            }
+            if !open && sel2 {
+                if ui
+                    .add(egui::Button::new(RichText::new("✖").size(12.0)).fill(th().glass))
+                    .on_hover_text("Tirar o segundo pad (fica só um)")
+                    .clicked()
+                {
+                    remove_second = true;
+                }
+            }
+        }
+        if remove_second {
+            core.set_pad_bank2(None);
+        }
+        if open && cur.is_some() && core.cfg.my_pads.len() > 1 {
+            let on = st.pad_mix_mode;
+            let b = egui::Button::new(
+                RichText::new(if on { "+ Misturar: escolha o 2º pad" } else { "+ Misturar" })
+                    .size(13.0)
+                    .color(if on { th().ink } else { th().text }),
+            )
+            .fill(if on { PAD2_COLOR } else { th().glass })
+            .corner_radius(16)
+            .min_size(Vec2::new(0.0, 32.0));
+            if ui
+                .add(b)
+                .on_hover_text("Tocar dois pads juntos: clique aqui e depois no pad que vai entrar junto")
+                .clicked()
+            {
+                st.pad_mix_mode = !st.pad_mix_mode;
+            }
+        }
+        // mix entre os dois (só com dois pads)
+        if !open && second.is_some() {
+            ui.add_space(8.0);
+            ui.label(RichText::new("Mix").size(12.0).color(th().dim));
+            let r = hbar(ui, Vec2::new(140.0, 28.0), core.cfg.pad_mix, true, PAD_COLOR);
+            let r = r.on_hover_text("Esquerda = mais o 1º pad · meio = os dois iguais · direita = mais o 2º. Dá para pôr num knob da mesinha (Aprender).");
+            if !learnable(ui, core, &r, Target::PadMix) && r.is_pointer_button_down_on() {
+                if let Some(p) = r.interact_pointer_pos() {
+                    core.set_pad_mix(((p.x - r.rect.left()) / r.rect.width()).clamp(0.0, 1.0));
+                }
             }
         }
         if cur.is_none() && !open {
@@ -2331,6 +2398,7 @@ fn scenes_bar(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                 }
                 if ui.button("🗑 Apagar").clicked() {
                     core.cfg.scenes[n].mix = None;
+                    core.cfg.scenes[n].extra = None;
                     core.dirty = true;
                     ui.close();
                 }
@@ -2921,22 +2989,40 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2, details: bool) {
     ui.add_space(if compact { 2.0 } else { 6.0 });
     // v0.16: Congelar — o acorde que está soando fica tocando sozinho (aperta de novo: some devagar).
     let on = core.freeze_on;
-    let fz = ui.add_sized(
-        [inner.width(), freeze_h],
-        egui::Button::new(
-            RichText::new(if on { "❄ CONGELADO" } else { "❄ CONGELAR" })
-                .strong()
-                .size(15.0)
-                .color(if on { th().ink } else { th().text }),
-        )
-        .fill(if on { PITCH_COLOR } else { th().glass_hi }),
-    );
+    // v0.24: FREEZE e, do lado, ↺ (volta o último Freeze)
+    let (fz, back) = ui
+        .horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            let back_w = 36.0;
+            let fz = ui.add_sized(
+                [inner.width() - back_w - 4.0, freeze_h],
+                egui::Button::new(
+                    RichText::new(if on { "❄ FREEZE ON" } else { "❄ FREEZE" })
+                        .strong()
+                        .size(15.0)
+                        .color(if on { th().ink } else { th().text }),
+                )
+                .fill(if on { PITCH_COLOR } else { th().glass_hi }),
+            );
+            let has = core.has_last_freeze();
+            let back = ui.add_sized(
+                [back_w, freeze_h],
+                egui::Button::new(RichText::new("↺").size(18.0).strong().color(if has { th().text } else { th().dim }))
+                    .fill(th().glass_hi),
+            );
+            (fz, back)
+        })
+        .inner;
     let fz = fz.on_hover_text(
         "Toque um acorde e aperte: o som fica soando sozinho, mesmo trocando os timbres. \
          Aperte de novo para ele sumir devagar.",
     );
+    let back = back.on_hover_text("↺ Voltar o último Freeze (o último som congelado, mesmo depois de reabrir o programa)");
     if !learnable(ui, core, &fz, Target::Freeze) && fz.clicked() {
         core.freeze_toggle();
+    }
+    if !learnable(ui, core, &back, Target::FreezeRecall) && back.clicked() {
+        core.freeze_recall();
     }
     ui.add_space(if compact { 2.0 } else { 6.0 });
     let panic = ui.add_sized(

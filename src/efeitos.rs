@@ -74,7 +74,7 @@ pub fn pulse_gain(phase: f32, depth: f32) -> f32 {
 // Arpejador
 // ---------------------------------------------------------------------------------------------
 
-pub const ARP_PATTERNS: [&str; 4] = ["Sobe", "Desce", "Sobe e desce", "Aleatório"];
+pub const ARP_PATTERNS: [&str; 4] = ["Up", "Down", "Up/Down", "Random"];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ArpParams {
@@ -228,7 +228,7 @@ impl Arp {
 
 pub const DRUMS: usize = 8;
 pub const DRUM_NAMES: [&str; DRUMS] = [
-    "Bumbo", "Caixa", "Palmas", "Chimbal", "Prato", "808", "Subida", "Impacto",
+    "Kick", "Snare", "Clap", "Hi-hat", "Crash", "808", "Riser", "Impact",
 ];
 
 /// Os 8 sons, prontos (estéreo), na taxa de amostragem da placa.

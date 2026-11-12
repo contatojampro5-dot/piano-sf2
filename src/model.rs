@@ -86,6 +86,22 @@ impl Mix {
 pub struct Scene {
     pub name: String,
     pub mix: Option<Mix>,
+    /// v0.24: o resto do preset (efeitos e o que está ligado, pads, mix dos pads, filtro, tempo, volume geral).
+    /// Cena salva antes da v0.24 não tem: carrega só as camadas, como antes.
+    pub extra: Option<SceneExtra>,
+}
+
+/// v0.24: tudo da cena além das camadas.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SceneExtra {
+    pub efeitos: Efeitos,
+    pub pad_bank: usize,
+    pub pad_bank2: Option<usize>,
+    pub pad_mix: f32,
+    pub pad_volume: f32,
+    pub master: f32,
+    pub vivo: VivoCfg,
 }
 
 /// O que um controle da mesinha comanda.
@@ -134,6 +150,9 @@ pub enum Target {
     /// v0.23: filtro de abrir/fechar (knob/fader) e o botão de swell (entra/sai suave).
     Filter,
     SwellToggle,
+    /// v0.24: ↺ volta o último Freeze; mix entre os dois pads.
+    FreezeRecall,
+    PadMix,
 }
 
 impl Target {
@@ -151,6 +170,7 @@ impl Target {
                 | Target::DrumVolume
                 | Target::VoiceFxVolume
                 | Target::Filter
+                | Target::PadMix
         )
     }
 
@@ -187,10 +207,10 @@ impl Target {
             Target::PitchUp => "Pitch ▲ (segurar sobe)".into(),
             Target::PitchDown => "Pitch ▼ (segurar desce)".into(),
             Target::Modulation => "Modulation (vibrato)".into(),
-            Target::Freeze => "Congelar o som (liga/desliga)".into(),
-            Target::TapTempo => "Bater o tempo (TAP)".into(),
-            Target::PulseToggle => "PulsePad (liga/desliga)".into(),
-            Target::ArpToggle => "Arpejador (liga/desliga)".into(),
+            Target::Freeze => "Freeze (liga/desliga)".into(),
+            Target::TapTempo => "Tap Tempo".into(),
+            Target::PulseToggle => "Pulse Pad (liga/desliga)".into(),
+            Target::ArpToggle => "Arpeggiator (liga/desliga)".into(),
             Target::VoiceFxToggle => "Voice FX (liga/desliga)".into(),
             Target::Drum(i) => format!(
                 "DrumPad {}",
@@ -198,8 +218,10 @@ impl Target {
             ),
             Target::DrumVolume => "Volume dos DrumPads".into(),
             Target::VoiceFxVolume => "Volume do Voice FX".into(),
-            Target::Filter => "Filtro (abrir/fechar o som)".into(),
-            Target::SwellToggle => "Swell (entrar/sair suave)".into(),
+            Target::Filter => "Filter Sweep (Cutoff)".into(),
+            Target::SwellToggle => "Swell In / Fade Out".into(),
+            Target::FreezeRecall => "Freeze: voltar o último (↺)".into(),
+            Target::PadMix => "Mix entre os 2 pads".into(),
         }
     }
 }
@@ -431,6 +453,9 @@ pub struct Config {
     pub pad_volume: f32,
     /// Banco de pads em uso (0 = Escuro, 1 = Coral).
     pub pad_bank: usize,
+    /// v0.24: segundo pad tocando junto (um dos "Meus pads"), e o mix entre os dois (0 = só o 1º, 1 = só o 2º).
+    pub pad_bank2: Option<usize>,
+    pub pad_mix: f32,
     /// Arquivos próprios nos botões de pad.
     pub pad_files: Vec<PadFile>,
     /// Aba aberta (0 = Sons SF2, 1 = Pads).
@@ -560,6 +585,10 @@ pub struct Efeitos {
     pub swell_secs: f32,
     /// v0.23: o swell abre/fecha o filtro junto com o volume.
     pub swell_filtro: bool,
+    /// v0.24: o que estava ligado (o programa abre do jeito que ficou).
+    pub pulse_on: bool,
+    pub arp_on: bool,
+    pub voicefx_on: bool,
 }
 
 /// v0.21: número da voz "Minha" (o arquivo do Theo) no Voice FX.
@@ -587,6 +616,9 @@ impl Default for Efeitos {
             filtro_tudo: false,
             swell_secs: 4.0,
             swell_filtro: true,
+            pulse_on: false,
+            arp_on: false,
+            voicefx_on: false,
         }
     }
 }
@@ -658,6 +690,8 @@ impl Default for Config {
             program_change_scenes: false,
             pad_volume: 0.7,
             pad_bank: 0,
+            pad_bank2: None,
+            pad_mix: 0.5,
             pad_files: Vec::new(),
             tab: 0,
             mappings_version: MAPPINGS_VERSION,
@@ -679,6 +713,7 @@ fn default_scenes() -> Vec<Scene> {
         .map(|i| Scene {
             name: format!("Cena {}", i + 1),
             mix: None,
+            extra: None,
         })
         .collect()
 }
@@ -707,6 +742,7 @@ impl Config {
         self.efeitos.normalize();
         self.pad_volume = self.pad_volume.clamp(0.0, 1.0);
         self.pad_bank %= crate::pads::ALL_BANKS;
+        self.pad_mix = self.pad_mix.clamp(0.0, 1.0);
         if !self.pads_v13 {
             self.pads_v13 = true;
             if !self.is_hidden("pad_styles") {
@@ -754,6 +790,13 @@ impl Config {
             }
         }
         self.my_pads.truncate(crate::pads::MY_SLOTS);
+        // v0.24: o segundo pad tem que ser um dos "Meus pads" e diferente do principal
+        if let Some(b2) = self.pad_bank2 {
+            let ok = crate::pads::my_slot(b2).is_some_and(|i| i < self.my_pads.len()) && b2 != self.pad_bank;
+            if !ok {
+                self.pad_bank2 = None;
+            }
+        }
         for m in &mut self.my_pads {
             m.key %= crate::pads::PAD_KEYS;
             if m.name.trim().is_empty() {

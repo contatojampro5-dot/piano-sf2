@@ -194,6 +194,18 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.24 — dois pads juntos, ↺ último Freeze, cena = preset completo, nomes originais
+- **Dois pads juntos**: na lista de pads, **+ Misturar** e clique no segundo pad. Aparece a barra **Mix** (esquerda = mais o 1º,
+  meio = os dois iguais, direita = mais o 2º; dá para pôr num knob). ✖ tira o segundo. Trocar de tom leva os dois.
+- **↺ ao lado do FREEZE**: volta o último som congelado quando você quiser, até depois de fechar e abrir o programa
+  (fica salvo em `%APPDATA%PianoSF2Ltimo-freeze.wav`).
+- **Cena = preset completo**: 💾 Salvar cena guarda camadas **e** efeitos (e o que está ligado), pads, mix dos pads, filtro,
+  tempo, volume do pad e o geral. Cenas antigas continuam funcionando (só com as camadas).
+- O programa **abre do jeito que ficou**: Pulse, Arp e Voice voltam ligados se estavam ligados.
+- **Nomes originais**: Freeze, Filter Sweep (Cutoff, Resonance), Swell In / Fade Out, Pulse (Rate, Depth), Arpeggiator
+  (Up, Down, Up/Down, Random, Rate 1/8 · 1/8T · 1/16, Octaves, Latch), Tap Tempo, Kick, Snare, Clap, Hi-hat, Crash, 808, Riser,
+  Impact, e as vozes Choir, Choir Aahs, Voice Oohs, Space Voice, Synth Voice.
+
 ### v0.23.1 — aba Pads arrumada
 - Com o ⚙ aberto, os ajustes do pad ficam num **quadro só**, alinhado: Nome e "está em" numa linha, Reverb de igreja na outra,
   e os botões (Pôr pad, ↺ pads da parceria, Tirar este pad) no fim.

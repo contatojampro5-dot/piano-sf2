@@ -363,7 +363,7 @@ pub fn planet_name(path: &str) -> Option<(&'static str, &'static str)> {
 
 /// v0.20/v0.21: vozes de verdade do Voice FX (MuseScore General, todas em C3).
 /// 0 Coral (aah + ooh), 1 Aah, 2 Ooh, 3 Celeste, 4 Synth.
-pub const VOICE_NAMES: [&str; 5] = ["Coral", "Aah", "Ooh", "Celeste", "Synth"];
+pub const VOICE_NAMES: [&str; 5] = ["Choir", "Choir Aahs", "Voice Oohs", "Space Voice", "Synth Voice"];
 pub const VOICE_HINTS: [&str; 5] = [
     "coral misturado (aah + ooh)",
     "coral cantando \"aah\"",
@@ -645,6 +645,8 @@ pub struct PadVoice {
     rate: f32,
     /// Velocidade de leitura (1 = altura original; "Meu pad" muda o tom assim).
     pitch: f64,
+    /// v0.24: 0 = pad principal, 1 = segundo pad (o mix entre os dois vale por camada).
+    pub layer: u8,
 }
 
 pub const FADE_IN_S: f32 = 2.5;
@@ -659,12 +661,23 @@ impl PadVoice {
             gain: 0.0,
             target: 1.0,
             rate: 1.0 / (FADE_IN_S * sample_rate as f32),
+            layer: 0,
         }
+    }
+
+    pub fn with_layer(mut self, layer: u8) -> Self {
+        self.layer = layer.min(1);
+        self
     }
 
     pub fn fade_out(&mut self, sample_rate: u32) {
         self.target = 0.0;
         self.rate = 1.0 / (FADE_OUT_S * sample_rate as f32);
+    }
+
+    /// Está sumindo (já mandaram parar)?
+    pub fn fading(&self) -> bool {
+        self.target == 0.0
     }
 
     /// Terminou de sumir?

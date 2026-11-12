@@ -396,3 +396,94 @@ mod tests {
         assert!(l.iter().all(|&x| x == 0.5));
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// v0.24: o último Freeze fica guardado num arquivo (volta com o botão ↺, até depois de reabrir)
+// ---------------------------------------------------------------------------------------------
+
+/// Onde o último Freeze fica salvo (%APPDATA%\PianoSF2\ultimo-freeze.wav). Nos testes, numa pasta temporária.
+pub fn saved_path() -> std::path::PathBuf {
+    #[cfg(test)]
+    {
+        // um arquivo por teste (os testes rodam juntos)
+        let t: String = format!("{:?}", std::thread::current().id()).chars().filter(|c| c.is_ascii_digit()).collect();
+        std::env::temp_dir().join(format!("noahpad-teste-freeze-{}-{t}.wav", std::process::id()))
+    }
+    #[cfg(not(test))]
+    {
+        let base = std::env::var_os("APPDATA")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        base.join("PianoSF2").join("ultimo-freeze.wav")
+    }
+}
+
+impl FreezeSource {
+    /// Trecho já escolhido (volume = o do finalzinho, igual ao `from_audio`).
+    pub fn from_exact(l: Vec<f32>, r: Vec<f32>, rate: u32) -> Option<Self> {
+        if l.len() < 2048 || l.len() != r.len() {
+            return None;
+        }
+        let last = l.len().saturating_sub(rate as usize * 3 / 10);
+        let rms = rms(&l[last..], &r[last..]);
+        if rms < 1e-5 {
+            return None;
+        }
+        Some(Self { l, r, rate, rms })
+    }
+
+    /// Grava como WAV 16 bits estéreo.
+    pub fn save_wav(&self, path: &std::path::Path) -> std::io::Result<()> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let data_len = (self.l.len() * 4) as u32;
+        let mut b: Vec<u8> = Vec::with_capacity(44 + data_len as usize);
+        b.extend(b"RIFF");
+        b.extend((36 + data_len).to_le_bytes());
+        b.extend(b"WAVEfmt ");
+        b.extend(16u32.to_le_bytes());
+        b.extend(1u16.to_le_bytes());
+        b.extend(2u16.to_le_bytes());
+        b.extend(self.rate.to_le_bytes());
+        b.extend((self.rate * 4).to_le_bytes());
+        b.extend(4u16.to_le_bytes());
+        b.extend(16u16.to_le_bytes());
+        b.extend(b"data");
+        b.extend(data_len.to_le_bytes());
+        for (a, c) in self.l.iter().zip(&self.r) {
+            b.extend(((a.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+            b.extend(((c.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+        }
+        std::fs::write(path, b)
+    }
+
+    /// Abre o último Freeze salvo (None = não tem / arquivo estragado).
+    pub fn load_wav(path: &std::path::Path) -> Option<Self> {
+        let file = std::fs::File::open(path).ok()?;
+        let clip = crate::pads::decode(Box::new(file), Some("wav"), false).ok()?;
+        let n = clip.frames();
+        let l = (0..n).map(|f| clip.data[2 * f] as f32 / 32768.0).collect();
+        let r = (0..n).map(|f| clip.data[2 * f + 1] as f32 / 32768.0).collect();
+        Self::from_exact(l, r, clip.rate)
+    }
+}
+
+#[cfg(test)]
+mod saved_tests {
+    use super::*;
+
+    #[test]
+    fn last_freeze_is_saved_and_comes_back() {
+        let rate = 48_000;
+        let l: Vec<f32> = (0..rate as usize).map(|i| (i as f32 * 0.03).sin() * 0.4).collect();
+        let src = FreezeSource::from_exact(l.clone(), l.clone(), rate).unwrap();
+        let path = std::env::temp_dir().join(format!("noahpad-freeze-wav-{}.wav", std::process::id()));
+        src.save_wav(&path).unwrap();
+        let back = FreezeSource::load_wav(&path).unwrap();
+        assert_eq!(back.l.len(), src.l.len());
+        assert!((back.rms - src.rms).abs() < 0.01);
+        assert!(FreezeSource::load_wav(std::path::Path::new("C:/nao/existe.wav")).is_none());
+        let _ = std::fs::remove_file(path);
+    }
+}

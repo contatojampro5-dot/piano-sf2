@@ -58,6 +58,9 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   `pads::VOICE_NAMES`/`load_voice` (assets/sons-livres/vozes), `cfg.efeitos.voicefx_voice` (5 = `VOICE_MINE`), `core.set_voicefx_voice`.
 - Filtro/swell (v0.23): `efeitos::Lowpass` (biquad, corte suave, `filter_hz` 150 Hz..20 kHz) e `efeitos::Swell`; no motor `lp_fz`/`lp_pad`
   (fundo) ou `lp_all` (tudo menos bateria), `Cmd::Filter`/`Cmd::Swell`; `cfg.efeitos.filtro*`/`swell_*`, `Target::Filter`/`SwellToggle`.
+- v0.24: `PadVoice.layer` + `Cmd::PadLayer2`/`PadMix` (`cfg.pad_bank2`, `cfg.pad_mix`, equal power); `core.last_freeze` +
+  `freeze::saved_path()` (ultimo-freeze.wav; nos testes, um por thread) e `freeze_recall`; `Scene.extra: SceneExtra` (preset completo);
+  `cfg.efeitos.pulse_on/arp_on/voicefx_on` restaurados em `Core::new` e protegidos em `set_efeitos`.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

@@ -28,7 +28,7 @@ pub enum Garbage {
 const MAX_FREEZE: usize = 4;
 
 /// Máximo de pads soando juntos (o que entra + os que estão sumindo).
-const MAX_PADS: usize = 4;
+const MAX_PADS: usize = 8;
 
 /// Comandos para o motor (vindos do piano, da mesinha ou da tela).
 pub enum Cmd {
@@ -114,6 +114,10 @@ pub enum Cmd {
     /// Toca um pad (o que estiver tocando some devagar).
     /// Pad em loop com a velocidade de leitura (1 = altura original).
     PadPlay(Arc<PadClip>, f32),
+    /// v0.24: segundo pad junto (não apaga o primeiro), na camada 1.
+    PadLayer2(Arc<PadClip>, f32),
+    /// v0.24: volume de cada camada de pad (principal, segundo) — o mix entre os dois.
+    PadMix(f32, f32),
     PadStop,
     PadVolume(f32),
     /// Toca um Pad Vivo (granular); o que estiver tocando some devagar. A voz é criada fora daqui.
@@ -166,6 +170,9 @@ pub struct Engine {
     /// Volume dos pads (alvo e valor suavizado).
     pad_vol: f32,
     pad_vol_now: f32,
+    /// v0.24: volume de cada camada (pedido e suavizado).
+    pad_layer: [f32; 2],
+    pad_layer_now: [f32; 2],
     // Box de propósito: a voz é criada fora da thread de áudio e só "passa a mão" para cá.
     #[allow(clippy::vec_box)]
     grains: Vec<Box<GranularVoice>>,
@@ -233,6 +240,8 @@ impl Engine {
             pads: Vec::with_capacity(MAX_PADS + 1),
             pad_vol: 0.49,
             pad_vol_now: 0.49,
+            pad_layer: [1.0, 0.0],
+            pad_layer_now: [1.0, 0.0],
             grains: Vec::with_capacity(MAX_PADS + 1),
             grain_params: GrainParams::default(),
             freezes: Vec::with_capacity(MAX_FREEZE + 1),
@@ -566,6 +575,15 @@ impl Engine {
                 }
                 self.pads.push(PadVoice::new(clip, sr, pitch));
             }
+            Cmd::PadLayer2(clip, pitch) => {
+                let sr = self.sample_rate;
+                if self.pads.len() >= MAX_PADS {
+                    let old = self.pads.remove(0);
+                    let _ = self.garbage.try_send(Garbage::Pad(old.clip));
+                }
+                self.pads.push(PadVoice::new(clip, sr, pitch).with_layer(1));
+            }
+            Cmd::PadMix(a, b) => self.pad_layer = [a.clamp(0.0, 1.0), b.clamp(0.0, 1.0)],
             Cmd::PadStop => {
                 let sr = self.sample_rate;
                 for v in &mut self.pads {
@@ -625,6 +643,18 @@ impl Engine {
     #[cfg(test)]
     pub fn test_choir_voices(&self) -> usize {
         self.voicefx.active_voices()
+    }
+
+    /// Para os testes: quantos pads tocando (sem estar sumindo) em cada camada, e o volume de cada camada.
+    #[cfg(test)]
+    pub fn test_pad_layers(&self) -> ([usize; 2], [f32; 2]) {
+        let mut n = [0usize; 2];
+        for v in &self.pads {
+            if !v.fading() {
+                n[v.layer as usize] += 1;
+            }
+        }
+        (n, self.pad_layer)
     }
 
     /// Solta a nota do arpejo que está soando.
@@ -747,8 +777,13 @@ impl Engine {
                 let (pl, pr) = (&mut self.pad_l[..n], &mut self.pad_r[..n]);
                 pl.fill(0.0);
                 pr.fill(0.0);
+                // v0.24: cada camada (pad principal / segundo pad) com o seu volume do mix, mudando suave
+                for k in 0..2 {
+                    self.pad_layer_now[k] += (self.pad_layer[k] - self.pad_layer_now[k]) * 0.2;
+                }
+                let lg = self.pad_layer_now;
                 for v in &mut self.pads {
-                    v.mix(pl, pr, 1.0, sr);
+                    v.mix(pl, pr, lg[v.layer as usize], sr);
                 }
                 let gp = self.grain_params;
                 for g in &mut self.grains {

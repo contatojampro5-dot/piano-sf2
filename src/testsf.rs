@@ -1511,3 +1511,143 @@ fn filter_settings_default_open_and_old_config_loads() {
     assert_eq!(old.efeitos.filtro, 1.0);
     assert!(old.efeitos.swell_filtro && !old.efeitos.filtro_tudo);
 }
+
+// ---------- v0.24: dois pads juntos, voltar o último Freeze, programa salvo, cena = preset completo ----------
+
+fn rig_with_my_pads() -> Rig {
+    let mut r = rig();
+    r.core.cfg.normalize(); // já vem com os 6 "Meus pads" (parceria + livres)
+    r
+}
+
+#[test]
+fn two_pads_play_together_with_a_mix() {
+    let mut r = rig_with_my_pads();
+    let (venus, terra) = (crate::pads::MY_BANK + 3, crate::pads::MY_BANK + 4);
+    r.core.set_pad_bank(venus);
+    r.core.set_pad_bank2(Some(terra));
+    r.core.pad_press(0);
+    r.render(4_800);
+    let (n, g) = r.engine.test_pad_layers();
+    assert_eq!(n, [1, 1], "Vênus e Terra tocando juntos");
+    assert!((g[0] - g[1]).abs() < 1e-3 && g[0] > 0.6, "no meio, os dois iguais: {g:?}");
+    // mix todo para o segundo
+    r.core.set_pad_mix(1.0);
+    r.render(256);
+    let (_, g) = r.engine.test_pad_layers();
+    assert!(g[0] < 0.01 && g[1] > 0.99, "{g:?}");
+    // trocar de tom leva os dois juntos
+    r.core.pad_press(7);
+    r.render(256);
+    assert_eq!(r.engine.test_pad_layers().0, [1, 1]);
+    // tirar o segundo: fica um só, com volume cheio
+    r.core.set_pad_bank2(None);
+    r.render(256);
+    let (n, g) = r.engine.test_pad_layers();
+    assert_eq!(n, [1, 0]);
+    assert!((g[0] - 1.0).abs() < 1e-6);
+    // o segundo não pode ser o mesmo do principal
+    r.core.set_pad_bank2(Some(venus));
+    assert_eq!(r.core.cfg.pad_bank2, None);
+}
+
+#[test]
+fn removing_a_pad_keeps_the_second_pad_right() {
+    let mut r = rig_with_my_pads();
+    r.core.set_pad_bank(crate::pads::MY_BANK + 3);
+    r.core.set_pad_bank2(Some(crate::pads::MY_BANK + 5)); // Marte
+    r.core.remove_my_pad(0); // tira Júpiter: todo mundo sobe uma posição
+    assert_eq!(r.core.cfg.pad_bank2, Some(crate::pads::MY_BANK + 4));
+    assert_eq!(r.core.cfg.my_pads[4].name, "Marte");
+    r.core.remove_my_pad(4); // tirou o próprio segundo pad
+    assert_eq!(r.core.cfg.pad_bank2, None);
+}
+
+#[test]
+fn last_freeze_comes_back_even_after_reopening() {
+    let _ = std::fs::remove_file(crate::freeze::saved_path());
+    let mut r = rig();
+    r.core.freeze_recall();
+    assert!(!r.core.freeze_on, "sem Freeze guardado ainda");
+    assert!(r.core.toast.as_ref().unwrap().0.contains("Ainda não tem"));
+    r.render(64);
+    r.core.handle_piano(&[0x90, 60, 100]);
+    r.render(48_000);
+    r.core.freeze_capture();
+    assert!(r.core.freeze_on);
+    r.core.handle_piano(&[0x80, 60, 0]);
+    r.core.freeze_toggle(); // desligou
+    r.render(48_000 * 4);
+    assert!(rms(&r.render(4_800)) < 1e-4, "sumiu");
+    r.core.freeze_recall(); // ↺
+    assert!(r.core.freeze_on);
+    r.render(24_000);
+    assert!(rms(&r.render(4_800)) > 0.005, "voltou o mesmo som");
+    // "reabriu o programa": core novo, sem nada na memória — o ↺ lê o arquivo salvo
+    let mut r2 = rig();
+    assert!(r2.core.has_last_freeze());
+    r2.core.freeze_recall();
+    assert!(r2.core.freeze_on);
+    r2.render(24_000);
+    assert!(rms(&r2.render(4_800)) > 0.005, "voltou depois de reabrir");
+    let _ = std::fs::remove_file(crate::freeze::saved_path());
+}
+
+#[test]
+fn program_reopens_with_the_effects_that_were_on() {
+    let mut r = rig();
+    r.core.toggle_pulse();
+    r.core.toggle_arp();
+    r.core.toggle_voicefx();
+    // a tela trabalha numa cópia velha dos ajustes: não pode desligar o que o botão ligou
+    let mut old = r.core.cfg.efeitos.clone();
+    old.pulse_on = false;
+    old.bpm = 101.0;
+    r.core.set_efeitos(old);
+    assert!(r.core.cfg.efeitos.pulse_on && r.core.cfg.efeitos.bpm == 101.0);
+    // salvou e abriu de novo
+    let json = serde_json::to_string(&r.core.cfg).unwrap();
+    let cfg: Config = serde_json::from_str(&json).unwrap();
+    let (tx, _rx) = unbounded::<Cmd>();
+    let c = Core::new(cfg, tx);
+    assert!(c.pulse_on && c.arp_on && c.voicefx_on, "abre com Pulse, Arp e Voice ligados");
+}
+
+#[test]
+fn a_scene_is_a_full_preset() {
+    let mut r = rig_with_my_pads();
+    // Cena 1: Pulse + Arp ligados, filtro meio fechado, Vênus + Terra, mix 0.3, tempo 92
+    r.core.toggle_pulse();
+    r.core.toggle_arp();
+    r.core.set_filter(0.4);
+    r.core.set_bpm(92.0);
+    r.core.set_pad_bank(crate::pads::MY_BANK + 3);
+    r.core.set_pad_bank2(Some(crate::pads::MY_BANK + 4));
+    r.core.set_pad_mix(0.3);
+    r.core.set_master(0.7);
+    r.core.save_scene(0);
+    // muda tudo
+    r.core.toggle_pulse();
+    r.core.toggle_arp();
+    r.core.set_filter(1.0);
+    r.core.set_bpm(130.0);
+    r.core.set_pad_bank2(None);
+    r.core.set_pad_bank(crate::pads::MY_BANK);
+    r.core.set_master(0.9);
+    // volta a Cena 1: tudo de volta
+    r.core.load_scene(0);
+    assert!(r.core.pulse_on && r.core.arp_on);
+    assert!((r.core.cfg.efeitos.filtro - 0.4).abs() < 1e-6);
+    assert_eq!(r.core.cfg.efeitos.bpm, 92.0);
+    assert_eq!(r.core.cfg.pad_bank, crate::pads::MY_BANK + 3);
+    assert_eq!(r.core.cfg.pad_bank2, Some(crate::pads::MY_BANK + 4));
+    assert!((r.core.cfg.pad_mix - 0.3).abs() < 1e-6);
+    assert!((r.core.cfg.master - 0.7).abs() < 1e-6);
+    // cena salva antes da v0.24 (sem o preset): só as camadas mudam
+    let mix = r.core.cfg.mix.clone();
+    r.core.cfg.scenes[1].mix = Some(mix);
+    r.core.cfg.scenes[1].extra = None;
+    r.core.set_bpm(77.0);
+    r.core.load_scene(1);
+    assert_eq!(r.core.cfg.efeitos.bpm, 77.0, "cena antiga não mexe no resto");
+}

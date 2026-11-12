@@ -101,6 +101,8 @@ pub struct Core {
     /// Tom do pad tocando agora (ou esperando carregar).
     pub pad_active: Option<usize>,
     pad_pending: Option<(usize, usize)>,
+    /// v0.24: tom esperando o segundo pad carregar.
+    pad_pending2: Option<usize>,
     pad_jobs: std::collections::HashSet<(usize, usize)>,
     /// Thread que decodifica pads (sem ela, decodifica na hora — usado nos testes).
     pub pad_loader: Option<Sender<PadJob>>,
@@ -127,6 +129,8 @@ pub struct Core {
     pub voicefx_on: bool,
     /// v0.23: o swell está "dentro" (som cheio) ou "fora" (som saiu devagar)?
     pub swell_in: bool,
+    /// v0.24: o último Freeze (para o botão ↺).
+    last_freeze: Option<Arc<crate::freeze::FreezeSource>>,
     /// Batidas do "bater o tempo" (segundos desde `tap_origin`).
     taps: Vec<f64>,
     tap_origin: Instant,
@@ -201,6 +205,18 @@ fn clear_held() {
 
 impl Core {
     pub fn new(cfg: Config, tx: Sender<Cmd>) -> Self {
+        // v0.24: volta com os efeitos que estavam ligados quando o programa fechou
+        let (pulse_on, arp_on, voicefx_on) = (cfg.efeitos.pulse_on, cfg.efeitos.arp_on, cfg.efeitos.voicefx_on);
+        let mut c = Self::empty(cfg, tx);
+        c.pulse_on = pulse_on;
+        c.arp_on = arp_on;
+        if voicefx_on && c.load_voicefx_source() {
+            c.voicefx_on = true;
+        }
+        c
+    }
+
+    fn empty(cfg: Config, tx: Sender<Cmd>) -> Self {
         Self {
             cfg,
             tx,
@@ -223,6 +239,7 @@ impl Core {
             pad_clips: vec![vec![None; PAD_KEYS]; PAD_BANKS],
             pad_active: None,
             pad_pending: None,
+            pad_pending2: None,
             pad_jobs: Default::default(),
             pad_loader: None,
             last_signal: None,
@@ -239,6 +256,7 @@ impl Core {
             arp_on: false,
             voicefx_on: false,
             swell_in: true,
+            last_freeze: None,
             taps: Vec::new(),
             tap_origin: Instant::now(),
             drum_kit: None,
@@ -307,14 +325,18 @@ impl Core {
             "o fundo"
         };
         self.notify(if self.swell_in {
-            format!("Swell: {onde} entrando devagar ({:.0} s)", self.cfg.efeitos.swell_secs)
+            format!("Swell In: {onde} entrando devagar ({:.0} s)", self.cfg.efeitos.swell_secs)
         } else {
-            format!("Swell: {onde} saindo devagar ({:.0} s)", self.cfg.efeitos.swell_secs)
+            format!("Fade Out: {onde} saindo devagar ({:.0} s)", self.cfg.efeitos.swell_secs)
         });
     }
 
     /// A tela mudou algum ajuste da aba Efeitos.
-    pub fn set_efeitos(&mut self, e: Efeitos) {
+    pub fn set_efeitos(&mut self, mut e: Efeitos) {
+        // ligado/desligado é dos botões (a tela trabalha numa cópia e não pode desfazer o que um botão fez)
+        e.pulse_on = self.cfg.efeitos.pulse_on;
+        e.arp_on = self.cfg.efeitos.arp_on;
+        e.voicefx_on = self.cfg.efeitos.voicefx_on;
         if e != self.cfg.efeitos {
             self.cfg.efeitos = e;
             self.cfg.efeitos.normalize();
@@ -349,16 +371,20 @@ impl Core {
 
     pub fn toggle_pulse(&mut self) {
         self.pulse_on = !self.pulse_on;
+        self.cfg.efeitos.pulse_on = self.pulse_on;
+        self.dirty = true;
         self.send_efeitos();
         self.notify(if self.pulse_on {
-            "PulsePad ligado: os pads e o ❄ congelado pulsam no tempo"
+            "Pulse Pad ligado: os pads e o ❄ Freeze pulsam no tempo"
         } else {
-            "PulsePad desligado"
+            "Pulse Pad desligado"
         });
     }
 
     pub fn toggle_arp(&mut self) {
         self.arp_on = !self.arp_on;
+        self.cfg.efeitos.arp_on = self.arp_on;
+        self.dirty = true;
         self.send_efeitos();
         let layer = self.cfg.efeitos.arp_layer;
         let name = self.cfg.mix.layers[layer]
@@ -368,13 +394,13 @@ impl Core {
             .unwrap_or_else(|| "sem timbre".into());
         if self.arp_on && !self.cfg.mix.audible(layer) {
             self.notify(format!(
-                "Arpejador ligado na camada {} ({name}) — ligue essa camada para ouvir",
+                "Arpeggiator ligado na camada {} ({name}) — ligue essa camada para ouvir",
                 layer + 1
             ));
         } else if self.arp_on {
-            self.notify(format!("Arpejador ligado na camada {} ({name})", layer + 1));
+            self.notify(format!("Arpeggiator ligado na camada {} ({name})", layer + 1));
         } else {
-            self.notify("Arpejador desligado");
+            self.notify("Arpeggiator desligado");
         }
     }
 
@@ -438,6 +464,8 @@ impl Core {
             return;
         }
         self.voicefx_on = !self.voicefx_on;
+        self.cfg.efeitos.voicefx_on = self.voicefx_on;
+        self.dirty = true;
         self.send_efeitos();
         self.notify(if self.voicefx_on {
             "Voice FX ligado: um coral acompanha as notas que você tocar"
@@ -594,24 +622,51 @@ impl Core {
     pub fn freeze_capture(&mut self) {
         match crate::freeze::FreezeSource::capture(self.sample_rate) {
             Some(src) => self.freeze_play(src),
-            None => self.notify("❄ Toque o acorde e aperte Congelar enquanto ele ainda está soando"),
+            None => self.notify("❄ Freeze: toque o acorde e aperte FREEZE enquanto ele ainda está soando"),
         }
     }
 
     /// Toca um trecho já capturado como congelado.
     pub fn freeze_play(&mut self, src: crate::freeze::FreezeSource) {
+        let src = Arc::new(src);
+        // v0.24: guarda como "último Freeze" (memória e arquivo) para o botão ↺ trazer de volta
+        let _ = src.save_wav(&crate::freeze::saved_path());
+        self.last_freeze = Some(src.clone());
+        self.freeze_start(src);
+        self.notify("❄ Freeze: som congelado — pode trocar os timbres e tocar por cima. Aperte de novo para soltar.");
+    }
+
+    fn freeze_start(&mut self, src: Arc<crate::freeze::FreezeSource>) {
         self.grain_seed = self.grain_seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-        let voice = crate::freeze::FreezeVoice::new(Arc::new(src), self.sample_rate, self.grain_seed);
+        let voice = crate::freeze::FreezeVoice::new(src, self.sample_rate, self.grain_seed);
         self.send(Cmd::FreezePlay(Box::new(voice)));
         self.freeze_on = true;
-        self.notify("❄ Som congelado: pode trocar os timbres e tocar por cima. Aperte de novo para soltar.");
+    }
+
+    /// v0.24: ↺ traz de volta o último Freeze (o que estava congelado antes), mesmo depois de reabrir o programa.
+    pub fn freeze_recall(&mut self) {
+        if self.last_freeze.is_none() {
+            self.last_freeze = crate::freeze::FreezeSource::load_wav(&crate::freeze::saved_path()).map(Arc::new);
+        }
+        match self.last_freeze.clone() {
+            Some(src) => {
+                self.freeze_start(src);
+                self.notify("❄ Freeze: voltou o último som congelado");
+            }
+            None => self.notify("❄ Ainda não tem um Freeze guardado: congele um acorde primeiro"),
+        }
+    }
+
+    /// Tem um Freeze guardado para o ↺?
+    pub fn has_last_freeze(&self) -> bool {
+        self.last_freeze.is_some() || crate::freeze::saved_path().exists()
     }
 
     pub fn freeze_off(&mut self) {
         if self.freeze_on {
             self.send(Cmd::FreezeStop(crate::freeze::FREEZE_OUT_S));
             self.freeze_on = false;
-            self.notify("❄ Congelado sumindo devagar");
+            self.notify("❄ Freeze sumindo devagar");
         }
     }
 
@@ -723,6 +778,7 @@ impl Core {
         self.send(Cmd::PadVolume(self.cfg.pad_volume));
         self.send_vivo();
         self.send_efeitos();
+        self.send_pad_mix();
     }
 
     fn send_vivo(&self) {
@@ -869,6 +925,11 @@ impl Core {
                     self.notify(msg);
                 }
                 self.my_pad_clips[i] = Some(clip);
+                if let Some(k) = self.pad_pending2 {
+                    if self.cfg.pad_bank2 == Some(MY_BANK + i) && self.pad_active == Some(k) {
+                        self.start_pad2(k);
+                    }
+                }
                 if self.pad_pending.is_some_and(|(b, _)| b == MY_BANK + i) {
                     let key = self.pad_pending.unwrap().1;
                     self.start_pad(key);
@@ -953,6 +1014,12 @@ impl Core {
             Some(j) if j > i => self.cfg.pad_bank -= 1,
             _ => {}
         }
+        match self.cfg.pad_bank2.and_then(pads::my_slot) {
+            Some(j) if j == i => self.cfg.pad_bank2 = None,
+            Some(j) if j > i => self.cfg.pad_bank2 = Some(MY_BANK + j - 1),
+            _ => {}
+        }
+        self.send_pad_mix();
     }
 
     pub fn rename_my_pad(&mut self, i: usize, name: &str) {
@@ -1064,14 +1131,88 @@ impl Core {
         self.request_repaint();
     }
 
+    /// Toca o pad no tom `key`: o principal e, se tiver, o segundo pad junto (v0.24).
     fn start_pad(&mut self, key: usize) {
+        if self.start_pad1(key) {
+            self.start_pad2(key);
+        }
+    }
+
+    /// v0.24: o segundo pad no mesmo tom (só depois que o principal já saiu, para entrarem juntos).
+    fn start_pad2(&mut self, key: usize) {
+        self.pad_pending2 = None;
+        let Some(i) = self.cfg.pad_bank2.and_then(pads::my_slot) else {
+            return;
+        };
+        match (self.my_pad_clips.get(i).cloned().flatten(), self.cfg.my_pads.get(i)) {
+            (Some(clip), Some(m)) => {
+                self.send(Cmd::PadLayer2(clip, pads::my_pad_pitch(m.key, key)));
+            }
+            (None, Some(_)) => {
+                self.pad_pending2 = Some(key);
+                self.request_my_pad(i);
+            }
+            _ => {}
+        }
+    }
+
+    /// Volume de cada pad no mix (equal power: no meio, os dois a ~71%, sem ficar mais alto que um só).
+    fn pad_mix_gains(&self) -> (f32, f32) {
+        if self.cfg.pad_bank2.is_none() {
+            return (1.0, 0.0);
+        }
+        let a = self.cfg.pad_mix.clamp(0.0, 1.0) * std::f32::consts::FRAC_PI_2;
+        (a.cos(), a.sin())
+    }
+
+    fn send_pad_mix(&self) {
+        let (a, b) = self.pad_mix_gains();
+        self.send(Cmd::PadMix(a, b));
+    }
+
+    /// v0.24: escolhe o segundo pad (None = só um pad). Se já estiver tocando, entra junto na hora.
+    pub fn set_pad_bank2(&mut self, bank: Option<usize>) {
+        let bank = bank.filter(|b| {
+            *b != self.cfg.pad_bank && pads::my_slot(*b).is_some_and(|i| i < self.cfg.my_pads.len())
+        });
+        if bank == self.cfg.pad_bank2 {
+            return;
+        }
+        self.cfg.pad_bank2 = bank;
+        self.dirty = true;
+        self.send_pad_mix();
+        if let Some(i) = bank.and_then(pads::my_slot) {
+            self.request_my_pad(i);
+        }
+        if let Some(k) = self.pad_active {
+            self.start_pad(k);
+        }
+        match bank {
+            Some(b) => self.notify(format!(
+                "Pads: {} + {} juntos (ajuste o mix)",
+                self.pad_bank_label(self.cfg.pad_bank),
+                self.pad_bank_label(b)
+            )),
+            None => self.notify(format!("Pads: só {}", self.pad_bank_label(self.cfg.pad_bank))),
+        }
+    }
+
+    /// v0.24: mix entre os dois pads (0 = só o principal … 1 = só o segundo).
+    pub fn set_pad_mix(&mut self, v: f32) {
+        self.cfg.pad_mix = v.clamp(0.0, 1.0);
+        self.dirty = true;
+        self.send_pad_mix();
+    }
+
+    /// Devolve true se mandou o pad principal tocar (false = ainda carregando ou sem pad).
+    fn start_pad1(&mut self, key: usize) -> bool {
         if self.cfg.pad_bank < MY_BANK && !self.builtin_pads() {
             if self.cfg.my_pads.is_empty() {
                 self.pad_active = None;
                 self.notify(
                     "Pads: ponha um pad seu em \"+ Pôr um pad meu\" (aba Pads).".to_string(),
                 );
-                return;
+                return false;
             }
             self.cfg.pad_bank = MY_BANK;
             self.dirty = true;
@@ -1083,6 +1224,7 @@ impl Core {
                 (Some(clip), Some(m)) => {
                     self.pad_pending = None;
                     self.send(Cmd::PadPlay(clip, pads::my_pad_pitch(m.key, key)));
+                    return true;
                 }
                 (None, Some(_)) => {
                     self.pad_pending = Some((bank, key));
@@ -1093,7 +1235,7 @@ impl Core {
                     self.notify("Meu pad: escolha o arquivo primeiro (aba Pads).".to_string());
                 }
             }
-            return;
+            return false;
         }
         if pads::is_vivo(bank) {
             let n = bank - PAD_BANKS;
@@ -1111,22 +1253,25 @@ impl Core {
                         self.grain_seed,
                     );
                     self.send(Cmd::GrainPlay(Box::new(voice)));
+                    return true;
                 }
                 None => {
                     self.pad_pending = Some((bank, key));
                     self.request_texture(n);
                 }
             }
-            return;
+            return false;
         }
         match self.pad_clips[bank][key].clone() {
             Some(clip) => {
                 self.pad_pending = None;
                 self.send(Cmd::PadPlay(clip, 1.0));
+                true
             }
             None => {
                 self.pad_pending = Some((bank, key));
                 self.request_pad(bank, key);
+                false
             }
         }
     }
@@ -1143,6 +1288,7 @@ impl Core {
     pub fn pad_stop(&mut self) {
         self.pad_active = None;
         self.pad_pending = None;
+        self.pad_pending2 = None;
         self.send(Cmd::PadStop);
     }
 
@@ -1173,6 +1319,10 @@ impl Core {
             return;
         }
         self.cfg.pad_bank = bank;
+        if self.cfg.pad_bank2 == Some(bank) {
+            self.cfg.pad_bank2 = None;
+            self.send_pad_mix();
+        }
         self.dirty = true;
         self.preload_pad_bank(bank);
         if let Some(k) = self.pad_active {
@@ -1340,7 +1490,22 @@ impl Core {
                 self.cfg.mix = mix;
                 self.cfg.mix.normalize();
                 self.cfg.current_scene = Some(n);
+                // v0.24: o resto do preset (cenas salvas antes da v0.24 não têm: só as camadas mudam)
+                let extra = self.cfg.scenes[n].extra.clone();
+                if let Some(x) = &extra {
+                    self.apply_scene_extra(x);
+                }
                 self.sync_engine();
+                if let Some(x) = extra {
+                    // pads por último (troca suave se estiver tocando)
+                    self.set_pad_bank(x.pad_bank);
+                    self.cfg.pad_mix = x.pad_mix.clamp(0.0, 1.0);
+                    if x.pad_bank2 != self.cfg.pad_bank2 {
+                        self.set_pad_bank2(x.pad_bank2);
+                    } else {
+                        self.send_pad_mix();
+                    }
+                }
                 self.notify(format!("{} carregada", self.cfg.scenes[n].name));
             }
             None => {
@@ -1359,9 +1524,40 @@ impl Core {
             return;
         }
         self.cfg.scenes[n].mix = Some(self.cfg.mix.clone());
+        // v0.24: a cena guarda tudo (o preset inteiro), não só as camadas
+        self.cfg.scenes[n].extra = Some(SceneExtra {
+            efeitos: self.cfg.efeitos.clone(),
+            pad_bank: self.cfg.pad_bank,
+            pad_bank2: self.cfg.pad_bank2,
+            pad_mix: self.cfg.pad_mix,
+            pad_volume: self.cfg.pad_volume,
+            master: self.cfg.master,
+            vivo: self.cfg.vivo.clone(),
+        });
         self.cfg.current_scene = Some(n);
         self.dirty = true;
-        self.notify(format!("Salvo em {}", self.cfg.scenes[n].name));
+        self.notify(format!("Salvo em {} (sons, efeitos, pads e filtro)", self.cfg.scenes[n].name));
+    }
+
+    /// v0.24: aplica efeitos, volumes e reverb guardados numa cena (os pads vêm depois, em `load_scene`).
+    fn apply_scene_extra(&mut self, x: &SceneExtra) {
+        self.cfg.master = x.master.clamp(0.0, 1.0);
+        self.cfg.pad_volume = x.pad_volume.clamp(0.0, 1.0);
+        self.cfg.vivo = x.vivo.clone();
+        let voice_changed = x.efeitos.voicefx_voice != self.cfg.efeitos.voicefx_voice
+            || x.efeitos.voicefx_file != self.cfg.efeitos.voicefx_file;
+        self.cfg.efeitos = x.efeitos.clone();
+        self.cfg.efeitos.normalize();
+        self.pulse_on = self.cfg.efeitos.pulse_on;
+        self.arp_on = self.cfg.efeitos.arp_on;
+        let want_voice = self.cfg.efeitos.voicefx_on;
+        if want_voice && (voice_changed || self.voicefx_src.is_none()) {
+            self.load_voicefx_source();
+        } else if voice_changed {
+            self.voicefx_src = None; // carrega a voz certa quando ligar
+        }
+        self.voicefx_on = want_voice && self.voicefx_src.is_some();
+        self.cfg.efeitos.voicefx_on = self.voicefx_on;
     }
 
     // ---------- Modo Editar ----------
@@ -1376,6 +1572,7 @@ impl Core {
         self.cfg.scenes.push(Scene {
             name: format!("Cena {}", n + 1),
             mix: None,
+            extra: None,
         });
         self.dirty = true;
     }
@@ -1463,6 +1660,7 @@ impl Core {
             Target::VoiceFxToggle => self.toggle_voicefx(),
             Target::Drum(i) => self.drum_hit(i, 110),
             Target::SwellToggle => self.toggle_swell(),
+            Target::FreezeRecall => self.freeze_recall(),
             Target::TabToggle => {
                 self.cfg.tab = 1 - self.cfg.tab.min(1);
                 self.dirty = true;
@@ -1508,6 +1706,14 @@ impl Core {
                 ContValue::Relative(d) => self.pitch + d * 2.0,
             };
             self.set_pitch(v);
+            return;
+        }
+        if t == Target::PadMix {
+            let v = match value {
+                ContValue::Absolute(v) => v,
+                ContValue::Relative(d) => self.cfg.pad_mix + d,
+            };
+            self.set_pad_mix(v);
             return;
         }
         if t == Target::Filter {
@@ -2431,7 +2637,7 @@ mod tests {
         c.handle_piano(&[0x90, 41, 100]);
         assert!(!c.freeze_on);
         assert!(!plays_note(&drain(&rx)), "a tecla do Congelar não toca");
-        assert!(c.toast.as_ref().unwrap().0.contains("Toque o acorde"));
+        assert!(c.toast.as_ref().unwrap().0.contains("toque o acorde"));
         // ligado: a luz do botão da mesinha acende
         c.freeze_play(test_chord());
         assert!(c.leds().contains(&(0, 0, true)));
