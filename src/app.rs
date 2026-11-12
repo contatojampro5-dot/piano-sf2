@@ -1116,20 +1116,41 @@ fn fx_card(
         }
     });
     child.add_space(6.0);
-    add(&mut child);
+    // v0.18.1: se a janela for pequena e o conteúdo não couber, o painel rola (nada vaza para fora)
+    egui::ScrollArea::vertical()
+        .id_salt(("fx_card", title))
+        .auto_shrink([false, false])
+        .show(&mut child, |ui| add(ui));
 }
 
 /// Botão grande de liga/desliga (pode ser ligado na mesinha/teclado pelo Aprender).
 fn fx_toggle(ui: &mut Ui, core: &mut Core, w: f32, on: bool, label: &str, color: Color32, target: Target, hint: &str) -> bool {
-    let b = ui.add_sized(
-        [w, 52.0],
-        egui::Button::new(
-            RichText::new(if on { format!("● {label}") } else { format!("○ {label}") })
-                .strong()
-                .size(17.0)
-                .color(if on { th().ink } else { th().text }),
-        )
-        .fill(if on { color } else { th().glass_hi }),
+    // v0.18.1: desenhado aqui (a fonte não tem "●" e mostrava um quadradinho)
+    let (rect, b) = ui.allocate_exact_size(Vec2::new(w, 52.0), Sense::click());
+    let p = ui.painter();
+    let fill = if on {
+        color
+    } else if b.hovered() {
+        th().glass_hi.gamma_multiply(1.25)
+    } else {
+        th().glass_hi
+    };
+    p.rect_filled(rect, 10, fill);
+    let fg = if on { th().ink } else { th().text };
+    let galley = p.layout_no_wrap(label.to_string(), FontId::proportional(17.0), fg);
+    let dot_r = 6.0;
+    let total = dot_r * 2.0 + 10.0 + galley.size().x;
+    let x0 = rect.center().x - total / 2.0;
+    let dot = Pos2::new(x0 + dot_r, rect.center().y);
+    if on {
+        p.circle_filled(dot, dot_r, fg);
+    } else {
+        p.circle_stroke(dot, dot_r, Stroke::new(2.0, fg));
+    }
+    p.galley(
+        Pos2::new(x0 + dot_r * 2.0 + 10.0, rect.center().y - galley.size().y / 2.0),
+        galley,
+        fg,
     );
     let b = b.on_hover_text(hint);
     !learnable(ui, core, &b, target) && b.clicked()
@@ -1239,22 +1260,60 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                     .color(if live { th().dim } else { ORANGE }),
             );
             if o_arp || learning {
-                ui.add_space(4.0);
-                let opts: Vec<(String, usize)> = (0..LAYERS).map(|i| (format!("{}", i + 1), i)).collect();
-                let opts: Vec<(&str, usize)> = opts.iter().map(|(n, i)| (n.as_str(), *i)).collect();
-                if let Some(v) = fx_choice(ui, "Camada", &opts, e.arp_layer, ARP_COLOR) {
-                    e.arp_layer = v;
-                }
-                let pats: Vec<(&str, u8)> = crate::efeitos::ARP_PATTERNS.iter().enumerate().map(|(i, n)| (*n, i as u8)).collect();
-                if let Some(v) = fx_choice(ui, "Padrão", &pats, e.arp_pattern, ARP_COLOR) {
-                    e.arp_pattern = v;
-                }
-                if let Some(v) = fx_choice(ui, "Velocidade", &[("♪", 2u32), ("tercina", 3), ("♬", 4)], e.arp_per_beat, ARP_COLOR) {
-                    e.arp_per_beat = v;
-                }
-                if let Some(v) = fx_choice(ui, "Oitavas", &[("1", 1u8), ("2", 2), ("3", 3)], e.arp_octaves, ARP_COLOR) {
-                    e.arp_octaves = v;
-                }
+                // v0.18.1: 4 listas compactas (antes eram fileiras de botões que vazavam do painel)
+                ui.add_space(6.0);
+                let names: Vec<String> = (0..LAYERS)
+                    .map(|i| {
+                        let p = core.cfg.mix.layers[i].preset.as_ref().map(|p| p.name.as_str()).unwrap_or("sem timbre");
+                        format!("{} · {p}", i + 1)
+                    })
+                    .collect();
+                let speeds: [(&str, u32); 3] = [("♪ colcheia", 2), ("tercina", 3), ("♬ semicolcheia", 4)];
+                let combo_w = (w - 88.0).max(80.0);
+                egui::Grid::new("arp_grid").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
+                    ui.label(RichText::new("Camada").size(13.0).color(th().dim));
+                    egui::ComboBox::from_id_salt("arp_layer")
+                        .width(combo_w)
+                        .selected_text(format!("{}", e.arp_layer + 1))
+                        .show_ui(ui, |ui| {
+                            for (i, n) in names.iter().enumerate() {
+                                ui.selectable_value(&mut e.arp_layer, i, n);
+                            }
+                        });
+                    ui.end_row();
+                    ui.label(RichText::new("Padrão").size(13.0).color(th().dim));
+                    egui::ComboBox::from_id_salt("arp_pattern")
+                        .width(combo_w)
+                        .selected_text(crate::efeitos::ARP_PATTERNS[e.arp_pattern as usize % 4])
+                        .show_ui(ui, |ui| {
+                            for (i, n) in crate::efeitos::ARP_PATTERNS.iter().enumerate() {
+                                ui.selectable_value(&mut e.arp_pattern, i as u8, *n);
+                            }
+                        });
+                    ui.end_row();
+                    ui.label(RichText::new("Velocidade").size(13.0).color(th().dim));
+                    let cur = speeds.iter().find(|(_, v)| *v == e.arp_per_beat).map(|(n, _)| *n).unwrap_or("♪ colcheia");
+                    egui::ComboBox::from_id_salt("arp_speed")
+                        .width(combo_w)
+                        .selected_text(cur)
+                        .show_ui(ui, |ui| {
+                            for (n, v) in speeds {
+                                ui.selectable_value(&mut e.arp_per_beat, v, n);
+                            }
+                        });
+                    ui.end_row();
+                    ui.label(RichText::new("Oitavas").size(13.0).color(th().dim));
+                    egui::ComboBox::from_id_salt("arp_oct")
+                        .width(combo_w)
+                        .selected_text(format!("{}", e.arp_octaves))
+                        .show_ui(ui, |ui| {
+                            for o in 1..=3u8 {
+                                ui.selectable_value(&mut e.arp_octaves, o, format!("{o}"));
+                            }
+                        });
+                    ui.end_row();
+                });
+                ui.add_space(2.0);
                 ui.checkbox(&mut e.arp_latch, "Segurar depois de soltar");
             }
         });
