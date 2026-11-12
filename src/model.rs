@@ -532,6 +532,10 @@ pub struct Efeitos {
     pub voicefx_volume: f32,
     /// Voice FX: oitava do coral (−1, 0, +1).
     pub voicefx_octave: i8,
+    /// v0.19: som do Theo em cada DrumPad (pad 0..7, arquivo WAV/MP3/OGG/FLAC). Sem = som do programa.
+    pub drum_files: Vec<(usize, String)>,
+    /// v0.19: coral do Theo no Voice FX (arquivo, nota MIDI em que ele está). Sem = coral do programa.
+    pub voicefx_file: Option<(String, u8)>,
 }
 
 impl Default for Efeitos {
@@ -548,6 +552,8 @@ impl Default for Efeitos {
             drum_volume: 0.8,
             voicefx_volume: 0.6,
             voicefx_octave: 0,
+            drum_files: Vec::new(),
+            voicefx_file: None,
         }
     }
 }
@@ -571,6 +577,9 @@ impl Efeitos {
         self.drum_volume = self.drum_volume.clamp(0.0, 1.0);
         self.voicefx_volume = self.voicefx_volume.clamp(0.0, 1.0);
         self.voicefx_octave = self.voicefx_octave.clamp(-1, 1);
+        self.drum_files.retain(|(i, _)| *i < crate::efeitos::DRUMS);
+        self.drum_files.sort_by_key(|(i, _)| *i);
+        self.drum_files.dedup_by_key(|(i, _)| *i);
     }
 }
 

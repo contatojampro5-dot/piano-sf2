@@ -129,6 +129,8 @@ pub struct Core {
     taps: Vec<f64>,
     tap_origin: Instant,
     drum_kit: Option<Arc<crate::efeitos::DrumKit>>,
+    /// Arquivos com que o kit atual foi montado (mudou → monta de novo).
+    drum_kit_files: Vec<(usize, String)>,
     voicefx_src: Option<Arc<GrainSource>>,
     /// Quando cada DrumPad foi tocado (a tela acende o botão por um instante).
     pub drum_flash: [Option<Instant>; crate::efeitos::DRUMS],
@@ -237,6 +239,7 @@ impl Core {
             taps: Vec::new(),
             tap_origin: Instant::now(),
             drum_kit: None,
+            drum_kit_files: Vec::new(),
             voicefx_src: None,
             drum_flash: [None; crate::efeitos::DRUMS],
         }
@@ -340,16 +343,36 @@ impl Core {
         }
     }
 
-    /// Coral do Voice FX: a textura "Coro" que vem no programa (carrega na primeira vez).
-    pub fn toggle_voicefx(&mut self) {
-        if !self.voicefx_on && self.voicefx_src.is_none() {
-            match pads::load_texture(0, None) {
-                Ok(src) => self.voicefx_src = Some(src),
-                Err(e) => {
-                    self.notify(format!("Voice FX: {e}"));
-                    return;
-                }
+    /// Coral do Voice FX: o do Theo (se tiver) ou a textura "Coro" que vem no programa.
+    fn load_voicefx_source(&mut self) -> bool {
+        let custom = self.cfg.efeitos.voicefx_file.clone();
+        let result = match &custom {
+            Some((path, root)) => pads::load_texture(0, Some((path.as_str(), *root))),
+            None => pads::load_texture(0, None),
+        };
+        match result {
+            Ok(src) => {
+                self.voicefx_src = Some(src.clone());
+                self.send(Cmd::VoiceFxSource(src));
+                true
             }
+            Err(e) if custom.is_some() => {
+                // o arquivo do Theo sumiu ou não abre: volta ao coral do programa
+                self.cfg.efeitos.voicefx_file = None;
+                self.dirty = true;
+                self.notify(format!("Voice FX: {e}. Voltei ao coral do programa."));
+                self.load_voicefx_source()
+            }
+            Err(e) => {
+                self.notify(format!("Voice FX: {e}"));
+                false
+            }
+        }
+    }
+
+    pub fn toggle_voicefx(&mut self) {
+        if !self.voicefx_on && self.voicefx_src.is_none() && !self.load_voicefx_source() {
+            return;
         }
         self.voicefx_on = !self.voicefx_on;
         self.send_efeitos();
@@ -360,13 +383,123 @@ impl Core {
         });
     }
 
+    /// v0.19: usar um coral do Theo no Voice FX (None = volta ao do programa).
+    /// O programa descobre pelo som em que nota ele está (dá para corrigir depois).
+    pub fn set_voicefx_file(&mut self, path: Option<String>) {
+        match path {
+            Some(p) => {
+                let file = std::fs::File::open(&p);
+                let ext = std::path::Path::new(&p)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase());
+                let key = match file
+                    .map_err(|e| e.to_string())
+                    .and_then(|f| pads::decode(Box::new(f), ext.as_deref(), false))
+                {
+                    Ok(clip) => pads::detect_key(&clip),
+                    Err(e) => {
+                        self.notify(format!("Não consegui abrir esse som: {e}"));
+                        return;
+                    }
+                };
+                self.cfg.efeitos.voicefx_file = Some((p.clone(), pads::key_midi(key)));
+                self.dirty = true;
+                if self.load_voicefx_source() {
+                    self.notify(format!(
+                        "Voice FX com o seu som: {} (está em {}; corrija no ⚙ se precisar)",
+                        pads::name_from_file(&p),
+                        pads::KEY_NAMES[key]
+                    ));
+                }
+            }
+            None => {
+                self.cfg.efeitos.voicefx_file = None;
+                self.dirty = true;
+                self.load_voicefx_source();
+                self.notify("Voice FX voltou ao coral do programa");
+            }
+        }
+    }
+
+    /// Nota em que o coral do Theo está (0 = C ... 11 = B).
+    pub fn set_voicefx_key(&mut self, key: usize) {
+        let Some((_, root)) = &mut self.cfg.efeitos.voicefx_file else {
+            return;
+        };
+        let midi = pads::key_midi(key);
+        if *root != midi {
+            *root = midi;
+            self.dirty = true;
+            self.load_voicefx_source();
+        }
+    }
+
     /// Prepara os sons dos DrumPads (na taxa da placa de som). Chamado quando a aba abre.
     pub fn ensure_drum_kit(&mut self) {
-        if self.drum_kit.as_ref().is_none_or(|k| k.rate != self.sample_rate) {
-            let kit = Arc::new(crate::efeitos::DrumKit::build(self.sample_rate));
+        let files = self.cfg.efeitos.drum_files.clone();
+        let stale = self.drum_kit.as_ref().is_none_or(|k| k.rate != self.sample_rate)
+            || files != self.drum_kit_files;
+        if stale {
+            let (kit, errors) = crate::efeitos::DrumKit::build_with(self.sample_rate, &files);
+            let kit = Arc::new(kit);
             self.send(Cmd::DrumKit(kit.clone()));
             self.drum_kit = Some(kit);
+            self.drum_kit_files = files;
+            if !errors.is_empty() {
+                // o arquivo sumiu ou não abre: o pad volta ao som do programa (e avisa)
+                let names: Vec<String> = errors
+                    .iter()
+                    .map(|(p, e)| format!("{}: {e}", crate::efeitos::DRUM_NAMES[*p]))
+                    .collect();
+                self.cfg
+                    .efeitos
+                    .drum_files
+                    .retain(|(p, _)| !errors.iter().any(|(q, _)| q == p));
+                self.drum_kit_files = self.cfg.efeitos.drum_files.clone();
+                self.dirty = true;
+                self.notify(format!("DrumPads: {} — voltou ao som do programa", names.join("; ")));
+            }
         }
+    }
+
+    /// v0.19: usar um som do Theo num DrumPad (None = volta ao som do programa).
+    pub fn set_drum_file(&mut self, pad: usize, path: Option<String>) {
+        if pad >= crate::efeitos::DRUMS {
+            return;
+        }
+        if let Some(p) = &path {
+            // confere antes de guardar (não deixa um pad mudo)
+            if let Err(e) = crate::efeitos::load_drum_file(p, self.sample_rate) {
+                self.notify(format!("Não consegui usar esse som: {e}"));
+                return;
+            }
+        }
+        self.cfg.efeitos.drum_files.retain(|(i, _)| *i != pad);
+        if let Some(p) = &path {
+            self.cfg.efeitos.drum_files.push((pad, p.clone()));
+        }
+        self.cfg.efeitos.normalize();
+        self.dirty = true;
+        self.ensure_drum_kit();
+        self.notify(match &path {
+            Some(p) => format!(
+                "{} agora toca o seu som: {}",
+                crate::efeitos::DRUM_NAMES[pad],
+                pads::name_from_file(p)
+            ),
+            None => format!("{} voltou ao som do programa", crate::efeitos::DRUM_NAMES[pad]),
+        });
+    }
+
+    /// Nome do som próprio de um DrumPad (para a tela), se tiver.
+    pub fn drum_file_name(&self, pad: usize) -> Option<String> {
+        self.cfg
+            .efeitos
+            .drum_files
+            .iter()
+            .find(|(i, _)| *i == pad)
+            .map(|(_, p)| pads::name_from_file(p))
     }
 
     pub fn drum_hit(&mut self, pad: usize, vel: u8) {

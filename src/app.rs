@@ -78,6 +78,9 @@ struct UiState {
     pad_details: bool,
     /// Tempo, PulsePad, Arpejador, Voice FX.
     fx_details: [bool; 4],
+    /// v0.19: janelas de arquivo (só com o `core` destravado): som de um DrumPad, coral do Voice FX.
+    drum_file_dialog: Option<usize>,
+    voicefx_file_dialog: bool,
 }
 
 pub struct PianoApp {
@@ -177,6 +180,8 @@ impl PianoApp {
                 mix_details: false,
                 pad_details: false,
                 fx_details: [false; 4],
+                drum_file_dialog: None,
+                voicefx_file_dialog: false,
             },
             last_save: Instant::now(),
             audio_retry: None,
@@ -364,6 +369,27 @@ impl eframe::App for PianoApp {
                 } else {
                     c.set_pad_file(bank, key, Some(p));
                 }
+            }
+        }
+        // v0.19: som próprio num DrumPad / coral próprio no Voice FX
+        if let Some(pad) = self.ui.drum_file_dialog.take() {
+            if let Some(path) = rfd::FileDialog::new()
+                .set_title("Escolha o som para este DrumPad (WAV, MP3, OGG ou FLAC)")
+                .add_filter("Áudio", &["wav", "mp3", "ogg", "flac", "WAV", "MP3", "OGG", "FLAC"])
+                .pick_file()
+            {
+                let mut c = self.core.lock().unwrap();
+                c.set_drum_file(pad, Some(path.to_string_lossy().to_string()));
+            }
+        }
+        if std::mem::take(&mut self.ui.voicefx_file_dialog) {
+            if let Some(path) = rfd::FileDialog::new()
+                .set_title("Escolha o coral (uma nota só, segurada: WAV, MP3, OGG ou FLAC)")
+                .add_filter("Áudio", &["wav", "mp3", "ogg", "flac", "WAV", "MP3", "OGG", "FLAC"])
+                .pick_file()
+            {
+                let mut c = self.core.lock().unwrap();
+                c.set_voicefx_file(Some(path.to_string_lossy().to_string()));
             }
         }
 
@@ -1206,6 +1232,12 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     let learning = core.learn.active;
     let [mut d_tempo, mut d_pulse, mut d_arp, mut d_voice] = st.fx_details;
     let [o_tempo, o_pulse, o_arp, o_voice] = st.fx_details;
+    // pedidos que rodam no fim (ver depois de `set_efeitos`)
+    let mut drum_reset: Option<usize> = None;
+    let mut drum_dialog: Option<usize> = None;
+    let mut voice_reset = false;
+    let mut voice_key: Option<usize> = None;
+    let mut st_voice_dialog = false;
 
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
@@ -1342,6 +1374,42 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                 if let Some(v) = fx_choice(ui, "Oitava do coral", &[("grave", -1i8), ("normal", 0), ("agudo", 1)], e.voicefx_octave, VOICE_COLOR) {
                     e.voicefx_octave = v;
                 }
+                // v0.19: coral próprio
+                ui.add_space(6.0);
+                match e.voicefx_file.clone() {
+                    Some((path, root)) => {
+                        ui.label(RichText::new(format!("Coral: ♪ {}", pads::name_from_file(&path))).size(13.0).color(VOICE_COLOR));
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("Está em").size(12.0).color(th().dim));
+                            let mut key = (0..pads::PAD_KEYS).find(|k| pads::key_midi(*k) == root).unwrap_or(0);
+                            let before = key;
+                            egui::ComboBox::from_id_salt("voicefx_key")
+                                .width(56.0)
+                                .selected_text(pads::KEY_NAMES[key])
+                                .show_ui(ui, |ui| {
+                                    for k in 0..pads::PAD_KEYS {
+                                        ui.selectable_value(&mut key, k, pads::KEY_NAMES[k]);
+                                    }
+                                });
+                            if key != before {
+                                voice_key = Some(key);
+                            }
+                        });
+                        if ui.button("Voltar ao coral do programa").clicked() {
+                            voice_reset = true;
+                        }
+                    }
+                    None => {
+                        ui.label(RichText::new("Coral: do programa").size(13.0).color(th().dim));
+                    }
+                }
+                if ui
+                    .button("Usar meu coral (WAV/MP3)...")
+                    .on_hover_text("Uma nota só, segurada, sem bateria (ex.: \"choir aah\" do Freesound). O programa descobre a nota sozinho.")
+                    .clicked()
+                {
+                    st_voice_dialog = true;
+                }
             }
         });
     });
@@ -1365,17 +1433,42 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                 let p = ui.painter();
                 p.rect_filled(rect, 14, if lit { DRUM_COLOR } else { th().glass_hi });
                 p.rect_stroke(rect, 14, Stroke::new(1.5, DRUM_COLOR.gamma_multiply(0.6)), StrokeKind::Inside);
-                p.text(
-                    rect.center(),
-                    Align2::CENTER_CENTER,
-                    crate::efeitos::DRUM_NAMES[i],
-                    FontId::proportional(16.0),
-                    if lit { th().ink } else { th().text },
-                );
-                let resp = resp.on_hover_text("Aprender → clique aqui → aperte uma tecla do AMW: a força do dedo vale");
+                // v0.19: pad com som próprio mostra o nome do arquivo (e um ♪)
+                let own = core.drum_file_name(i);
+                let fg = if lit { th().ink } else { th().text };
+                match &own {
+                    Some(name) => {
+                        let short: String = name.chars().take(11).collect();
+                        p.text(rect.center() - Vec2::new(0.0, 9.0), Align2::CENTER_CENTER, short, FontId::proportional(14.0), fg);
+                        p.text(
+                            rect.center() + Vec2::new(0.0, 12.0),
+                            Align2::CENTER_CENTER,
+                            format!("♪ {}", crate::efeitos::DRUM_NAMES[i]),
+                            FontId::proportional(11.0),
+                            if lit { th().ink } else { DRUM_COLOR },
+                        );
+                    }
+                    None => {
+                        p.text(rect.center(), Align2::CENTER_CENTER, crate::efeitos::DRUM_NAMES[i], FontId::proportional(16.0), fg);
+                    }
+                }
+                let resp = resp.on_hover_text(match &own {
+                    Some(n) => format!("Seu som: {n}\nBotão direito: trocar ou voltar ao som do programa"),
+                    None => "Botão direito: usar um som seu (WAV/MP3)".to_string(),
+                });
                 if !learnable(ui, core, &resp, Target::Drum(i)) && resp.clicked() {
                     core.drum_hit(i, 110);
                 }
+                resp.context_menu(|ui| {
+                    if ui.button("♪ Usar meu som (WAV/MP3)...").clicked() {
+                        drum_dialog = Some(i);
+                        ui.close();
+                    }
+                    if own.is_some() && ui.button("Voltar ao som do programa").clicked() {
+                        drum_reset = Some(i);
+                        ui.close();
+                    }
+                });
             }
             ui.vertical(|ui| {
                 ui.set_width(vol_w);
@@ -1389,6 +1482,22 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     });
 
     core.set_efeitos(e);
+    // v0.19: ações que mexem nos arquivos depois de guardar os ajustes (senão a cópia `e` desfazia)
+    if let Some(i) = drum_reset {
+        core.set_drum_file(i, None);
+    }
+    if voice_reset {
+        core.set_voicefx_file(None);
+    }
+    if let Some(k) = voice_key {
+        core.set_voicefx_key(k);
+    }
+    if drum_dialog.is_some() {
+        st.drum_file_dialog = drum_dialog;
+    }
+    if st_voice_dialog {
+        st.voicefx_file_dialog = true;
+    }
 }
 
 // ---------- Pads ----------

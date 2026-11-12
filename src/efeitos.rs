@@ -411,6 +411,76 @@ impl DrumKit {
     }
 }
 
+/// v0.19: maior duração de um som próprio num DrumPad (o resto do arquivo é ignorado).
+pub const DRUM_FILE_MAX_S: usize = 8;
+
+/// Abre o som do Theo para um DrumPad: pula o silêncio do começo (a batida sai na hora),
+/// converte para a taxa da placa, guarda no máximo 8 s, não deixa estourar e some no finalzinho.
+pub fn load_drum_file(path: &str, rate: u32) -> Result<(Vec<f32>, Vec<f32>), String> {
+    let file = std::fs::File::open(path).map_err(|e| format!("Não consegui abrir {path}: {e}"))?;
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase());
+    let clip = crate::pads::decode(Box::new(file), ext.as_deref(), false)?;
+    let frames = clip.frames().min(clip.rate as usize * DRUM_FILE_MAX_S);
+    if frames < 32 {
+        return Err("o arquivo não tem som".into());
+    }
+    let d = &clip.data;
+    // silêncio do começo (abaixo de ~ −40 dB) fora
+    let start = (0..frames)
+        .find(|&f| d[2 * f].unsigned_abs() > 320 || d[2 * f + 1].unsigned_abs() > 320)
+        .unwrap_or(0)
+        .saturating_sub(16);
+    let ratio = clip.rate as f64 / rate.max(8000) as f64;
+    let n = ((frames - start) as f64 / ratio) as usize;
+    let (mut l, mut r) = (Vec::with_capacity(n), Vec::with_capacity(n));
+    for k in 0..n {
+        let pos = start as f64 + k as f64 * ratio;
+        let i = (pos as usize).min(frames - 2);
+        let t = (pos - i as f64) as f32;
+        let at = |f: usize, c: usize| d[2 * f + c] as f32 / 32768.0;
+        l.push(at(i, 0) + (at(i + 1, 0) - at(i, 0)) * t);
+        r.push(at(i, 1) + (at(i + 1, 1) - at(i, 1)) * t);
+    }
+    let peak = l.iter().chain(r.iter()).fold(0.0f32, |m, x| m.max(x.abs()));
+    if peak < 0.001 {
+        return Err("o arquivo está em silêncio".into());
+    }
+    if peak > 0.95 {
+        let g = 0.95 / peak;
+        l.iter_mut().chain(r.iter_mut()).for_each(|x| *x *= g);
+    }
+    let fade = (rate as usize / 50).min(l.len());
+    let len = l.len();
+    for k in 0..fade {
+        let g = k as f32 / fade as f32;
+        l[len - 1 - k] *= g;
+        r[len - 1 - k] *= g;
+    }
+    Ok((l, r))
+}
+
+impl DrumKit {
+    /// Os sons do programa, trocando os pads que têm arquivo do Theo. Devolve também os erros
+    /// (arquivo sumiu, formato estranho...): esses pads ficam com o som do programa.
+    pub fn build_with(rate: u32, files: &[(usize, String)]) -> (Self, Vec<(usize, String)>) {
+        let mut kit = Self::build(rate);
+        let mut errors = Vec::new();
+        for (pad, path) in files {
+            if *pad >= kit.hits.len() {
+                continue;
+            }
+            match load_drum_file(path, rate) {
+                Ok(hit) => kit.hits[*pad] = hit,
+                Err(e) => errors.push((*pad, e)),
+            }
+        }
+        (kit, errors)
+    }
+}
+
 #[derive(Clone, Copy, Default)]
 struct DrumVoice {
     pad: usize,

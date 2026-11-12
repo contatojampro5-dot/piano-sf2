@@ -1071,3 +1071,115 @@ fn efeitos_real_sf2_preview() {
         std::fs::write(out, b).unwrap();
     }
 }
+
+// ---------- v0.19: sons próprios nos DrumPads e no Voice FX ----------
+
+/// Escreve um WAV estéreo 16 bits de teste e devolve o caminho.
+fn write_test_wav(name: &str, rate: u32, samples: &[f32]) -> String {
+    let dir = std::env::temp_dir().join(format!("piano-sf2-teste-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(name);
+    let data_len = (samples.len() * 4) as u32;
+    let mut b: Vec<u8> = Vec::new();
+    b.extend(b"RIFF");
+    b.extend((36 + data_len).to_le_bytes());
+    b.extend(b"WAVEfmt ");
+    b.extend(16u32.to_le_bytes());
+    b.extend(1u16.to_le_bytes());
+    b.extend(2u16.to_le_bytes());
+    b.extend(rate.to_le_bytes());
+    b.extend((rate * 4).to_le_bytes());
+    b.extend(4u16.to_le_bytes());
+    b.extend(16u16.to_le_bytes());
+    b.extend(b"data");
+    b.extend(data_len.to_le_bytes());
+    for s in samples {
+        let v = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
+        b.extend(v.to_le_bytes());
+        b.extend(v.to_le_bytes());
+    }
+    std::fs::write(&path, b).unwrap();
+    path.to_string_lossy().to_string()
+}
+
+#[test]
+fn drum_pad_uses_my_own_wav_and_goes_back() {
+    let mut r = rig();
+    // "caixa" de 44,1 kHz com 0,2 s de silêncio antes da batida
+    let rate = 44_100;
+    let mut s = vec![0.0f32; rate as usize / 5];
+    s.extend((0..rate as usize / 2).map(|i| {
+        let t = i as f32 / rate as f32;
+        (std::f32::consts::TAU * 330.0 * t).sin() * (-t * 12.0).exp() * 0.8
+    }));
+    let path = write_test_wav("minha_caixa.wav", rate, &s);
+    r.render(64);
+    r.core.panic();
+    r.core.set_drum_file(1, Some(path.clone()));
+    assert_eq!(r.core.drum_file_name(1).as_deref(), Some("minha caixa"));
+    assert_eq!(r.core.cfg.efeitos.drum_files.len(), 1);
+    r.render(48_000);
+    r.core.drum_hit(1, 127);
+    // o silêncio do começo foi cortado: a batida sai na hora
+    let first = r.render(960); // 20 ms
+    assert!(rms(&first) > 0.05, "bateu na hora: {}", rms(&first));
+    // voltar ao som do programa
+    r.core.set_drum_file(1, None);
+    assert!(r.core.drum_file_name(1).is_none());
+    assert!(r.core.cfg.efeitos.drum_files.is_empty());
+    // arquivo que não existe: avisa e não muda nada
+    r.core.set_drum_file(2, Some("C:/nao/existe.wav".into()));
+    assert!(r.core.drum_file_name(2).is_none());
+    assert!(r.core.toast.as_ref().unwrap().0.contains("Não consegui"));
+}
+
+#[test]
+fn drum_file_that_disappeared_falls_back_with_warning() {
+    let mut r = rig();
+    let s: Vec<f32> = (0..4800).map(|i| (i as f32 * 0.05).sin() * 0.5).collect();
+    let path = write_test_wav("some.wav", 48_000, &s);
+    r.core.set_drum_file(0, Some(path.clone()));
+    assert!(r.core.drum_file_name(0).is_some());
+    // o arquivo sumiu e o programa foi aberto de novo (taxa da placa diferente obriga a remontar)
+    std::fs::remove_file(&path).unwrap();
+    r.core.sample_rate = 44_100;
+    r.core.ensure_drum_kit();
+    assert!(r.core.drum_file_name(0).is_none(), "voltou ao som do programa");
+    assert!(r.core.toast.as_ref().unwrap().0.contains("voltou ao som do programa"));
+    r.core.sample_rate = 48_000;
+}
+
+#[test]
+fn voice_fx_uses_my_choir_and_finds_its_note() {
+    let mut r = rig();
+    // "coral" em Lá (A2 + A3 + E4 = tônica e quinta), 3 s
+    let rate = 48_000;
+    let s: Vec<f32> = (0..rate as usize * 3)
+        .map(|i| {
+            let t = i as f32 / rate as f32;
+            [110.0f32, 220.0, 329.63]
+                .iter()
+                .map(|f| (std::f32::consts::TAU * f * t).sin())
+                .sum::<f32>()
+                * 0.2
+        })
+        .collect();
+    let path = write_test_wav("meu_coral_em_la.wav", rate, &s);
+    r.core.set_voicefx_file(Some(path.clone()));
+    let (p, root) = r.core.cfg.efeitos.voicefx_file.clone().unwrap();
+    assert_eq!(p, path);
+    assert_eq!(root % 12, 9, "descobriu que está em Lá");
+    // corrigir a nota à mão
+    r.core.set_voicefx_key(0);
+    assert_eq!(r.core.cfg.efeitos.voicefx_file.as_ref().unwrap().1 % 12, 0);
+    // toca com o coral novo
+    r.core.toggle_voicefx();
+    r.render(64);
+    r.core.handle_piano(&[0x90, 60, 100]);
+    let out = r.render(24_000);
+    assert_eq!(r.engine.test_choir_voices(), 1);
+    assert!(rms(&out) > 0.005);
+    // voltar ao coral do programa
+    r.core.set_voicefx_file(None);
+    assert!(r.core.cfg.efeitos.voicefx_file.is_none());
+}

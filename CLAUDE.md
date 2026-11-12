@@ -48,6 +48,9 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   Prévia: teste `efeitos_real_sf2_preview` (ignored; `PIANO_SF2_FREEZE`, `PIANO_EFEITOS_WAV`).
 - Tela limpa (v0.18): `UiState.mix_details/pad_details/fx_details` (⚙) escondem os ajustes finos; o Aprender mostra tudo.
   Ações raras no menu ⚙ da barra de cima. Fonte não tem ▲▼ nem 🥁: desenhar com o painter ou trocar o ícone.
+- Sons próprios (v0.19): `cfg.efeitos.drum_files` + `efeitos::load_drum_file` / `DrumKit::build_with` (`core.set_drum_file`),
+  `cfg.efeitos.voicefx_file` (arquivo, nota MIDI; `core.set_voicefx_file` com `pads::detect_key`). Ações da tela que mexem
+  em arquivos rodam depois de `set_efeitos(e)` (senão a cópia `e` desfaz).
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.
