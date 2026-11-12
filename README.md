@@ -194,6 +194,16 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.18 — tela limpa ("modo palco")
+- Cada tela mostra só o que se usa tocando; os ajustes finos ficam atrás de um **⚙** (aparecem sozinhos no modo Aprender).
+- Barra de cima: nome do SF2, luzes Piano/Mesinha, **Aprender** e **⚙** (Ajustes, Editar, Configurar mesinha, Bluetooth, Sons grátis).
+  Áudio e CPU só aparecem quando há problema. Barra de baixo sem texto fixo.
+- **Sons SF2**: camada = nome do timbre, LIGADA e fader. **⚙ Detalhes** (fim da barra de cenas) mostra reverb, solo, ◀ ▶
+  e o Pitch/Mod da coluna GERAL. Salvar cena e Teclado viraram ícones (💾 🎹).
+- **Pads**: só os pads e os 12 tons; nome, tom, reverb, pôr/tirar pad e a ajuda de escala no ⚙.
+- **Efeitos** (✨): cada painel com um botão grande e o controle principal; o resto no ⚙ do canto.
+- Corrigido: ▲ ▼ do Pitch e o ícone da aba Efeitos apareciam como quadradinho.
+
 ### v0.17 — aba 🥁 Efeitos (PulsePad, Arpejador, DrumPads, Voice FX)
 - **Tempo** único (BPM com − / + ou **TAP**: bata 2 a 4 vezes no tempo da música). PulsePad e Arpejador andam juntos.
 - **PulsePad**: os pads e o ❄ congelado pulsam no tempo (1, 2 ou 4 pulsos por tempo, profundidade ajustável).

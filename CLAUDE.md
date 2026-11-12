@@ -46,6 +46,8 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   (`arp_next`), pulso no barramento dos pads e no congelado, coral antes do `ring().push` (o Congelar pega), batidas por último.
   `cfg.efeitos` (ajustes salvos; ligado/desligado não salva), aba 3 `efeitos_page`. Nos testes `freeze::ring()` é por thread.
   Prévia: teste `efeitos_real_sf2_preview` (ignored; `PIANO_SF2_FREEZE`, `PIANO_EFEITOS_WAV`).
+- Tela limpa (v0.18): `UiState.mix_details/pad_details/fx_details` (⚙) escondem os ajustes finos; o Aprender mostra tudo.
+  Ações raras no menu ⚙ da barra de cima. Fonte não tem ▲▼ nem 🥁: desenhar com o painter ou trocar o ícone.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.
