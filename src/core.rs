@@ -119,6 +119,8 @@ pub struct Core {
     pub modulation: f32,
     /// v0.15: último sinal que chegou do teclado (aparece no modo Aprender).
     pub last_piano_signal: Option<String>,
+    /// v0.16: o Congelar está ligado (tem som congelado tocando).
+    pub freeze_on: bool,
 }
 
 pub type SharedCore = Arc<Mutex<Core>>;
@@ -217,6 +219,43 @@ impl Core {
             pitch: 0.0,
             modulation: 0.0,
             last_piano_signal: None,
+            freeze_on: false,
+        }
+    }
+
+    /// v0.16: botão ❄ Congelar. Ligar = o som que as camadas estão tocando agora vira um pad
+    /// que fica soando sozinho (trocar timbre, cena ou tocar por cima não mexe nele).
+    /// Desligar = some devagar.
+    pub fn freeze_toggle(&mut self) {
+        if self.freeze_on {
+            self.freeze_off();
+        } else {
+            self.freeze_capture();
+        }
+    }
+
+    /// Congela o que está soando agora (se já tinha um congelado, ele dá lugar ao novo).
+    pub fn freeze_capture(&mut self) {
+        match crate::freeze::FreezeSource::capture(self.sample_rate) {
+            Some(src) => self.freeze_play(src),
+            None => self.notify("❄ Toque o acorde e aperte Congelar enquanto ele ainda está soando"),
+        }
+    }
+
+    /// Toca um trecho já capturado como congelado.
+    pub fn freeze_play(&mut self, src: crate::freeze::FreezeSource) {
+        self.grain_seed = self.grain_seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let voice = crate::freeze::FreezeVoice::new(Arc::new(src), self.sample_rate, self.grain_seed);
+        self.send(Cmd::FreezePlay(Box::new(voice)));
+        self.freeze_on = true;
+        self.notify("❄ Som congelado: pode trocar os timbres e tocar por cima. Aperte de novo para soltar.");
+    }
+
+    pub fn freeze_off(&mut self) {
+        if self.freeze_on {
+            self.send(Cmd::FreezeStop(crate::freeze::FREEZE_OUT_S));
+            self.freeze_on = false;
+            self.notify("❄ Congelado sumindo devagar");
         }
     }
 
@@ -927,6 +966,7 @@ impl Core {
         // o motor zera pitch e modulação no pânico; a tela acompanha
         self.pitch = 0.0;
         self.modulation = 0.0;
+        self.freeze_on = false; // o motor cala o congelado no pânico
         self.send(Cmd::Panic);
         self.notify("Pânico: todas as notas cortadas");
     }
@@ -1056,6 +1096,7 @@ impl Core {
             Target::PadPrev => self.pad_step(-1),
             Target::PadNext => self.pad_step(1),
             Target::PadBank => self.set_pad_bank(self.cfg.pad_bank + 1),
+            Target::Freeze => self.freeze_toggle(),
             Target::TabToggle => {
                 self.cfg.tab = 1 - self.cfg.tab.min(1);
                 self.dirty = true;
@@ -1412,6 +1453,7 @@ impl Core {
                     Target::Solo(i) => self.cfg.mix.layers[i].solo,
                     Target::Scene(n) => self.cfg.current_scene == Some(n),
                     Target::Pad(k) => self.pad_active == Some(k),
+                    Target::Freeze => self.freeze_on,
                     _ => continue,
                 };
                 out.push((ch, num, lit));
@@ -1933,6 +1975,92 @@ mod tests {
         let old: Config = serde_json::from_str(r#"{"master":0.5}"#).unwrap();
         assert_eq!(old.pitch_range, 2);
         assert!(old.piano_mappings.is_empty());
+    }
+
+    /// Trecho de "acorde" para os testes do Congelar.
+    fn test_chord() -> crate::freeze::FreezeSource {
+        let rate = 48_000u32;
+        let n = rate as usize * 2;
+        let l: Vec<f32> = (0..n)
+            .map(|i| {
+                let t = i as f32 / rate as f32;
+                [196.0f32, 246.94, 293.66]
+                    .iter()
+                    .map(|f| (std::f32::consts::TAU * f * t).sin())
+                    .sum::<f32>()
+                    * 0.2
+                    * (-t * 0.5).exp()
+            })
+            .collect();
+        crate::freeze::FreezeSource::from_audio(&l, &l, rate).unwrap()
+    }
+
+    #[test]
+    fn freeze_button_toggles_and_panic_stops() {
+        let (mut c, rx) = core();
+        c.freeze_play(test_chord());
+        assert!(c.freeze_on);
+        assert!(drain(&rx).iter().any(|m| matches!(m, Cmd::FreezePlay(_))));
+        c.freeze_toggle(); // desliga
+        assert!(!c.freeze_on);
+        assert!(drain(&rx).iter().any(|m| matches!(m, Cmd::FreezeStop(s) if (*s - 3.0).abs() < 0.01)));
+        c.freeze_play(test_chord());
+        c.panic();
+        assert!(!c.freeze_on, "pânico solta o congelado");
+        // trocar de cena não mexe no congelado
+        c.freeze_play(test_chord());
+        c.save_scene(1);
+        c.load_scene(1);
+        c.set_preset(0, c.presets[1].clone());
+        assert!(c.freeze_on);
+        assert!(!drain(&rx).iter().any(|m| matches!(m, Cmd::FreezeStop(_))));
+    }
+
+    #[test]
+    fn freeze_can_be_learned_on_the_amw_and_on_the_mixer() {
+        let (mut c, rx) = core();
+        c.learn.active = true;
+        c.learn.target = Some(Target::Freeze);
+        c.handle_piano(&[0x90, 41, 100]); // tecla do AMW
+        c.learn.target = Some(Target::Freeze);
+        c.handle_controller(&[0x90, 0, 127]); // botão REC 1 da mesinha (livre)
+        c.learn.active = false;
+        assert_eq!(c.cfg.piano_mappings.last().unwrap().target, Target::Freeze);
+        assert!(c.cfg.mappings.iter().any(|m| m.target == Target::Freeze));
+        drain(&rx);
+        // sem nada tocando: avisa e não liga
+        crate::freeze::ring().clear();
+        c.handle_piano(&[0x90, 41, 100]);
+        assert!(!c.freeze_on);
+        assert!(!plays_note(&drain(&rx)), "a tecla do Congelar não toca");
+        assert!(c.toast.as_ref().unwrap().0.contains("Toque o acorde"));
+        // ligado: a luz do botão da mesinha acende
+        c.freeze_play(test_chord());
+        assert!(c.leds().contains(&(0, 0, true)));
+        c.handle_controller(&[0x90, 0, 127]);
+        assert!(!c.freeze_on);
+    }
+
+    #[test]
+    fn engine_keeps_the_frozen_sound_and_fades_it_out() {
+        use crate::engine::{Engine, Stats};
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let (gtx, _grx) = crossbeam_channel::unbounded();
+        let mut e = Engine::new(rx, gtx, Arc::new(Stats::default()));
+        let v = crate::freeze::FreezeVoice::new(Arc::new(test_chord()), 48_000, 3);
+        tx.send(Cmd::FreezePlay(Box::new(v))).unwrap();
+        let mut out = vec![0.0f32; 1024];
+        let level = |o: &[f32]| (o.iter().map(|x| x * x).sum::<f32>() / o.len() as f32).sqrt();
+        // 30 s sem SF2 nenhum: o congelado continua soando
+        for _ in 0..(30 * 48_000 / 512) {
+            e.render_interleaved(&mut out, 2);
+        }
+        assert!(level(&out) > 0.01, "ainda soando: {}", level(&out));
+        tx.send(Cmd::FreezeStop(3.0)).unwrap();
+        for _ in 0..(4 * 48_000 / 512) {
+            e.render_interleaved(&mut out, 2);
+        }
+        assert!(level(&out) < 1e-6, "sumiu: {}", level(&out));
     }
 
     #[test]

@@ -2369,7 +2369,9 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
 
     ui.add_space(if compact { 2.0 } else { 8.0 });
     ui.label(RichText::new(format!("{:.0}%", core.cfg.master * 100.0)).monospace());
-    let fader_h = (ui.available_height() - if compact { 48.0 } else { 64.0 }).max(60.0);
+    let freeze_h = if compact { 32.0 } else { 42.0 };
+    let fader_h =
+        (ui.available_height() - if compact { 48.0 } else { 64.0 } - freeze_h - 6.0).max(60.0);
     let (resp, newv) = fader(
         ui,
         Vec2::new(inner.width(), fader_h),
@@ -2380,6 +2382,26 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     learnable(ui, core, &resp, Target::Master);
     if let Some(v) = newv {
         core.set_master(v);
+    }
+    ui.add_space(if compact { 2.0 } else { 6.0 });
+    // v0.16: Congelar — o acorde que está soando fica tocando sozinho (aperta de novo: some devagar).
+    let on = core.freeze_on;
+    let fz = ui.add_sized(
+        [inner.width(), freeze_h],
+        egui::Button::new(
+            RichText::new(if on { "❄ CONGELADO" } else { "❄ CONGELAR" })
+                .strong()
+                .size(15.0)
+                .color(if on { th().ink } else { th().text }),
+        )
+        .fill(if on { PITCH_COLOR } else { th().glass_hi }),
+    );
+    let fz = fz.on_hover_text(
+        "Toque um acorde e aperte: o som fica soando sozinho, mesmo trocando os timbres. \
+         Aperte de novo para ele sumir devagar.",
+    );
+    if !learnable(ui, core, &fz, Target::Freeze) && fz.clicked() {
+        core.freeze_toggle();
     }
     ui.add_space(if compact { 2.0 } else { 6.0 });
     let panic = ui.add_sized(

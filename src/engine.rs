@@ -10,6 +10,7 @@ use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
 use rustysynth::{SoundFont, Synthesizer, SynthesizerSettings};
 
+use crate::freeze::FreezeVoice;
 use crate::granular::{ChurchReverb, GrainParams, GranularVoice};
 use crate::model::LAYERS;
 use crate::pads::{PadClip, PadVoice};
@@ -19,7 +20,11 @@ pub enum Garbage {
     Synth(Box<Synthesizer>),
     Pad(Arc<PadClip>),
     Grain(Box<GranularVoice>),
+    Freeze(Box<FreezeVoice>),
 }
+
+/// Congelados soando juntos (o atual + os que estão sumindo).
+const MAX_FREEZE: usize = 4;
 
 /// Máximo de pads soando juntos (o que entra + os que estão sumindo).
 const MAX_PADS: usize = 4;
@@ -63,6 +68,10 @@ pub enum Cmd {
     SetTranspose(i32),
     /// v0.15: quantos semitons o pitch bend alcança (1..12).
     PitchRange(u8),
+    /// v0.16: toca o som congelado (o anterior, se houver, some devagar). Criado fora daqui.
+    FreezePlay(Box<FreezeVoice>),
+    /// v0.16: desliga o congelado (some em `segundos`).
+    FreezeStop(f32),
     Panic,
     /// Novo sintetizador (SF2 novo ou taxa de amostragem nova).
     Replace(Box<Synthesizer>),
@@ -127,6 +136,9 @@ pub struct Engine {
     #[allow(clippy::vec_box)]
     grains: Vec<Box<GranularVoice>>,
     grain_params: GrainParams,
+    /// v0.16: sons congelados (o último é o atual; os outros estão sumindo).
+    #[allow(clippy::vec_box)]
+    freezes: Vec<Box<FreezeVoice>>,
     reverb: ChurchReverb,
     church_pads: f32,
     church_sf2: f32,
@@ -139,6 +151,8 @@ pub struct Engine {
 
 impl Engine {
     pub fn new(rx: Receiver<Cmd>, garbage: Sender<Garbage>, stats: Arc<Stats>) -> Self {
+        // A memória do Congelar é criada aqui (fora da thread de áudio, que só escreve nela).
+        let _ = crate::freeze::ring();
         Self {
             synth: None,
             rx,
@@ -162,6 +176,7 @@ impl Engine {
             pad_vol_now: 0.49,
             grains: Vec::with_capacity(MAX_PADS + 1),
             grain_params: GrainParams::default(),
+            freezes: Vec::with_capacity(MAX_FREEZE + 1),
             reverb: ChurchReverb::new(48_000),
             church_pads: 0.4,
             church_sf2: 0.0,
@@ -221,6 +236,23 @@ impl Engine {
 
     fn handle(&mut self, cmd: Cmd) {
         match cmd {
+            Cmd::FreezePlay(voice) => {
+                let sr = self.sample_rate;
+                for f in &mut self.freezes {
+                    f.fade_out(sr, crate::freeze::FREEZE_OUT_S);
+                }
+                if self.freezes.len() >= MAX_FREEZE {
+                    let old = self.freezes.remove(0);
+                    let _ = self.garbage.try_send(Garbage::Freeze(old));
+                }
+                self.freezes.push(voice);
+            }
+            Cmd::FreezeStop(secs) => {
+                let sr = self.sample_rate;
+                for f in &mut self.freezes {
+                    f.fade_out(sr, secs);
+                }
+            }
             Cmd::PitchRange(semis) => {
                 self.pitch_range = semis.clamp(1, 12);
                 if let Some(s) = self.synth.as_mut() {
@@ -386,6 +418,11 @@ impl Engine {
             Cmd::PadVolume(v) => self.pad_vol = v.clamp(0.0, 1.0).powi(2),
             Cmd::SetTranspose(t) => self.transpose = t.clamp(-24, 24),
             Cmd::Panic => {
+                // pânico também cala o congelado (rápido, sem estalo)
+                let sr = self.sample_rate;
+                for f in &mut self.freezes {
+                    f.fade_out(sr, 0.3);
+                }
                 if let Some(s) = self.synth.as_mut() {
                     s.note_off_all(true);
                     for i in 0..LAYERS {
@@ -429,6 +466,12 @@ impl Engine {
                     l.fill(0.0);
                     r.fill(0.0);
                 }
+            }
+            // v0.16: guarda o som das camadas (para o Congelar) e soma o congelado.
+            // Ele entra aqui, junto das camadas, para ganhar o mesmo reverb de igreja delas.
+            crate::freeze::ring().push(l, r);
+            for fz in &mut self.freezes {
+                fz.mix(l, r, sr);
             }
             // Pads (loop e Vivo) num "barramento" próprio; depois vão para a saída e para o reverb de igreja.
             let has_pads = !self.pads.is_empty() || !self.grains.is_empty();
@@ -496,6 +539,16 @@ impl Engine {
             if self.grains[i].finished() {
                 let v = self.grains.remove(i);
                 let _ = self.garbage.try_send(Garbage::Grain(v));
+            } else {
+                i += 1;
+            }
+        }
+
+        let mut i = 0;
+        while i < self.freezes.len() {
+            if self.freezes[i].finished() {
+                let v = self.freezes.remove(i);
+                let _ = self.garbage.try_send(Garbage::Freeze(v));
             } else {
                 i += 1;
             }

@@ -735,3 +735,94 @@ fn write_wav(path: &str, stereo: &[f32], sr: u32) {
     }
     std::fs::write(path, w).unwrap();
 }
+
+/// v0.16: Congelar com um SF2 de verdade. Toca um Sol no piano, congela, solta as teclas,
+/// troca o timbre e confere que o congelado continua firme (sem buraco nem estalo).
+/// `PIANO_SF2_FREEZE=<arquivo.sf2>` (e opcional `PIANO_FREEZE_WAV=<saida.wav>` para ouvir).
+#[test]
+#[ignore]
+fn freeze_real_sf2_preview() {
+    let Ok(path) = std::env::var("PIANO_SF2_FREEZE") else {
+        return;
+    };
+    let sf = Arc::new(SoundFont::new(&mut std::fs::File::open(&path).unwrap()).unwrap());
+    let (tx, rx) = unbounded::<Cmd>();
+    let (gtx, _grx) = unbounded();
+    let mut engine = Engine::new(rx, gtx, Arc::new(Stats::default()));
+    let mut core = Core::new(Config::default(), tx);
+    core.sample_rate = 48_000;
+    core.install_sound_font(sf, "real.sf2".into());
+    let piano = core.presets[0].clone();
+    core.set_preset(0, piano.clone());
+    core.set_on(0, true);
+    println!("timbre: {}", piano.name);
+    let mut wav: Vec<f32> = Vec::new();
+    let mut render = |engine: &mut Engine, secs: f32, wav: &mut Vec<f32>| -> Vec<f32> {
+        let mut out = vec![0.0; (48_000.0 * secs) as usize * 2];
+        for chunk in out.chunks_mut(1024) {
+            engine.render_interleaved(chunk, 2);
+        }
+        wav.extend_from_slice(&out);
+        out
+    };
+    render(&mut engine, 0.1, &mut wav);
+    for k in [55u8, 59, 62, 67] {
+        core.handle_piano(&[0x90, k, 100]);
+    }
+    let played = render(&mut engine, 1.5, &mut wav);
+    {
+        let s = crate::freeze::FreezeSource::capture(48_000).unwrap();
+        println!("trecho: {:.2} s, rms {:.4}", s.seconds(), s.rms);
+    }
+    core.freeze_capture();
+    assert!(core.freeze_on, "congelou");
+    for k in [55u8, 59, 62, 67] {
+        core.handle_piano(&[0x80, k, 0]);
+    }
+    if let Some(other) = core.presets.get(core.presets.len() / 2).cloned() {
+        println!("troca para: {}", other.name);
+        core.set_preset(0, other);
+    }
+    let frozen = render(&mut engine, 12.0, &mut wav);
+    core.freeze_toggle();
+    let tail = render(&mut engine, 4.0, &mut wav);
+
+    let half = 48_000; // 0,5 s estéreo
+    let levels: Vec<f32> = frozen.chunks(half).map(rms).collect();
+    let jump = frozen
+        .chunks(2)
+        .collect::<Vec<_>>()
+        .windows(2)
+        .map(|w| (w[1][0] - w[0][0]).abs())
+        .fold(0.0f32, f32::max);
+    println!("acorde tocado: {:.4}", rms(&played[played.len() / 2..]));
+    println!("congelado (a cada 0,5 s): {:?}", levels.iter().map(|v| (v * 1000.0).round() / 1000.0).collect::<Vec<_>>());
+    println!("maior salto entre amostras: {jump:.4}   fim: {:.6}", rms(&tail[tail.len() - 4800..]));
+    let (lo, hi) = levels[2..].iter().fold((f32::MAX, 0.0f32), |(a, b), &v| (a.min(v), b.max(v)));
+    assert!(lo > 0.0 && hi / lo < 2.5, "volume firme ({lo}..{hi})");
+    let now = rms(&played[played.len() - 28_800..]); // último 0,3 s antes de apertar
+    let avg = levels[2..].iter().sum::<f32>() / (levels.len() - 2) as f32;
+    println!("volume ao apertar: {now:.4}  congelado: {avg:.4}");
+    assert!(avg > now * 0.6 && avg < now * 1.6, "mesmo volume do que se ouvia");
+    assert!(rms(&tail[tail.len() - 4800..]) < 1e-4, "sumiu no fim");
+    if let Ok(out) = std::env::var("PIANO_FREEZE_WAV") {
+        let mut b: Vec<u8> = Vec::new();
+        let data_len = (wav.len() * 2) as u32;
+        b.extend(b"RIFF");
+        b.extend((36 + data_len).to_le_bytes());
+        b.extend(b"WAVEfmt ");
+        b.extend(16u32.to_le_bytes());
+        b.extend(1u16.to_le_bytes());
+        b.extend(2u16.to_le_bytes());
+        b.extend(48_000u32.to_le_bytes());
+        b.extend((48_000u32 * 4).to_le_bytes());
+        b.extend(4u16.to_le_bytes());
+        b.extend(16u16.to_le_bytes());
+        b.extend(b"data");
+        b.extend(data_len.to_le_bytes());
+        for s in &wav {
+            b.extend(((s.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+        }
+        std::fs::write(out, b).unwrap();
+    }
+}

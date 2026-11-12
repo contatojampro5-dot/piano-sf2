@@ -194,6 +194,13 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.16 — ❄ Congelar
+- Botão **❄ CONGELAR** na coluna GERAL: toque um acorde (ex.: Sol) e aperte. Aquele som fica soando **sozinho**, como um pad,
+  enquanto você troca os timbres, as cenas e toca por cima. Aperte de novo (**❄ CONGELADO**): ele some devagar (3 s).
+- O programa guarda sempre os últimos segundos do som das camadas, pega a parte que ainda está soando (sem a martelada
+  da tecla) e toca ela sem parar, no mesmo volume que estava. Pads normais continuam separados.
+- Dá para pôr na mesinha ou numa tecla do teclado com **Aprender**. **Pânico** também solta o congelado.
+
 ### v0.15 — pitch bend e modulation no teclado (AMW MIDI Control Mini 32)
 - Na coluna **8 · GERAL**: barra **Pitch** (arraste; soltou, volta ao meio), botões de segurar **▼ ▲** e barra **Mod** (vibrato).
 - **Aprender** agora também ouve o **teclado** (não só a mesinha): clique em Aprender → clique no Pitch, ▲, ▼ ou Mod →

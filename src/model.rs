@@ -121,6 +121,8 @@ pub enum Target {
     PitchDown,
     /// v0.15: modulação (vibrato, CC 1). Botão: segurar = vibrato cheio.
     Modulation,
+    /// v0.16: Congelar — liga: o som que está tocando fica soando sozinho; desliga: some devagar.
+    Freeze,
 }
 
 impl Target {
@@ -171,6 +173,7 @@ impl Target {
             Target::PitchUp => "Pitch ▲ (segurar sobe)".into(),
             Target::PitchDown => "Pitch ▼ (segurar desce)".into(),
             Target::Modulation => "Modulation (vibrato)".into(),
+            Target::Freeze => "Congelar o som (liga/desliga)".into(),
         }
     }
 }

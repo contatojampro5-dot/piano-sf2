@@ -37,6 +37,10 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   A thread do MIDI decide sem travar o `core` com `core::piano_routed` (marcas atualizadas por `sync_piano_hooks`, a cada quadro).
   Tela: `pitch_mod_controls` na coluna GERAL. Teclado do Theo: AMW MIDI Control Mini 32 (aparece como "AKM320"; pelo USB só
   manda notas — rodas e slider não mandaram nada no teste de 12/11/2026).
+- Congelar (v0.16): `src/freeze.rs` — `CaptureRing` (memória sem trava, ~5 s do som das camadas, escrita no `render`),
+  `pick_region` (fim = som mais recente não silencioso, começo depois do ataque), `FreezeVoice` (granular sem mudar altura,
+  volume = RMS dos últimos 0,3 s). `Cmd::FreezePlay/FreezeStop`, `Target::Freeze`, `core.freeze_toggle()`. Botão na coluna GERAL.
+  Prévia com SF2 de verdade: teste `freeze_real_sf2_preview` (ignored; `PIANO_SF2_FREEZE`, `PIANO_FREEZE_WAV`).
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

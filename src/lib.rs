@@ -3,6 +3,7 @@
 pub mod blemidi;
 pub mod core;
 pub mod engine;
+pub mod freeze;
 pub mod granular;
 pub mod model;
 pub mod pads;
