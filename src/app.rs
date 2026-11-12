@@ -276,7 +276,8 @@ impl eframe::App for PianoApp {
                     .inner_margin(egui::Margin::symmetric(14, 5)),
             )
             .show(ui, |ui| footer(ui, &mut core, &self.stats));
-        if core.cfg.tab == 0 && self.ui.kb_open {
+        // v0.18.2: o teclado da tela continua aberto ao trocar de aba (Pads, Efeitos)
+        if self.ui.kb_open {
             egui::Panel::bottom("teclado")
                 .frame(
                     egui::Frame::new()
@@ -429,7 +430,8 @@ fn keyboard(ctx: &egui::Context, core: &mut Core, st: &mut UiState) {
     if ctx.egui_wants_keyboard_input() {
         return;
     }
-    if st.kb_open && core.cfg.tab == 0 {
+    // v0.18.2: as teclas do computador tocam em qualquer aba (antes só na Sons SF2)
+    if st.kb_open {
         computer_keys(ctx, core, st);
     }
     ctx.input_mut(|i| {
@@ -567,13 +569,21 @@ fn release_keyboard(core: &mut Core, st: &mut UiState) {
 
 fn piano_keyboard(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new("🎹 Teclado de teste").strong());
+        ui.label(RichText::new("🎹 Teclado").strong());
         ui.label(
-            RichText::new("clique nas teclas (mais embaixo = mais forte) · computador: A W S E D F T G Y H U J K = notas · Z / X = oitava · espaço = pedal")
+            RichText::new("PC: A W S E D F T G Y H U J K · Z / X oitava · espaço pedal")
                 .size(13.0)
                 .color(th().dim),
         );
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            // v0.18.2: fecha daqui também (o botão 🎹 só existe na aba Sons SF2)
+            if ui
+                .add(egui::Button::new(RichText::new("✖").size(14.0)).fill(th().glass_hi))
+                .on_hover_text("Fechar o teclado")
+                .clicked()
+            {
+                st.kb_open = false;
+            }
             let ped = egui::Button::new(RichText::new("PEDAL").strong().color(if st.kb_sustain { th().ink } else { th().text }))
                 .fill(if st.kb_sustain { YELLOW } else { th().glass_hi });
             if ui.add(ped).on_hover_text("Segura as notas (como o pedal do piano)").clicked() {
