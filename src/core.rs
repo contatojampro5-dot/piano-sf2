@@ -125,6 +125,8 @@ pub struct Core {
     pub pulse_on: bool,
     pub arp_on: bool,
     pub voicefx_on: bool,
+    /// v0.23: o swell está "dentro" (som cheio) ou "fora" (som saiu devagar)?
+    pub swell_in: bool,
     /// Batidas do "bater o tempo" (segundos desde `tap_origin`).
     taps: Vec<f64>,
     tap_origin: Instant,
@@ -236,6 +238,7 @@ impl Core {
             pulse_on: false,
             arp_on: false,
             voicefx_on: false,
+            swell_in: true,
             taps: Vec::new(),
             tap_origin: Instant::now(),
             drum_kit: None,
@@ -275,6 +278,38 @@ impl Core {
             on: self.voicefx_on,
             level: e.voicefx_volume,
             octave: e.voicefx_octave,
+        });
+        self.send(Cmd::Filter {
+            amount: e.filtro,
+            resonance: e.filtro_res,
+            all: e.filtro_tudo,
+            with_swell: e.swell_filtro,
+        });
+    }
+
+    /// v0.23: filtro de abrir/fechar (0 = fechado/escuro … 1 = aberto).
+    pub fn set_filter(&mut self, v: f32) {
+        let mut e = self.cfg.efeitos.clone();
+        e.filtro = v.clamp(0.0, 1.0);
+        self.set_efeitos(e);
+    }
+
+    /// v0.23: Swell — se o som está cheio, sai devagar; se saiu, entra devagar (abrindo o filtro junto).
+    pub fn toggle_swell(&mut self) {
+        self.swell_in = !self.swell_in;
+        self.send(Cmd::Swell {
+            inn: self.swell_in,
+            secs: self.cfg.efeitos.swell_secs,
+        });
+        let onde = if self.cfg.efeitos.filtro_tudo {
+            "o som"
+        } else {
+            "o fundo"
+        };
+        self.notify(if self.swell_in {
+            format!("Swell: {onde} entrando devagar ({:.0} s)", self.cfg.efeitos.swell_secs)
+        } else {
+            format!("Swell: {onde} saindo devagar ({:.0} s)", self.cfg.efeitos.swell_secs)
         });
     }
 
@@ -1291,6 +1326,7 @@ impl Core {
         self.pitch = 0.0;
         self.modulation = 0.0;
         self.freeze_on = false; // o motor cala o congelado no pânico
+        self.swell_in = true; // e o swell volta a "cheio"
         self.send(Cmd::Panic);
         self.notify("Pânico: todas as notas cortadas");
     }
@@ -1426,6 +1462,7 @@ impl Core {
             Target::ArpToggle => self.toggle_arp(),
             Target::VoiceFxToggle => self.toggle_voicefx(),
             Target::Drum(i) => self.drum_hit(i, 110),
+            Target::SwellToggle => self.toggle_swell(),
             Target::TabToggle => {
                 self.cfg.tab = 1 - self.cfg.tab.min(1);
                 self.dirty = true;
@@ -1471,6 +1508,14 @@ impl Core {
                 ContValue::Relative(d) => self.pitch + d * 2.0,
             };
             self.set_pitch(v);
+            return;
+        }
+        if t == Target::Filter {
+            let v = match value {
+                ContValue::Absolute(v) => v,
+                ContValue::Relative(d) => self.cfg.efeitos.filtro + d,
+            };
+            self.set_filter(v);
             return;
         }
         if matches!(t, Target::DrumVolume | Target::VoiceFxVolume) {

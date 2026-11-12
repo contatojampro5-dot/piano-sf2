@@ -131,6 +131,9 @@ pub enum Target {
     Drum(usize),
     DrumVolume,
     VoiceFxVolume,
+    /// v0.23: filtro de abrir/fechar (knob/fader) e o botão de swell (entra/sai suave).
+    Filter,
+    SwellToggle,
 }
 
 impl Target {
@@ -147,6 +150,7 @@ impl Target {
                 | Target::Modulation
                 | Target::DrumVolume
                 | Target::VoiceFxVolume
+                | Target::Filter
         )
     }
 
@@ -194,6 +198,8 @@ impl Target {
             ),
             Target::DrumVolume => "Volume dos DrumPads".into(),
             Target::VoiceFxVolume => "Volume do Voice FX".into(),
+            Target::Filter => "Filtro (abrir/fechar o som)".into(),
+            Target::SwellToggle => "Swell (entrar/sair suave)".into(),
         }
     }
 }
@@ -544,6 +550,16 @@ pub struct Efeitos {
     pub voicefx_file: Option<(String, u8)>,
     /// v0.21: voz escolhida no Voice FX: 0..4 = vozes do programa (`pads::VOICE_NAMES`), 5 = "Minha" (o arquivo acima).
     pub voicefx_voice: usize,
+    /// v0.23: filtro de abrir/fechar: 0 = fechado (escuro) … 1 = aberto (normal).
+    pub filtro: f32,
+    /// v0.23: ressonância do filtro (0..1, o "brilho" da abertura).
+    pub filtro_res: f32,
+    /// v0.23: filtro e swell em tudo menos a bateria (false = só no fundo: pads e congelado).
+    pub filtro_tudo: bool,
+    /// v0.23: quanto tempo o swell leva para entrar/sair (segundos).
+    pub swell_secs: f32,
+    /// v0.23: o swell abre/fecha o filtro junto com o volume.
+    pub swell_filtro: bool,
 }
 
 /// v0.21: número da voz "Minha" (o arquivo do Theo) no Voice FX.
@@ -566,6 +582,11 @@ impl Default for Efeitos {
             drum_files: Vec::new(),
             voicefx_file: None,
             voicefx_voice: 0,
+            filtro: 1.0,
+            filtro_res: 0.25,
+            filtro_tudo: false,
+            swell_secs: 4.0,
+            swell_filtro: true,
         }
     }
 }
@@ -589,6 +610,9 @@ impl Efeitos {
         self.drum_volume = self.drum_volume.clamp(0.0, 1.0);
         self.voicefx_volume = self.voicefx_volume.clamp(0.0, 1.0);
         self.voicefx_octave = self.voicefx_octave.clamp(-1, 1);
+        self.filtro = self.filtro.clamp(0.0, 1.0);
+        self.filtro_res = self.filtro_res.clamp(0.0, 1.0);
+        self.swell_secs = self.swell_secs.clamp(0.5, 16.0);
         if self.voicefx_voice > VOICE_MINE || (self.voicefx_voice == VOICE_MINE && self.voicefx_file.is_none()) {
             self.voicefx_voice = 0;
         }

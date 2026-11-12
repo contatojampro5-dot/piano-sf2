@@ -77,7 +77,7 @@ struct UiState {
     mix_details: bool,
     pad_details: bool,
     /// Tempo, PulsePad, Arpejador, Voice FX.
-    fx_details: [bool; 4],
+    fx_details: [bool; 5],
     /// v0.19: janelas de arquivo (só com o `core` destravado): som de um DrumPad, coral do Voice FX.
     drum_file_dialog: Option<usize>,
     voicefx_file_dialog: bool,
@@ -181,7 +181,7 @@ impl PianoApp {
                 kb_sustain: false,
                 mix_details: false,
                 pad_details: false,
-                fx_details: [false; 4],
+                fx_details: [false; 5],
                 drum_file_dialog: None,
                 voicefx_file_dialog: false,
                 pad_list_open: false,
@@ -1237,11 +1237,11 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     let gap = 12.0;
     let top_h = (avail.y * 0.56).clamp(240.0, 380.0);
     let drum_h = (avail.y - top_h - gap).max(150.0);
-    let card_w = ((avail.x - 3.0 * gap) / 4.0).max(150.0);
+    let card_w = ((avail.x - 4.0 * gap) / 5.0).max(150.0);
     let mut e = core.cfg.efeitos.clone();
     let learning = core.learn.active;
-    let [mut d_tempo, mut d_pulse, mut d_arp, mut d_voice] = st.fx_details;
-    let [o_tempo, o_pulse, o_arp, o_voice] = st.fx_details;
+    let [mut d_tempo, mut d_pulse, mut d_arp, mut d_voice, mut d_filt] = st.fx_details;
+    let [o_tempo, o_pulse, o_arp, o_voice, o_filt] = st.fx_details;
     // pedidos que rodam no fim (ver depois de `set_efeitos`)
     let mut drum_reset: Option<usize> = None;
     let mut drum_dialog: Option<usize> = None;
@@ -1432,8 +1432,58 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                 }
             }
         });
+
+        // ---- v0.23: Abrir / fechar (filtro) + Swell ----
+        fx_card(ui, Vec2::new(card_w, top_h), "Abrir / fechar", PITCH_COLOR, Some((&mut d_filt, "Ressonância, tempo do swell e onde vale")), |ui| {
+            let w = ui.available_width();
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Filtro").size(13.0).strong());
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let t = if e.filtro >= 0.995 { "aberto".to_string() } else if e.filtro <= 0.005 { "fechado".to_string() } else { format!("{:.0}%", e.filtro * 100.0) };
+                    ui.label(RichText::new(t).size(12.0).color(th().dim));
+                });
+            });
+            let r = hbar(ui, Vec2::new(w, 34.0), e.filtro, false, PITCH_COLOR);
+            let r = r.on_hover_text("Esquerda = som escuro, abafado (de longe) · direita = aberto, brilhante. Ligue num knob da mesinha pelo Aprender.");
+            if !learnable(ui, core, &r, Target::Filter) && r.is_pointer_button_down_on() {
+                if let Some(p) = r.interact_pointer_pos() {
+                    e.filtro = ((p.x - r.rect.left()) / r.rect.width()).clamp(0.0, 1.0);
+                }
+            }
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("fechado").size(11.0).color(th().dim));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(RichText::new("aberto").size(11.0).color(th().dim));
+                });
+            });
+            ui.add_space(8.0);
+            let label = if core.swell_in { "SAIR SUAVE" } else { "ENTRAR SUAVE" };
+            if fx_toggle(ui, core, w, core.swell_in, label, PITCH_COLOR, Target::SwellToggle, "Swell: o som sai devagar (fechando o filtro) ou entra devagar (abrindo)") {
+                core.toggle_swell();
+            }
+            ui.label(
+                RichText::new(if core.swell_in { "som cheio" } else { "som fora — aperte para entrar" })
+                    .size(12.0)
+                    .color(if core.swell_in { th().dim } else { ORANGE }),
+            );
+            if o_filt || learning {
+                ui.add_space(6.0);
+                ui.label(RichText::new(format!("Ressonância {:.0}%", e.filtro_res * 100.0)).size(12.0).color(th().dim));
+                fx_bar(ui, core, w, &mut e.filtro_res, PITCH_COLOR, None);
+                let secs: [(&str, u32); 4] = [("2 s", 2), ("4 s", 4), ("8 s", 8), ("16 s", 16)];
+                let cur = e.swell_secs.round() as u32;
+                if let Some(v) = fx_choice(ui, "Tempo do swell", &secs, cur, PITCH_COLOR) {
+                    e.swell_secs = v as f32;
+                }
+                if let Some(v) = fx_choice(ui, "Vale para", &[("o fundo", false), ("tudo", true)], e.filtro_tudo, PITCH_COLOR) {
+                    e.filtro_tudo = v;
+                }
+                ui.label(RichText::new("fundo = pads e ❄ congelado · tudo = menos a bateria").size(11.0).color(th().dim));
+                ui.checkbox(&mut e.swell_filtro, "Swell abre e fecha o filtro junto");
+            }
+        });
     });
-    st.fx_details = [d_tempo, d_pulse, d_arp, d_voice];
+    st.fx_details = [d_tempo, d_pulse, d_arp, d_voice, d_filt];
 
     ui.add_space(gap);
     // ---- DrumPads ----

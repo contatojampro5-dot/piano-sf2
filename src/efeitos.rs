@@ -961,3 +961,175 @@ mod tests {
         assert_eq!(v.active_voices(), 0, "soltou o pedal: o coral some");
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// v0.23: Filtro de "abrir e fechar" o som (passa-baixa) e Swell (entra/sai suave)
+// ---------------------------------------------------------------------------------------------
+
+/// Onde o filtro está: 0 = bem fechado (escuro, ~150 Hz) … 1 = todo aberto (som normal).
+pub fn filter_hz(amount: f32) -> f32 {
+    let a = amount.clamp(0.0, 1.0);
+    150.0 * (20_000.0f32 / 150.0).powf(a)
+}
+
+/// Passa-baixa estéreo (biquad) com o corte mudando suave (sem "degrau" quando gira o knob).
+/// Ressonância 0..1 = um pouco de "brilho" perto do corte, típico da abertura de filtro.
+pub struct Lowpass {
+    z: [[f32; 2]; 2],
+    c: [f32; 5],
+    /// Corte atual (Hz), andando devagar até o pedido.
+    now_hz: f32,
+}
+
+impl Default for Lowpass {
+    fn default() -> Self {
+        Self {
+            z: [[0.0; 2]; 2],
+            c: [1.0, 0.0, 0.0, 0.0, 0.0],
+            now_hz: 20_000.0,
+        }
+    }
+}
+
+impl Lowpass {
+    fn coefs(&mut self, hz: f32, q: f32, sr: f32) {
+        let w = std::f32::consts::TAU * hz.min(sr * 0.45) / sr;
+        let (s, c) = (w.sin(), w.cos());
+        let alpha = s / (2.0 * q);
+        let a0 = 1.0 + alpha;
+        let b1 = (1.0 - c) / a0;
+        self.c = [b1 * 0.5, b1, b1 * 0.5, (-2.0 * c) / a0, (1.0 - alpha) / a0];
+    }
+
+    /// Está todo aberto (dá para pular o filtro, gastando nada)?
+    pub fn is_open(&self, target_hz: f32) -> bool {
+        target_hz >= 19_000.0 && self.now_hz >= 19_000.0
+    }
+
+    pub fn process(&mut self, l: &mut [f32], r: &mut [f32], target_hz: f32, resonance: f32, sr: u32) {
+        if self.is_open(target_hz) {
+            self.now_hz = 20_000.0;
+            self.z = [[0.0; 2]; 2];
+            return;
+        }
+        let sr = sr as f32;
+        let q = 0.707 + resonance.clamp(0.0, 1.0) * 3.3;
+        // ~60 ms para chegar no corte novo (em escala de oitavas: gira natural)
+        let k = 1.0 - (-32.0 / (0.06 * sr)).exp();
+        let mut i = 0;
+        while i < l.len() {
+            let n = (l.len() - i).min(32);
+            let ln = self.now_hz.ln() + (target_hz.max(20.0).ln() - self.now_hz.ln()) * k;
+            self.now_hz = ln.exp();
+            self.coefs(self.now_hz, q, sr);
+            let [b0, b1, b2, a1, a2] = self.c;
+            for (ch, buf) in [&mut l[i..i + n], &mut r[i..i + n]].into_iter().enumerate() {
+                let z = &mut self.z[ch];
+                for x in buf.iter_mut() {
+                    let y = b0 * *x + z[0];
+                    z[0] = b1 * *x - a1 * y + z[1];
+                    z[1] = b2 * *x - a2 * y;
+                    *x = y;
+                }
+            }
+            i += n;
+        }
+    }
+}
+
+/// Swell: volume que entra/sai devagar (curva suave, igual à do pad).
+pub struct Swell {
+    pub gain: f32,
+    target: f32,
+    rate: f32,
+}
+
+impl Default for Swell {
+    fn default() -> Self {
+        Self {
+            gain: 1.0,
+            target: 1.0,
+            rate: 0.0,
+        }
+    }
+}
+
+impl Swell {
+    /// `inn` = entrar (vai a 1) ou sair (vai a 0) em `secs` segundos (0 = na hora).
+    pub fn set(&mut self, inn: bool, secs: f32, sr: u32) {
+        self.target = if inn { 1.0 } else { 0.0 };
+        if secs <= 0.0 {
+            self.gain = self.target;
+            self.rate = 0.0;
+        } else {
+            self.rate = 1.0 / (secs * sr as f32);
+        }
+    }
+
+    pub fn moving(&self) -> bool {
+        self.gain != self.target
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.gain >= 1.0 && self.target >= 1.0
+    }
+
+    /// Enche `out` com o ganho de cada amostra (curva de seno) e anda a rampa.
+    pub fn fill(&mut self, out: &mut [f32]) {
+        for g in out.iter_mut() {
+            if self.gain < self.target {
+                self.gain = (self.gain + self.rate).min(self.target);
+            } else if self.gain > self.target {
+                self.gain = (self.gain - self.rate).max(self.target);
+            }
+            *g = (self.gain * std::f32::consts::FRAC_PI_2).sin();
+        }
+    }
+}
+
+#[cfg(test)]
+mod filtro_tests {
+    use super::*;
+
+    fn tone(hz: f32, n: usize) -> Vec<f32> {
+        (0..n).map(|i| (std::f32::consts::TAU * hz * i as f32 / 48_000.0).sin() * 0.5).collect()
+    }
+
+    fn level(x: &[f32]) -> f32 {
+        (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt()
+    }
+
+    #[test]
+    fn closed_filter_darkens_and_open_is_untouched() {
+        let mut f = Lowpass::default();
+        let (mut l, mut r) = (tone(3000.0, 48_000), tone(3000.0, 48_000));
+        f.process(&mut l, &mut r, filter_hz(0.0), 0.0, 48_000);
+        assert!(level(&l[24_000..]) < 0.01, "agudo some com o filtro fechado: {}", level(&l[24_000..]));
+        let mut g = Lowpass::default();
+        let (mut l2, mut r2) = (tone(3000.0, 4800), tone(3000.0, 4800));
+        let before = l2.clone();
+        g.process(&mut l2, &mut r2, filter_hz(1.0), 0.0, 48_000);
+        assert_eq!(l2, before, "aberto = som igual");
+        // grave passa mesmo fechado
+        let mut h = Lowpass::default();
+        let (mut l3, mut r3) = (tone(80.0, 48_000), tone(80.0, 48_000));
+        h.process(&mut l3, &mut r3, filter_hz(0.0), 0.0, 48_000);
+        assert!(level(&l3[24_000..]) > 0.25);
+    }
+
+    #[test]
+    fn swell_goes_out_and_in_smoothly() {
+        let mut s = Swell::default();
+        let mut buf = vec![0.0f32; 48_000];
+        s.set(false, 2.0, 48_000);
+        s.fill(&mut buf);
+        assert!(buf[0] > 0.99 && buf[47_999] > 0.6 && buf[47_999] < 0.8, "no meio do caminho em 1 s");
+        s.fill(&mut buf);
+        assert!(buf[47_999] < 1e-6, "saiu em 2 s");
+        let jumps = buf.windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0f32, f32::max);
+        assert!(jumps < 0.001, "sem degrau");
+        s.set(true, 0.0, 48_000);
+        s.fill(&mut buf[..1]);
+        assert_eq!(buf[0], 1.0);
+    }
+}

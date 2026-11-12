@@ -56,6 +56,8 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   (`build_synth` = reserva), `pads::load_voicefx_choir`, `pads::FREE_PADS` ("livre:N", entram uma vez por `cfg.pads_v20`). `MY_SLOTS = 8`.
 - Planetas e vozes (v0.21): `pads::planet_name` + `cfg.pads_v21` (renomeia uma vez, só nome antigo), `planet_ball` + `UiState.pad_list_open`;
   `pads::VOICE_NAMES`/`load_voice` (assets/sons-livres/vozes), `cfg.efeitos.voicefx_voice` (5 = `VOICE_MINE`), `core.set_voicefx_voice`.
+- Filtro/swell (v0.23): `efeitos::Lowpass` (biquad, corte suave, `filter_hz` 150 Hz..20 kHz) e `efeitos::Swell`; no motor `lp_fz`/`lp_pad`
+  (fundo) ou `lp_all` (tudo menos bateria), `Cmd::Filter`/`Cmd::Swell`; `cfg.efeitos.filtro*`/`swell_*`, `Target::Filter`/`SwellToggle`.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

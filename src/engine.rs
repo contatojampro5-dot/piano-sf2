@@ -93,6 +93,19 @@ pub enum Cmd {
         level: f32,
         octave: i8,
     },
+    /// v0.23: filtro de abrir/fechar (0 fechado … 1 aberto), ressonância 0..1,
+    /// `all` = tudo menos a bateria (senão só o fundo: pads e congelado), `with_swell` = o swell abre o filtro junto.
+    Filter {
+        amount: f32,
+        resonance: f32,
+        all: bool,
+        with_swell: bool,
+    },
+    /// v0.23: swell — entrar (true) ou sair (false) em `secs` segundos.
+    Swell {
+        inn: bool,
+        secs: f32,
+    },
     Panic,
     /// Novo sintetizador (SF2 novo ou taxa de amostragem nova).
     Replace(Box<Synthesizer>),
@@ -175,6 +188,16 @@ pub struct Engine {
     voicefx: VoiceFx,
     fz_l: Vec<f32>,
     fz_r: Vec<f32>,
+    // v0.23: filtro e swell
+    filt_amount: f32,
+    filt_res: f32,
+    filt_all: bool,
+    filt_with_swell: bool,
+    lp_fz: efeitos::Lowpass,
+    lp_pad: efeitos::Lowpass,
+    lp_all: efeitos::Lowpass,
+    swell: efeitos::Swell,
+    swell_buf: Vec<f32>,
     reverb: ChurchReverb,
     church_pads: f32,
     church_sf2: f32,
@@ -224,6 +247,15 @@ impl Engine {
             voicefx: VoiceFx::new(),
             fz_l: vec![0.0; 8192],
             fz_r: vec![0.0; 8192],
+            filt_amount: 1.0,
+            filt_res: 0.25,
+            filt_all: false,
+            filt_with_swell: true,
+            lp_fz: efeitos::Lowpass::default(),
+            lp_pad: efeitos::Lowpass::default(),
+            lp_all: efeitos::Lowpass::default(),
+            swell: efeitos::Swell::default(),
+            swell_buf: vec![1.0; 8192],
             reverb: ChurchReverb::new(48_000),
             church_pads: 0.4,
             church_sf2: 0.0,
@@ -396,6 +428,21 @@ impl Engine {
                     self.arp_next = self.clock as f64;
                 }
             }
+            Cmd::Filter {
+                amount,
+                resonance,
+                all,
+                with_swell,
+            } => {
+                self.filt_amount = amount.clamp(0.0, 1.0);
+                self.filt_res = resonance.clamp(0.0, 1.0);
+                self.filt_all = all;
+                self.filt_with_swell = with_swell;
+            }
+            Cmd::Swell { inn, secs } => {
+                let sr = self.sample_rate;
+                self.swell.set(inn, secs, sr);
+            }
             Cmd::DrumKit(kit) => self.drums.kit = Some(kit),
             Cmd::Drum { pad, vel } => self.drums.hit(pad, vel),
             Cmd::DrumVolume(v) => self.drum_vol = v.clamp(0.0, 1.0),
@@ -533,6 +580,8 @@ impl Engine {
             Cmd::Panic => {
                 // pânico também cala o congelado (rápido, sem estalo), o arpejo, o coral e as batidas
                 let sr = self.sample_rate;
+                // e o swell volta a "cheio" (o próximo som não pode sair mudo)
+                self.swell.set(true, 0.0, sr);
                 for f in &mut self.freezes {
                     f.fade_out(sr, 0.3);
                 }
@@ -655,6 +704,19 @@ impl Engine {
             // v0.16: guarda o som das camadas (para o Congelar) e soma o congelado.
             // Ele entra aqui, junto das camadas, para ganhar o mesmo reverb de igreja delas.
             crate::freeze::ring().push(l, r);
+            // v0.23: filtro (abrir/fechar) e swell — corte deste bloco e ganho de cada amostra
+            let cut = self.filt_amount
+                * if self.filt_with_swell {
+                    self.swell.gain
+                } else {
+                    1.0
+                };
+            let (cut_hz, res, all) = (efeitos::filter_hz(cut), self.filt_res, self.filt_all);
+            let swell_on = !self.swell.is_full();
+            if swell_on {
+                self.swell.fill(&mut self.swell_buf[..n]);
+            }
+            let sw = &self.swell_buf[..n];
             if !self.freezes.is_empty() {
                 let (fl, fr) = (&mut self.fz_l[..n], &mut self.fz_r[..n]);
                 fl.fill(0.0);
@@ -662,9 +724,15 @@ impl Engine {
                 for fz in &mut self.freezes {
                     fz.mix(fl, fr, sr);
                 }
+                if !all {
+                    self.lp_fz.process(fl, fr, cut_hz, res, sr);
+                }
                 for f in 0..n {
                     // v0.17: o congelado também pulsa no PulsePad
-                    let g = if pulse_on { pulse_at(f) } else { 1.0 };
+                    let mut g = if pulse_on { pulse_at(f) } else { 1.0 };
+                    if swell_on && !all {
+                        g *= sw[f];
+                    }
                     l[f] += fl[f] * g;
                     r[f] += fr[f] * g;
                 }
@@ -694,6 +762,16 @@ impl Engine {
                         pr[f] *= g;
                     }
                 }
+                if has_pads && !all {
+                    // v0.23: filtro e swell no fundo (antes do reverb: a sala acompanha a abertura)
+                    self.lp_pad.process(pl, pr, cut_hz, res, sr);
+                    if swell_on {
+                        for f in 0..n {
+                            pl[f] *= sw[f];
+                            pr[f] *= sw[f];
+                        }
+                    }
+                }
                 if church {
                     let (rl, rr) = (&mut self.rev_l[..n], &mut self.rev_r[..n]);
                     let (sp, ss) = (self.church_pads * gain, self.church_sf2);
@@ -709,6 +787,16 @@ impl Engine {
                 if church {
                     self.reverb
                         .process(&self.rev_l[..n], &self.rev_r[..n], l, r, 1.0);
+                }
+            }
+            if all {
+                // v0.23: "tudo menos a bateria": filtro e swell no som inteiro
+                self.lp_all.process(l, r, cut_hz, res, sr);
+                if swell_on {
+                    for f in 0..n {
+                        l[f] *= sw[f];
+                        r[f] *= sw[f];
+                    }
                 }
             }
             // v0.17: DrumPads por último, secos (não entram no Congelar nem no pulso).

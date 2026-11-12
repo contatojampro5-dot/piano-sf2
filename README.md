@@ -194,6 +194,13 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.23 — abrir e fechar o som (filtro) e swell
+- Painel **Abrir / fechar** na aba Efeitos: barra **Filtro** (esquerda = escuro, abafado, "de longe"; direita = aberto, brilhante).
+  Ligue num **knob da mesinha** pelo Aprender e "abra" o som girando, como os tecladistas fazem no pré-refrão.
+- Botão **Swell**: o fundo **sai devagar** (fechando o filtro junto) ou **entra devagar** (abrindo). Tempo de 2 a 16 s no ⚙.
+- No ⚙: ressonância (o "brilho" da abertura), tempo do swell, e se vale só para o **fundo** (pads e congelado) ou para **tudo** menos a bateria.
+- Pânico devolve o swell ao som cheio. O programa abre sempre com o filtro aberto.
+
 ### v0.22 — NoahPad
 - O programa agora se chama **NoahPad** ("o pad do Noah"): logo **Noah**+**Pad** lá em cima e no título da janela.
   As configurações continuam no mesmo lugar (`%APPDATA%PianoSF2`), nada se perde.

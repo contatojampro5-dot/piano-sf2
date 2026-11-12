@@ -1441,3 +1441,73 @@ fn pads_get_planet_names_once_and_keep_mine() {
     let names: Vec<&str> = d.my_pads.iter().map(|m| m.name.as_str()).collect();
     assert_eq!(names, vec!["Júpiter", "Saturno", "Netuno", "Vênus", "Terra", "Marte"]);
 }
+
+// ---------- v0.23: filtro de abrir/fechar e swell ----------
+
+/// Congelado agudo (3 kHz) tocando, sem SF2: o "fundo" para o filtro e o swell.
+fn rig_with_bright_freeze() -> Rig {
+    let mut r = rig();
+    let rate = 48_000u32;
+    let s: Vec<f32> = (0..rate as usize * 2)
+        .map(|i| (std::f32::consts::TAU * 3000.0 * i as f32 / rate as f32).sin() * 0.3)
+        .collect();
+    let src = crate::freeze::FreezeSource::from_audio(&s, &s, rate).unwrap();
+    r.core.freeze_play(src);
+    r.render(48_000); // entrou
+    r
+}
+
+#[test]
+fn filter_closes_and_opens_the_background() {
+    let mut r = rig_with_bright_freeze();
+    let open = rms(&r.render(24_000));
+    assert!(open > 0.02, "aberto soa: {open}");
+    r.core.set_filter(0.0);
+    r.render(24_000);
+    let closed = rms(&r.render(24_000));
+    assert!(closed < open * 0.1, "fechado fica escuro: {closed} vs {open}");
+    // knob da mesinha (CC 16 da SMC, relativo) ligado ao filtro pelo Aprender
+    r.core.learn.active = true;
+    r.core.learn.target = Some(Target::Filter);
+    r.core.handle_controller(&[0xB0, 50, 10]);
+    r.core.learn.active = false;
+    r.core.handle_controller(&[0xB0, 50, 127]);
+    assert!((r.core.cfg.efeitos.filtro - 1.0).abs() < 1e-3, "knob abriu tudo");
+    r.render(24_000);
+    let again = rms(&r.render(24_000));
+    assert!(again > open * 0.8, "abriu de novo: {again}");
+}
+
+#[test]
+fn swell_takes_the_background_out_and_back_and_panic_restores() {
+    let mut r = rig_with_bright_freeze();
+    r.core.cfg.efeitos.swell_secs = 2.0;
+    let full = rms(&r.render(12_000));
+    r.core.toggle_swell(); // sai em 2 s
+    assert!(!r.core.swell_in);
+    let fade = r.render(96_000); // os 2 s da saída
+    let (start, end) = (rms(&fade[..19_200]), rms(&fade[172_800..]));
+    assert!(end < start * 0.2, "vai baixando: {start} → {end}");
+    let gone = rms(&r.render(48_000));
+    assert!(gone < full * 0.02, "saiu de vez: {full} → {gone}");
+    r.core.toggle_swell(); // entra
+    r.render(96_000);
+    let back = rms(&r.render(24_000));
+    assert!(back > full * 0.8, "entrou de novo: {back}");
+    // saiu e alguém apertou pânico: o swell volta a cheio
+    r.core.toggle_swell();
+    r.render(9_600);
+    r.core.panic();
+    assert!(r.core.swell_in);
+    r.core.handle_piano(&[0x90, 60, 100]);
+    assert!(rms(&r.render(4_800)) > 0.01, "o piano não fica mudo depois do pânico");
+}
+
+#[test]
+fn filter_settings_default_open_and_old_config_loads() {
+    let c = Config::default();
+    assert_eq!(c.efeitos.filtro, 1.0, "abre o programa com o filtro aberto");
+    let old: Config = serde_json::from_str(r#"{"efeitos":{"bpm":90}}"#).unwrap();
+    assert_eq!(old.efeitos.filtro, 1.0);
+    assert!(old.efeitos.swell_filtro && !old.efeitos.filtro_tudo);
+}
