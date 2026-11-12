@@ -19,3 +19,13 @@ PacoteIgreja.sf2 — domínio público (CC0 1.0, https://creativecommons.org/pub
 
 PianoSalamander.sf2 — Salamander Grand Piano V3 (Yamaha C5), criado por Alexander Holm,
 versão SF2 do FreePats. Licença Creative Commons Atribuição 3.0 (https://creativecommons.org/licenses/by/3.0/).
+
+== Sons que vêm dentro do programa (v0.20) ==
+Bateria dos DrumPads (assets/sons-livres/drums), coral do Voice FX (assets/sons-livres/coral_c3.ogg)
+e os pads "Coral Celeste", "Cordas Suaves" e "Atmosfera" (assets/sons-livres/pads):
+gravados (tocados e mixados pelo Piano SF2) a partir do MuseScore_General.sf2 v0.2, licença MIT.
+  FluidR3 (original version) by Frank Wen Copyright (c) 2000-02
+  Mono conversion (FluidR3Mono) by Michael Cowgill Copyright (c) 2014-17
+  Adaptation for MuseScore_General.sf2 by S. Christian Collins Copyright (c) 2018-19
+Fonte: https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/
+Licença completa: assets/sons-livres/LICENCA-MuseScore_General.md

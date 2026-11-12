@@ -442,6 +442,9 @@ pub struct Config {
     /// Já escondeu os estilos de pad do programa (v0.13: o Theo quis só os pads dele)?
     #[serde(default)]
     pub pads_v13: bool,
+    /// v0.20: já colocou os pads livres (MuseScore General) nos "Meus pads"?
+    #[serde(default)]
+    pub pads_v20: bool,
     /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
     #[serde(default)]
     pub mappings_version: u32,
@@ -629,6 +632,7 @@ impl Default for Config {
             scale_minor: false,
             my_pads: Vec::new(),
             pads_v13: false,
+            pads_v20: false,
         }
     }
 }
@@ -684,6 +688,21 @@ impl Config {
                     })
                     .collect();
                 self.pad_bank = crate::pads::MY_BANK;
+            }
+        }
+        if !self.pads_v20 {
+            // v0.20: os 3 pads livres entram sozinhos (sem apagar os pads que o Theo já tinha)
+            self.pads_v20 = true;
+            for (n, p) in crate::pads::FREE_PADS.iter().enumerate() {
+                let path = crate::pads::free_path(n);
+                if self.my_pads.len() < crate::pads::MY_SLOTS && !self.my_pads.iter().any(|m| m.path == path) {
+                    self.my_pads.push(MyPad {
+                        name: p.name.into(),
+                        path,
+                        key: p.key,
+                        auto_key: false,
+                    });
+                }
             }
         }
         self.my_pads.truncate(crate::pads::MY_SLOTS);

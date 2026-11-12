@@ -64,7 +64,7 @@ static BUILTIN: [[&[u8]; PAD_KEYS]; PAD_BANKS] = [bank!("escuro"), bank!("coral"
 /// "Meus pads": arquivos do Theo (ex.: pad do YouTube em G) tocados nos 12 tons, mudando a altura.
 /// Bancos 6..9 (até 4, cada um com nome).
 pub const MY_BANK: usize = PAD_BANKS + 3;
-pub const MY_SLOTS: usize = 4;
+pub const MY_SLOTS: usize = 8;
 
 /// Estilos ao todo: 3 de loop (Escuro, Coral, Suave) + 3 "Vivos" (motor granular) + 4 "Meus pads".
 pub const ALL_BANKS: usize = MY_BANK + MY_SLOTS;
@@ -314,15 +314,62 @@ pub fn partner_path(n: usize) -> String {
     format!("embutido:{n}")
 }
 
+/// v0.20: pads gravados a partir do MuseScore General (licença MIT, pode ir junto com o programa).
+/// Caminho "livre:N" nos "Meus pads". Todos em C, sem terça (servem para maior e menor).
+pub struct FreePad {
+    pub name: &'static str,
+    pub key: usize,
+    bytes: &'static [u8],
+}
+
+pub const FREE_PADS: [FreePad; 3] = [
+    FreePad {
+        name: "Coral Celeste",
+        key: 0,
+        bytes: include_bytes!("../assets/sons-livres/pads/00.ogg"),
+    },
+    FreePad {
+        name: "Cordas Suaves",
+        key: 0,
+        bytes: include_bytes!("../assets/sons-livres/pads/01.ogg"),
+    },
+    FreePad {
+        name: "Atmosfera",
+        key: 0,
+        bytes: include_bytes!("../assets/sons-livres/pads/02.ogg"),
+    },
+];
+
+pub const FREE_CREDIT: &str = "MuseScore General (MIT)";
+
+pub fn free_path(n: usize) -> String {
+    format!("livre:{n}")
+}
+
+/// v0.20: coral de verdade do Voice FX (Choir Aahs + Voice Oohs do MuseScore General, em C3).
+static VOICEFX_CHOIR: &[u8] = include_bytes!("../assets/sons-livres/coral_c3.ogg");
+
+pub fn load_voicefx_choir() -> Result<Arc<crate::granular::GrainSource>, String> {
+    let clip = decode(Box::new(Cursor::new(VOICEFX_CHOIR)), Some("ogg"), false)?;
+    Ok(Arc::new(crate::granular::GrainSource::from_stereo_i16(
+        &clip.data, clip.rate, 48,
+    )))
+}
+
 /// Carrega o arquivo do "Meu pad" (ou um pad da parceria, "embutido:N").
 pub fn load_my_pad(path: &str) -> Result<Arc<PadClip>, String> {
     let partner = path
         .strip_prefix("embutido:")
         .and_then(|n| n.parse::<usize>().ok())
         .and_then(|n| PARTNER_PADS.get(n));
-    let clip = match partner {
-        Some(p) => decode_part(Box::new(Cursor::new(p.bytes)), Some("ogg"), 0, MY_KEEP_S)?,
-        None => {
+    let free = path
+        .strip_prefix("livre:")
+        .and_then(|n| n.parse::<usize>().ok())
+        .and_then(|n| FREE_PADS.get(n));
+    let clip = match (partner, free) {
+        (Some(p), _) => decode_part(Box::new(Cursor::new(p.bytes)), Some("ogg"), 0, MY_KEEP_S)?,
+        (_, Some(p)) => decode_part(Box::new(Cursor::new(p.bytes)), Some("ogg"), 0, MY_KEEP_S)?,
+        (None, None) => {
             let file =
                 std::fs::File::open(path).map_err(|e| format!("Não consegui abrir {path}: {e}"))?;
             let ext = std::path::Path::new(path)

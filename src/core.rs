@@ -348,7 +348,7 @@ impl Core {
         let custom = self.cfg.efeitos.voicefx_file.clone();
         let result = match &custom {
             Some((path, root)) => pads::load_texture(0, Some((path.as_str(), *root))),
-            None => pads::load_texture(0, None),
+            None => pads::load_voicefx_choir(),
         };
         match result {
             Ok(src) => {

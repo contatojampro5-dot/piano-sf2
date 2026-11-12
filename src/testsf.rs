@@ -676,13 +676,49 @@ fn old_config_hides_builtin_pads_once() {
     c.set_hidden("pad_styles", false); // Theo trouxe de volta no Editar
     c.normalize();
     assert!(!c.is_hidden("pad_styles"), "não esconde de novo");
-    assert_eq!(c.my_pads.len(), 3, "pads da parceria já colocados");
+    // v0.20: 3 da parceria + 3 pads livres (MuseScore General)
+    assert_eq!(c.my_pads.len(), 6, "pads da parceria e os livres já colocados");
     assert_eq!(c.pad_bank, crate::pads::MY_BANK);
     for (n, p) in crate::pads::PARTNER_PADS.iter().enumerate() {
         let clip = crate::pads::load_my_pad(&crate::pads::partner_path(n)).unwrap();
         assert_eq!(crate::pads::detect_key(&clip), p.key, "{}", p.name);
         assert!(clip.frames() > 44_100 * 80);
     }
+}
+
+#[test]
+fn free_sounds_come_inside_the_program() {
+    // os 3 pads livres abrem, estão em C e são longos
+    for (n, p) in crate::pads::FREE_PADS.iter().enumerate() {
+        let clip = crate::pads::load_my_pad(&crate::pads::free_path(n)).unwrap();
+        assert_eq!(crate::pads::detect_key(&clip), p.key, "{} está em C", p.name);
+        assert!(clip.frames() > 48_000 * 55, "{} tem ~1 min", p.name);
+    }
+    // config antiga ganha os pads livres uma vez só, sem apagar os do Theo
+    let mut c = Config::default();
+    c.my_pads.push(crate::model::MyPad {
+        name: "Meu pad do YouTube".into(),
+        path: "C:/pads/meu.mp3".into(),
+        key: 7,
+        auto_key: false,
+    });
+    c.pads_v13 = true;
+    c.normalize();
+    assert_eq!(c.my_pads.len(), 4);
+    assert_eq!(c.my_pads[0].name, "Meu pad do YouTube");
+    c.my_pads.retain(|m| m.name != "Atmosfera"); // Theo tirou um
+    c.normalize();
+    assert_eq!(c.my_pads.len(), 3, "não volta sozinho depois que o Theo tirou");
+    // bateria gravada: os 8 sons abrem (nenhum caiu no sintetizado) e são diferentes dos sintetizados
+    let real = crate::efeitos::DrumKit::build(48_000);
+    let synth = crate::efeitos::DrumKit::build_synth(48_000);
+    for i in 0..crate::efeitos::DRUMS {
+        assert_ne!(real.hits[i].0.len(), synth.hits[i].0.len(), "{} é o gravado", crate::efeitos::DRUM_NAMES[i]);
+    }
+    // coral do Voice FX gravado, em C3
+    let choir = crate::pads::load_voicefx_choir().unwrap();
+    assert_eq!(choir.root, 48);
+    assert!(choir.data.len() > 48_000 * 9);
 }
 
 /// Prévia para ouvir os "Meus pads" em vários tons:
@@ -1182,4 +1218,158 @@ fn voice_fx_uses_my_choir_and_finds_its_note() {
     // voltar ao coral do programa
     r.core.set_voicefx_file(None);
     assert!(r.core.cfg.efeitos.voicefx_file.is_none());
+}
+
+// ---------- v0.20: gerar os sons "de verdade" a partir do MuseScore General (MIT) ----------
+
+/// Ferramenta (não é teste de verdade): toca o MuseScore_General.sf2 e grava os WAV que viram os sons
+/// do programa (8 DrumPads, o coral do Voice FX e 3 pads em C).
+/// `PIANO_SF2_MUSESCORE=<MuseScore_General.sf2>` `PIANO_RENDER_DIR=<pasta de saída>`
+#[test]
+#[ignore]
+fn render_sons_livres() {
+    use rustysynth::{Synthesizer, SynthesizerSettings};
+    let (Ok(path), Ok(out)) = (std::env::var("PIANO_SF2_MUSESCORE"), std::env::var("PIANO_RENDER_DIR")) else {
+        return;
+    };
+    std::fs::create_dir_all(&out).unwrap();
+    let sf = Arc::new(SoundFont::new(&mut std::io::BufReader::new(std::fs::File::open(&path).unwrap())).unwrap());
+    let sr = 48_000u32;
+    for p in sf.get_presets().iter().filter(|p| p.get_bank_number() == 128 || [47, 48, 49, 52, 53, 88, 89, 91, 94, 95, 119].contains(&p.get_patch_number()) && p.get_bank_number() == 0) {
+        println!("preset {:>3}:{:<3} {}", p.get_bank_number(), p.get_patch_number(), p.get_name());
+    }
+    let new_synth = || {
+        let mut s = SynthesizerSettings::new(sr as i32);
+        s.enable_reverb_and_chorus = true;
+        s.maximum_polyphony = 128;
+        Synthesizer::new(&sf, &s).unwrap()
+    };
+    let render = |s: &mut Synthesizer, secs: f32, l: &mut Vec<f32>, r: &mut Vec<f32>| {
+        let n = (secs * sr as f32) as usize;
+        let (mut bl, mut br) = (vec![0.0f32; 512], vec![0.0f32; 512]);
+        let mut done = 0;
+        while done < n {
+            let k = (n - done).min(512);
+            s.render(&mut bl[..k], &mut br[..k]);
+            l.extend_from_slice(&bl[..k]);
+            r.extend_from_slice(&br[..k]);
+            done += k;
+        }
+    };
+    let write = |name: &str, l: &[f32], r: &[f32]| {
+        let data_len = (l.len() * 4) as u32;
+        let mut b: Vec<u8> = Vec::new();
+        b.extend(b"RIFF");
+        b.extend((36 + data_len).to_le_bytes());
+        b.extend(b"WAVEfmt ");
+        b.extend(16u32.to_le_bytes());
+        b.extend(1u16.to_le_bytes());
+        b.extend(2u16.to_le_bytes());
+        b.extend(sr.to_le_bytes());
+        b.extend((sr * 4).to_le_bytes());
+        b.extend(4u16.to_le_bytes());
+        b.extend(16u16.to_le_bytes());
+        b.extend(b"data");
+        b.extend(data_len.to_le_bytes());
+        for (a, c) in l.iter().zip(r) {
+            b.extend(((a.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+            b.extend(((c.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+        }
+        std::fs::write(std::path::Path::new(&out).join(name), b).unwrap();
+        let peak = l.iter().chain(r).fold(0.0f32, |m, x| m.max(x.abs()));
+        println!("{name}: {:.2} s, pico {peak:.2}", l.len() as f32 / sr as f32);
+    };
+    // corta o fim quando já está em silêncio e normaliza o pico
+    let finish = |l: &mut Vec<f32>, r: &mut Vec<f32>, peak_to: f32| {
+        let last = l.iter().zip(r.iter()).rposition(|(a, b)| a.abs() > 0.0008 || b.abs() > 0.0008).unwrap_or(0);
+        let end = (last + sr as usize / 50).min(l.len());
+        l.truncate(end);
+        r.truncate(end);
+        let peak = l.iter().chain(r.iter()).fold(0.0f32, |m, x| m.max(x.abs()));
+        if peak > 0.0 {
+            let g = peak_to / peak;
+            l.iter_mut().chain(r.iter_mut()).for_each(|x| *x *= g);
+        }
+    };
+
+    // ---- DrumPads: (nome, banco, programa, nota, força, segundos, reverb) ----
+    // 0 Bumbo, 1 Caixa, 2 Palmas, 3 Chimbal, 4 Prato, 5 808, 6 Subida, 7 Impacto
+    let hits: [(&str, &[(i32, i32, i32, i32)], f32, i32); 8] = [
+        ("drum_00_bumbo.wav", &[(128, 0, 36, 118)], 0.9, 0),
+        ("drum_01_caixa.wav", &[(128, 0, 38, 112)], 0.9, 10),
+        ("drum_02_palmas.wav", &[(128, 0, 39, 115)], 0.9, 20),
+        ("drum_03_chimbal.wav", &[(128, 0, 42, 100)], 0.6, 0),
+        ("drum_04_prato.wav", &[(128, 0, 49, 112)], 4.0, 20),
+        ("drum_05_808.wav", &[(128, 25, 36, 120)], 2.5, 0),
+        ("drum_06_subida.wav", &[(0, 119, 60, 120), (0, 119, 72, 90)], 4.0, 40),
+        ("drum_07_impacto.wav", &[(0, 47, 36, 127), (128, 0, 35, 127), (128, 0, 49, 110), (128, 48, 59, 127)], 4.0, 60),
+    ];
+    for (name, layers, secs, rev) in hits {
+        let mut s = new_synth();
+        for (ch, (bank, patch, note, vel)) in layers.iter().enumerate() {
+            let ch = ch as i32;
+            s.set_channel_preset(ch, *bank, *patch);
+            s.process_midi_message(ch, 0xB0, 0x5B, rev);
+            s.process_midi_message(ch, 0xB0, 0x5D, 0);
+            s.note_on(ch, *note, *vel);
+        }
+        let (mut l, mut r) = (Vec::new(), Vec::new());
+        render(&mut s, secs, &mut l, &mut r);
+        finish(&mut l, &mut r, 0.9);
+        write(name, &l, &r);
+    }
+
+    // ---- Coral do Voice FX: "aah" em C3 (48), segurado, sem o começo ----
+    {
+        let mut s = new_synth();
+        s.set_channel_preset(0, 0, 52); // Choir Aahs
+        s.set_channel_preset(1, 0, 53); // Voice Oohs
+        s.process_midi_message(1, 0xB0, 0x07, 70);
+        for ch in 0..2 {
+            s.process_midi_message(ch, 0xB0, 0x5B, 40);
+            s.note_on(ch, 48, 100);
+        }
+        let (mut l, mut r) = (Vec::new(), Vec::new());
+        render(&mut s, 13.0, &mut l, &mut r);
+        let a = (sr as f32 * 1.5) as usize;
+        let b = (sr as f32 * 12.5) as usize;
+        let (mut l, mut r) = (l[a..b].to_vec(), r[a..b].to_vec());
+        finish(&mut l, &mut r, 0.7);
+        write("coral_c3.wav", &l, &r);
+    }
+
+    // ---- 3 pads em C (sem terça: serve para C e Cm), com reverb de igreja ----
+    let pads: [(&str, &[(i32, i32)], &[i32]); 3] = [
+        ("pad_00_coral_celeste.wav", &[(52, 100), (53, 80), (91, 70)], &[48, 55, 60, 67]),
+        ("pad_01_cordas_suaves.wav", &[(49, 100), (48, 70), (89, 75)], &[36, 48, 55, 60, 67]),
+        ("pad_02_atmosfera.wav", &[(88, 80), (94, 90), (95, 55), (49, 60)], &[36, 48, 55, 60, 67, 72]),
+    ];
+    for (name, layers, notes) in pads {
+        let mut s = new_synth();
+        for (ch, (patch, vol)) in layers.iter().enumerate() {
+            let ch = ch as i32;
+            s.set_channel_preset(ch, 0, *patch);
+            s.process_midi_message(ch, 0xB0, 0x07, *vol);
+            s.process_midi_message(ch, 0xB0, 0x5B, 90);
+            for n in notes.iter() {
+                s.note_on(ch, *n, 82);
+            }
+        }
+        let (mut dl, mut dr) = (Vec::new(), Vec::new());
+        render(&mut s, 72.0, &mut dl, &mut dr);
+        // reverb de igreja do próprio programa por cima
+        let mut rev = crate::granular::ChurchReverb::new(sr);
+        let (mut l, mut r) = (dl.clone(), dr.clone());
+        for (ci, chunk) in (0..dl.len()).step_by(512).enumerate() {
+            let _ = ci;
+            let e = (chunk + 512).min(dl.len());
+            let (inl, inr) = (dl[chunk..e].to_vec(), dr[chunk..e].to_vec());
+            rev.process(&inl, &inr, &mut l[chunk..e], &mut r[chunk..e], 0.7);
+        }
+        let a = sr as usize * 7;
+        let b = a + sr as usize * 62;
+        let (mut l, mut r) = (l[a..b].to_vec(), r[a..b].to_vec());
+        finish(&mut l, &mut r, 0.8);
+        write(name, &l, &r);
+    }
 }

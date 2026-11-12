@@ -51,6 +51,9 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 - Sons próprios (v0.19): `cfg.efeitos.drum_files` + `efeitos::load_drum_file` / `DrumKit::build_with` (`core.set_drum_file`),
   `cfg.efeitos.voicefx_file` (arquivo, nota MIDI; `core.set_voicefx_file` com `pads::detect_key`). Ações da tela que mexem
   em arquivos rodam depois de `set_efeitos(e)` (senão a cópia `e` desfaz).
+- Sons livres (v0.20): `assets/sons-livres/` (drums/00..07.ogg, coral_c3.ogg, pads/00..02.ogg) gerados do MuseScore_General.sf2 (MIT)
+  pelo teste `render_sons_livres` (`PIANO_SF2_MUSESCORE`, `PIANO_RENDER_DIR`) + ffmpeg libvorbis. `DrumKit::build` usa os gravados
+  (`build_synth` = reserva), `pads::load_voicefx_choir`, `pads::FREE_PADS` ("livre:N", entram uma vez por `cfg.pads_v20`). `MY_SLOTS = 8`.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

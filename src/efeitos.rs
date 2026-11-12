@@ -253,7 +253,8 @@ fn lp_coef(fc: f32, sr: f32) -> f32 {
 }
 
 impl DrumKit {
-    pub fn build(rate: u32) -> Self {
+    /// Sons sintetizados (v0.17): reserva, caso um som gravado não abra.
+    pub fn build_synth(rate: u32) -> Self {
         let sr = rate as f32;
         let tau = std::f32::consts::TAU;
         let len = |s: f32| (s * sr) as usize;
@@ -423,6 +424,28 @@ pub fn load_drum_file(path: &str, rate: u32) -> Result<(Vec<f32>, Vec<f32>), Str
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase());
     let clip = crate::pads::decode(Box::new(file), ext.as_deref(), false)?;
+    drum_from_clip(&clip, rate)
+}
+
+/// v0.20: bateria de verdade que vem dentro do programa (MuseScore General, licença MIT).
+/// 0 Bumbo, 1 Caixa, 2 Palmas, 3 Chimbal, 4 Prato, 5 808, 6 Subida, 7 Impacto.
+static DRUM_SAMPLES: [&[u8]; DRUMS] = [
+    include_bytes!("../assets/sons-livres/drums/00.ogg"),
+    include_bytes!("../assets/sons-livres/drums/01.ogg"),
+    include_bytes!("../assets/sons-livres/drums/02.ogg"),
+    include_bytes!("../assets/sons-livres/drums/03.ogg"),
+    include_bytes!("../assets/sons-livres/drums/04.ogg"),
+    include_bytes!("../assets/sons-livres/drums/05.ogg"),
+    include_bytes!("../assets/sons-livres/drums/06.ogg"),
+    include_bytes!("../assets/sons-livres/drums/07.ogg"),
+];
+
+fn load_drum_bytes(bytes: &'static [u8], rate: u32) -> Result<(Vec<f32>, Vec<f32>), String> {
+    let clip = crate::pads::decode(Box::new(std::io::Cursor::new(bytes)), Some("ogg"), false)?;
+    drum_from_clip(&clip, rate)
+}
+
+fn drum_from_clip(clip: &crate::pads::PadClip, rate: u32) -> Result<(Vec<f32>, Vec<f32>), String> {
     let frames = clip.frames().min(clip.rate as usize * DRUM_FILE_MAX_S);
     if frames < 32 {
         return Err("o arquivo não tem som".into());
@@ -463,6 +486,17 @@ pub fn load_drum_file(path: &str, rate: u32) -> Result<(Vec<f32>, Vec<f32>), Str
 }
 
 impl DrumKit {
+    /// Os 8 sons padrão: bateria gravada de verdade (embutida). Se algum não abrir, fica o sintetizado.
+    pub fn build(rate: u32) -> Self {
+        let mut kit = Self::build_synth(rate);
+        for (i, bytes) in DRUM_SAMPLES.iter().enumerate() {
+            if let Ok(hit) = load_drum_bytes(bytes, rate) {
+                kit.hits[i] = hit;
+            }
+        }
+        kit
+    }
+
     /// Os sons do programa, trocando os pads que têm arquivo do Theo. Devolve também os erros
     /// (arquivo sumiu, formato estranho...): esses pads ficam com o som do programa.
     pub fn build_with(rate: u32, files: &[(usize, String)]) -> (Self, Vec<(usize, String)>) {

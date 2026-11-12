@@ -1638,7 +1638,13 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                 .strip_prefix("embutido:")
                 .and_then(|n| n.parse::<usize>().ok())
                 .and_then(|n| pads::PARTNER_PADS.get(n))
-                .map(|p| format!("pad de {} (parceria)", p.credit));
+                .map(|p| format!("pad de {} (parceria)", p.credit))
+                .or_else(|| {
+                    core.cfg.my_pads[i]
+                        .path
+                        .starts_with("livre:")
+                        .then(|| format!("pad do programa · sons {}", pads::FREE_CREDIT))
+                });
             ui.label(
                 RichText::new(credit.unwrap_or_else(|| {
                     "(o programa descobriu pelo som; corrija se precisar)".into()
@@ -3801,6 +3807,16 @@ fn settings_window(
                 ui.separator();
                 ui.label(RichText::new(format!("Configurações salvas em: {}", config_path.display())).size(12.0).color(th().dim));
                 ui.label(RichText::new(concat!("Piano SF2 v", env!("CARGO_PKG_VERSION"))).size(12.0).color(th().dim));
+                // v0.20: créditos dos sons que vêm no programa (a licença MIT pede)
+                ui.label(
+                    RichText::new(
+                        "Bateria, coral do Voice FX e os pads Coral Celeste, Cordas Suaves e Atmosfera: \
+                         MuseScore General (licença MIT) — FluidR3 © Frank Wen 2000-2002, FluidR3Mono © Michael Cowgill, \
+                         MuseScore General © S. Christian Collins.",
+                    )
+                    .size(11.0)
+                    .color(th().dim),
+                );
             });
         });
     if !open {
