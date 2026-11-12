@@ -194,6 +194,14 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.15 — pitch bend e modulation no teclado (AMW MIDI Control Mini 32)
+- Na coluna **8 · GERAL**: barra **Pitch** (arraste; soltou, volta ao meio), botões de segurar **▼ ▲** e barra **Mod** (vibrato).
+- **Aprender** agora também ouve o **teclado** (não só a mesinha): clique em Aprender → clique no Pitch, ▲, ▼ ou Mod →
+  aperte o botão/tecla (ou mexa a roda/slider) do teclado. Tecla ligada assim vira controle e **não toca nota**.
+  Botão/tecla: segurar = liga (pitch lá em cima/embaixo, vibrato cheio), soltar = volta. Roda/slider: segue a posição.
+- Controles do teclado ficam numa lista separada da mesinha (⚙ Ajustes → **Controles do teclado**, com ✖ para tirar).
+- **Alcance do pitch** em ⚙ Ajustes (1 a 12 semitons, padrão 2). Pânico zera pitch e modulation.
+
 ### v0.14 — pads no navegador
 - `web/index.html`: página com os pads da parceria nos 12 tons (troca suave, volume, reverb de igreja, ajuda de escala,
   teclado do computador, tela fica acesa). Publicada como página privada do Claude; para pôr um pad novo: arquivo em

@@ -318,6 +318,15 @@ fn connect_usb(name: &str, mut handler: Handler) -> Result<MidiInputConnection<(
 /// Piano: notas vão direto para o motor (sem esperar a tela).
 fn piano_message(msg: &[u8], core: &SharedCore, tx: &Sender<Cmd>) {
     let Some(&status) = msg.first() else { return };
+    // v0.15: controle do teclado ligado pelo Aprender (ex.: botão do AMW = pitch), ou o Aprender
+    // esperando um controle: vai para o core e não toca. O resto (notas) segue direto, sem travar nada.
+    if crate::core::piano_routed(msg) {
+        if let Ok(mut c) = core.lock() {
+            c.handle_piano_control(msg);
+            c.request_repaint();
+        }
+        return;
+    }
     let d1 = msg.get(1).copied().unwrap_or(0) & 0x7F;
     let d2 = msg.get(2).copied().unwrap_or(0) & 0x7F;
     match status & 0xF0 {

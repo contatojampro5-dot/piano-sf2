@@ -32,6 +32,11 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 - Pads no navegador (v0.14): `web/index.html` (Web Audio, loop com emendas cruzadas, altura por `playbackRate`) + `web/pads/*.mp3`
   (mesmos pads, volume igualado com loudnorm). Publicada como Artifact privado https://claude.ai/artifact/Csec6zTktwjRpXAC6CmXFj
   (republicar com o mesmo arquivo). Pad novo = mp3 em `web/pads/` + entrada em `PADS`.
+- Pitch/Mod do teclado (v0.15): alvos `Target::Pitch/PitchUp/PitchDown/Modulation` (`is_momentary` = botão de segurar),
+  `cfg.piano_mappings` (controles da porta Piano, separados da mesinha), `cfg.pitch_range` (RPN 0, `Cmd::PitchRange`).
+  A thread do MIDI decide sem travar o `core` com `core::piano_routed` (marcas atualizadas por `sync_piano_hooks`, a cada quadro).
+  Tela: `pitch_mod_controls` na coluna GERAL. Teclado do Theo: AMW MIDI Control Mini 32 (aparece como "AKM320"; pelo USB só
+  manda notas — rodas e slider não mandaram nada no teste de 12/11/2026).
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

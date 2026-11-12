@@ -114,6 +114,13 @@ pub enum Target {
     PadKnob,
     /// Alterna entre as abas Sons SF2 / Pads.
     TabToggle,
+    /// v0.15: pitch bend (roda/fader/knob: meio = afinado). Botão: segurar = sobe tudo.
+    Pitch,
+    /// v0.15: botão que segura o pitch lá em cima / lá embaixo (soltou, volta ao meio).
+    PitchUp,
+    PitchDown,
+    /// v0.15: modulação (vibrato, CC 1). Botão: segurar = vibrato cheio.
+    Modulation,
 }
 
 impl Target {
@@ -126,6 +133,16 @@ impl Target {
                 | Target::Master
                 | Target::PadVolume
                 | Target::PadKnob
+                | Target::Pitch
+                | Target::Modulation
+        )
+    }
+
+    /// Alvo que também aceita botão "de segurar" (apertou = liga, soltou = volta).
+    pub fn is_momentary(self) -> bool {
+        matches!(
+            self,
+            Target::Pitch | Target::PitchUp | Target::PitchDown | Target::Modulation
         )
     }
 
@@ -150,6 +167,10 @@ impl Target {
             Target::PadBank => "Pad: trocar o estilo".into(),
             Target::PadKnob => "Pad: escolher o tom (knob)".into(),
             Target::TabToggle => "Trocar de aba (Sons/Pads)".into(),
+            Target::Pitch => "Pitch bend".into(),
+            Target::PitchUp => "Pitch ▲ (segurar sobe)".into(),
+            Target::PitchDown => "Pitch ▼ (segurar desce)".into(),
+            Target::Modulation => "Modulation (vibrato)".into(),
         }
     }
 }
@@ -361,6 +382,12 @@ pub struct Config {
     pub scenes: Vec<Scene>,
     pub current_scene: Option<usize>,
     pub mappings: Vec<Mapping>,
+    /// v0.15: controles do próprio teclado (porta "Piano", ex.: AMW MIDI Control Mini 32) ligados pelo Aprender.
+    /// Ficam separados dos da mesinha: uma tecla do piano nunca dispara um botão da SMC sem querer.
+    /// O que está aqui não toca nota: vira o controle escolhido.
+    pub piano_mappings: Vec<Mapping>,
+    /// v0.15: quantos semitons o pitch bend sobe/desce no máximo (1..12, padrão 2).
+    pub pitch_range: u8,
     /// Ajuste manual da função de cada porta (nome → função).
     pub port_roles: Vec<(String, PortRole)>,
     pub audio_device: Option<String>,
@@ -486,6 +513,8 @@ impl Default for Config {
             scenes: default_scenes(),
             current_scene: None,
             mappings: smc_default_mappings(),
+            piano_mappings: Vec::new(),
+            pitch_range: 2,
             port_roles: Vec::new(),
             audio_device: None,
             buffer_frames: 256,
@@ -536,6 +565,7 @@ impl Config {
             self.current_scene = None;
         }
         self.polyphony = self.polyphony.clamp(16, 256);
+        self.pitch_range = self.pitch_range.clamp(1, 12);
         self.pad_volume = self.pad_volume.clamp(0.0, 1.0);
         self.pad_bank %= crate::pads::ALL_BANKS;
         if !self.pads_v13 {

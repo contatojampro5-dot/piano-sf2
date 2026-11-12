@@ -309,6 +309,8 @@ impl eframe::App for PianoApp {
         rename_window(&ctx, &mut core, &mut self.ui);
         bt_window(&ctx, &mut self.ui, &self.midi_status, &self.bt);
         sons_window(&ctx, &core, &mut self.ui);
+        // v0.15: diz à thread do MIDI o que do teclado é controle (Aprender ligado/desligado pela tela).
+        core.sync_piano_hooks();
         drop(core);
         if let Some(path) = self.ui.load_sf2.take() {
             load_sf2_async(self.core.clone(), path);
@@ -978,14 +980,17 @@ fn top_bar(
         }
     } else if core.learn.active {
         let msg = match core.learn.target {
-            None => "MODO APRENDER — 1) clique num controle da tela   2) mexa o controle da mesinha.   (Esc sai)".to_string(),
-            Some(t) => format!("Agora mexa na mesinha o controle para: {}", t.label()),
+            None => "MODO APRENDER — 1) clique num controle da tela   2) mexa o controle da mesinha ou do teclado.   (Esc sai)".to_string(),
+            Some(t) => format!("Agora mexa na mesinha ou no teclado o controle para: {}", t.label()),
         };
-        let last = core
+        let mut last = core
             .last_signal
             .clone()
             .map(|l| format!("   ·   último sinal da mesinha: {l}"))
             .unwrap_or_default();
+        if let Some(l) = &core.last_piano_signal {
+            last.push_str(&format!("   ·   do teclado: {l}"));
+        }
         ui.add_space(4.0);
         egui::Frame::new()
             .fill(ORANGE)
@@ -2359,6 +2364,9 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
         }
     });
 
+    ui.add_space(if compact { 2.0 } else { 6.0 });
+    pitch_mod_controls(ui, core, inner.width(), compact);
+
     ui.add_space(if compact { 2.0 } else { 8.0 });
     ui.label(RichText::new(format!("{:.0}%", core.cfg.master * 100.0)).monospace());
     let fader_h = (ui.available_height() - if compact { 48.0 } else { 64.0 }).max(60.0);
@@ -2388,6 +2396,112 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2) {
     if !learnable(ui, core, &panic, Target::Panic) && panic.clicked() {
         core.panic();
     }
+}
+
+/// v0.15: Pitch (volta ao meio quando solta) com botões de segurar ▼ ▲, e Mod (vibrato).
+/// Tudo dá para ligar no teclado (ex.: AMW MIDI Control Mini 32) pelo Aprender.
+fn pitch_mod_controls(ui: &mut Ui, core: &mut Core, w: f32, compact: bool) {
+    let h = if compact { 24.0 } else { 28.0 };
+    let gap = ui.spacing().item_spacing.x;
+    let semis = core.cfg.pitch_range as f32;
+    if !compact {
+        let st = core.pitch * semis;
+        let txt = if core.pitch.abs() < 0.005 {
+            "Pitch".to_string()
+        } else {
+            format!("Pitch {st:+.1}")
+        };
+        ui.label(RichText::new(txt).size(12.0).color(if core.pitch.abs() < 0.005 { th().dim } else { PITCH_COLOR }));
+    }
+    ui.horizontal(|ui| {
+        let bw = 26.0;
+        hold_button(ui, core, Vec2::new(bw, h), "▼", Target::PitchDown, core.pitch < -0.99);
+        let bar_w = (w - 2.0 * bw - 2.0 * gap).max(30.0);
+        let resp = hbar(ui, Vec2::new(bar_w, h), (core.pitch + 1.0) / 2.0, true, PITCH_COLOR);
+        let resp = resp.on_hover_text("Pitch bend: arraste para os lados; soltou, volta ao meio");
+        if !learnable(ui, core, &resp, Target::Pitch) {
+            if resp.is_pointer_button_down_on() {
+                if let Some(p) = resp.interact_pointer_pos() {
+                    let v = ((p.x - resp.rect.left()) / resp.rect.width()).clamp(0.0, 1.0);
+                    core.set_pitch(v * 2.0 - 1.0);
+                }
+            } else if resp.drag_stopped() || resp.clicked() {
+                core.set_pitch(0.0);
+            }
+        }
+        hold_button(ui, core, Vec2::new(bw, h), "▲", Target::PitchUp, core.pitch > 0.99);
+    });
+    ui.add_space(if compact { 2.0 } else { 4.0 });
+    if !compact {
+        ui.label(
+            RichText::new(format!("Mod {:.0}%", core.modulation * 100.0))
+                .size(12.0)
+                .color(if core.modulation > 0.0 { MOD_COLOR } else { th().dim }),
+        );
+    }
+    let resp = hbar(ui, Vec2::new(w, h), core.modulation, false, MOD_COLOR);
+    let resp = resp.on_hover_text("Modulation (vibrato): arraste; fica onde você deixar");
+    if !learnable(ui, core, &resp, Target::Modulation) && resp.is_pointer_button_down_on() {
+        if let Some(p) = resp.interact_pointer_pos() {
+            let v = ((p.x - resp.rect.left()) / resp.rect.width()).clamp(0.0, 1.0);
+            core.set_modulation(v);
+        }
+    }
+}
+
+const PITCH_COLOR: Color32 = Color32::from_rgb(0x64, 0xd2, 0xff);
+const MOD_COLOR: Color32 = Color32::from_rgb(0xff, 0x9f, 0x0a);
+
+/// Barra deitada. `centered` = enche a partir do meio (pitch); senão, da esquerda (mod).
+fn hbar(ui: &mut Ui, size: Vec2, value: f32, centered: bool, color: Color32) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
+    let p = ui.painter();
+    let track = rect.shrink2(Vec2::new(2.0, size.y * 0.3));
+    p.rect_filled(track, 6, th().glass_hi);
+    let v = value.clamp(0.0, 1.0);
+    let x = track.left() + v * track.width();
+    let from = if centered { track.center().x } else { track.left() };
+    let fill = Rect::from_min_max(
+        Pos2::new(from.min(x), track.top()),
+        Pos2::new(from.max(x), track.bottom()),
+    );
+    if fill.width() > 0.5 {
+        p.rect_filled(fill, 6, color);
+    }
+    if centered {
+        p.line_segment(
+            [Pos2::new(track.center().x, rect.top() + 3.0), Pos2::new(track.center().x, rect.bottom() - 3.0)],
+            Stroke::new(1.0, th().dim),
+        );
+    }
+    let knob = Pos2::new(x.clamp(rect.left() + 7.0, rect.right() - 7.0), rect.center().y);
+    p.circle_filled(knob, size.y * 0.32, Color32::WHITE);
+    p.circle_stroke(knob, size.y * 0.32, Stroke::new(1.0, Color32::from_black_alpha(60)));
+    resp
+}
+
+/// Botão "de segurar" (pitch ▲/▼): enquanto o mouse segura, liga; soltou, volta.
+fn hold_button(ui: &mut Ui, core: &mut Core, size: Vec2, label: &str, target: Target, lit: bool) {
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
+    let learning = learnable(ui, core, &resp, target);
+    let id = resp.id.with("segurando");
+    let was = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
+    let now = !learning && resp.is_pointer_button_down_on();
+    if now != was {
+        ui.data_mut(|d| d.insert_temp(id, now));
+        core.hold(target, now);
+    }
+    let on = now || lit;
+    let p = ui.painter();
+    p.rect_filled(rect, 6, if on { PITCH_COLOR } else { th().glass_hi });
+    p.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        label,
+        FontId::proportional(14.0),
+        if on { th().ink } else { th().text },
+    );
+    resp.on_hover_text(target.label());
 }
 
 /// Quadro de ajuda: escala, pentatônica e acordes do tom do pad (para quem está começando).
@@ -2692,7 +2806,12 @@ fn learnable(ui: &Ui, core: &mut Core, resp: &egui::Response, target: Target) ->
 
 fn learn_outline(ui: &Ui, resp: &egui::Response, core: &Core, target: Target) {
     let selected = core.learn.target == Some(target);
-    let linked = core.cfg.mappings.iter().any(|m| m.target == target);
+    let linked = core
+        .cfg
+        .mappings
+        .iter()
+        .chain(core.cfg.piano_mappings.iter())
+        .any(|m| m.target == target);
     let color = if selected {
         ORANGE
     } else if linked {
@@ -3183,6 +3302,51 @@ fn settings_window(
                         core.dirty = true;
                     }
                 });
+
+                // v0.15: controles do próprio teclado (ex.: AMW MIDI Control Mini 32).
+                ui.separator();
+                ui.heading("Controles do teclado (pitch, modulation...)");
+                ui.label(
+                    RichText::new(
+                        "Clique em Aprender, clique no Pitch, ▲, ▼ ou Mod (coluna GERAL) e aperte/mexa o botão do teclado. \
+                         O que for ligado aqui não toca nota.",
+                    )
+                    .size(12.0)
+                    .color(th().dim),
+                );
+                ui.horizontal(|ui| {
+                    ui.label("Alcance do pitch:");
+                    let mut r = core.cfg.pitch_range as i32;
+                    if ui
+                        .add(egui::Slider::new(&mut r, 1..=12).suffix(" semitons"))
+                        .changed()
+                    {
+                        core.set_pitch_range(r as u8);
+                    }
+                    if ui.button("Aprender").clicked() {
+                        core.learn.active = true;
+                        core.learn.target = None;
+                        st.settings = false;
+                    }
+                });
+                let mut remove = None;
+                if core.cfg.piano_mappings.is_empty() {
+                    ui.label(RichText::new("Nenhum controle do teclado ligado ainda.").color(th().dim));
+                } else {
+                    egui::Grid::new("maps_teclado").num_columns(3).striped(true).show(ui, |ui| {
+                        for (k, m) in core.cfg.piano_mappings.iter().enumerate() {
+                            ui.label(m.target.label());
+                            ui.label(RichText::new(m.source.label()).color(th().dim));
+                            if ui.small_button("✖").on_hover_text("Remover").clicked() {
+                                remove = Some(k);
+                            }
+                            ui.end_row();
+                        }
+                    });
+                }
+                if let Some(k) = remove {
+                    core.remove_piano_mapping(k);
+                }
 
                 ui.separator();
                 ui.label(RichText::new(format!("Configurações salvas em: {}", config_path.display())).size(12.0).color(th().dim));

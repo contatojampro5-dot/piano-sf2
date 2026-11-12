@@ -61,6 +61,8 @@ pub enum Cmd {
     },
     SetMaster(f32),
     SetTranspose(i32),
+    /// v0.15: quantos semitons o pitch bend alcança (1..12).
+    PitchRange(u8),
     Panic,
     /// Novo sintetizador (SF2 novo ou taxa de amostragem nova).
     Replace(Box<Synthesizer>),
@@ -108,6 +110,8 @@ pub struct Engine {
     held: [Option<u8>; 128],
     transpose: i32,
     master: f32,
+    /// Alcance do pitch bend em semitons (RPN 0), reaplicado em cada camada.
+    pitch_range: u8,
     // Estado guardado para reaplicar quando o sintetizador é trocado.
     presets: [Option<(i32, i32)>; LAYERS],
     volumes: [f32; LAYERS],
@@ -146,6 +150,7 @@ impl Engine {
             held: [None; 128],
             transpose: 0,
             master: 0.64,
+            pitch_range: 2,
             presets: [None; LAYERS],
             volumes: [0.8; LAYERS],
             reverbs: [0.25; LAYERS],
@@ -201,10 +206,29 @@ impl Engine {
         );
         s.process_midi_message(ch, 0xB0, 0x5D, 0);
         s.process_midi_message(ch, 0xB0, 0x0B, if self.audible[i] { 127 } else { 0 });
+        Self::send_pitch_range(s, ch, self.pitch_range);
+    }
+
+    /// RPN 0 (alcance do pitch bend) num canal; depois "fecha" o RPN para nada mais mexer nele.
+    fn send_pitch_range(s: &mut Synthesizer, ch: i32, semis: u8) {
+        s.process_midi_message(ch, 0xB0, 0x65, 0);
+        s.process_midi_message(ch, 0xB0, 0x64, 0);
+        s.process_midi_message(ch, 0xB0, 0x06, semis.clamp(1, 12) as i32);
+        s.process_midi_message(ch, 0xB0, 0x26, 0);
+        s.process_midi_message(ch, 0xB0, 0x65, 127);
+        s.process_midi_message(ch, 0xB0, 0x64, 127);
     }
 
     fn handle(&mut self, cmd: Cmd) {
         match cmd {
+            Cmd::PitchRange(semis) => {
+                self.pitch_range = semis.clamp(1, 12);
+                if let Some(s) = self.synth.as_mut() {
+                    for i in 0..LAYERS {
+                        Self::send_pitch_range(s, i as i32, self.pitch_range);
+                    }
+                }
+            }
             Cmd::Replace(new) => {
                 if let Some(old) = self.synth.replace(new) {
                     let _ = self.garbage.try_send(Garbage::Synth(old));

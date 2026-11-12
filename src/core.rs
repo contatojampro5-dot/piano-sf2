@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::io::Read;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -113,9 +113,53 @@ pub struct Core {
     tex_jobs: std::collections::HashSet<usize>,
     grain_seed: u32,
     pub wizard: Option<Wizard>,
+    /// v0.15: pitch bend agora (−1 = lá embaixo, 0 = afinado, +1 = lá em cima).
+    pub pitch: f32,
+    /// v0.15: modulação agora (0..1, CC 1).
+    pub modulation: f32,
+    /// v0.15: último sinal que chegou do teclado (aparece no modo Aprender).
+    pub last_piano_signal: Option<String>,
 }
 
 pub type SharedCore = Arc<Mutex<Core>>;
+
+// ---------- v0.15: controles do teclado (porta Piano) ----------
+// A thread do MIDI precisa saber, sem travar o `core`, se uma mensagem do teclado é nota para tocar
+// ou um controle ligado pelo Aprender. Estas marcas são copiadas do `core` por `sync_piano_hooks`.
+
+/// Aprender esperando um controle (aí tudo que vem do teclado vai para o Aprender, sem tocar).
+static PIANO_LEARNING: AtomicBool = AtomicBool::new(false);
+/// Notas (0..127) do teclado ligadas a algum controle.
+static PIANO_NOTES: [AtomicU64; 2] = [AtomicU64::new(0), AtomicU64::new(0)];
+/// CCs (0..127) do teclado ligados a algum controle.
+static PIANO_CCS: [AtomicU64; 2] = [AtomicU64::new(0), AtomicU64::new(0)];
+/// Pitch bend do teclado ligado a algum controle.
+static PIANO_BEND: AtomicBool = AtomicBool::new(false);
+
+fn bit_of(n: u8) -> (usize, u64) {
+    ((n as usize >> 6) & 1, 1u64 << (n & 63))
+}
+
+/// A mensagem do teclado vai para o `core` (Aprender / controle ligado) em vez de tocar direto?
+pub fn piano_routed(msg: &[u8]) -> bool {
+    let Some(&status) = msg.first() else {
+        return false;
+    };
+    let kind = status & 0xF0;
+    if !matches!(kind, 0x80 | 0x90 | 0xB0 | 0xE0) {
+        return false;
+    }
+    if PIANO_LEARNING.load(Ordering::Relaxed) {
+        return true;
+    }
+    let d1 = msg.get(1).copied().unwrap_or(0) & 0x7F;
+    let (i, bit) = bit_of(d1);
+    match kind {
+        0x80 | 0x90 => PIANO_NOTES[i].load(Ordering::Relaxed) & bit != 0,
+        0xB0 => PIANO_CCS[i].load(Ordering::Relaxed) & bit != 0,
+        _ => PIANO_BEND.load(Ordering::Relaxed),
+    }
+}
 
 /// Notas apertadas agora (piano de verdade ou teclado da tela), para acender as teclas na tela.
 static HELD: [AtomicU64; 2] = [AtomicU64::new(0), AtomicU64::new(0)];
@@ -170,6 +214,73 @@ impl Core {
             tex_jobs: Default::default(),
             grain_seed: 0x1234_5678,
             wizard: None,
+            pitch: 0.0,
+            modulation: 0.0,
+            last_piano_signal: None,
+        }
+    }
+
+    /// Copia para a thread do MIDI o que do teclado é controle (ver `piano_routed`).
+    /// Barato: chamado a cada quadro da tela e depois de cada Aprender.
+    pub fn sync_piano_hooks(&self) {
+        let learning = self.learn.active && self.learn.target.is_some() && self.wizard.is_none();
+        PIANO_LEARNING.store(learning, Ordering::Relaxed);
+        let (mut notes, mut ccs, mut bend) = ([0u64; 2], [0u64; 2], false);
+        for m in &self.cfg.piano_mappings {
+            match m.source {
+                Source::Note { num, .. } => {
+                    let (i, b) = bit_of(num);
+                    notes[i] |= b;
+                }
+                Source::Cc { num, .. } => {
+                    let (i, b) = bit_of(num);
+                    ccs[i] |= b;
+                }
+                Source::PitchBend { .. } => bend = true,
+            }
+        }
+        for i in 0..2 {
+            PIANO_NOTES[i].store(notes[i], Ordering::Relaxed);
+            PIANO_CCS[i].store(ccs[i], Ordering::Relaxed);
+        }
+        PIANO_BEND.store(bend, Ordering::Relaxed);
+    }
+
+    /// Pitch bend em todas as camadas (−1..1; 0 = afinado).
+    pub fn set_pitch(&mut self, v: f32) {
+        let v = v.clamp(-1.0, 1.0);
+        self.pitch = v;
+        let raw = ((v + 1.0) * 8192.0).round().clamp(0.0, 16383.0) as u16;
+        self.send(Cmd::PitchBend {
+            lsb: (raw & 0x7F) as u8,
+            msb: (raw >> 7) as u8,
+        });
+    }
+
+    /// Modulação (vibrato) em todas as camadas (0..1).
+    pub fn set_modulation(&mut self, v: f32) {
+        let v = v.clamp(0.0, 1.0);
+        self.modulation = v;
+        self.send(Cmd::Cc {
+            num: 1,
+            val: (v * 127.0).round() as u8,
+        });
+    }
+
+    /// Alcance do pitch bend (semitons).
+    pub fn set_pitch_range(&mut self, semis: u8) {
+        self.cfg.pitch_range = semis.clamp(1, 12);
+        self.send(Cmd::PitchRange(self.cfg.pitch_range));
+        self.dirty = true;
+    }
+
+    /// Botão "de segurar": apertou = liga, soltou = volta ao normal.
+    pub fn hold(&mut self, t: Target, down: bool) {
+        match t {
+            Target::Pitch | Target::PitchUp => self.set_pitch(if down { 1.0 } else { 0.0 }),
+            Target::PitchDown => self.set_pitch(if down { -1.0 } else { 0.0 }),
+            Target::Modulation => self.set_modulation(if down { 1.0 } else { 0.0 }),
+            _ => {}
         }
     }
 
@@ -213,6 +324,7 @@ impl Core {
         }
         self.send(Cmd::SetMaster(self.cfg.master));
         self.send(Cmd::SetTranspose(mix.transpose));
+        self.send(Cmd::PitchRange(self.cfg.pitch_range));
         self.send(Cmd::PadVolume(self.cfg.pad_volume));
         self.send_vivo();
     }
@@ -812,6 +924,9 @@ impl Core {
 
     pub fn panic(&mut self) {
         clear_held();
+        // o motor zera pitch e modulação no pânico; a tela acompanha
+        self.pitch = 0.0;
+        self.modulation = 0.0;
         self.send(Cmd::Panic);
         self.notify("Pânico: todas as notas cortadas");
     }
@@ -972,6 +1087,30 @@ impl Core {
             }
             return;
         }
+        if t == Target::Pitch {
+            let v = match value {
+                // roda/fader 0..1 → −1..1 (meio = afinado; perto do meio encaixa no zero)
+                ContValue::Absolute(v) => {
+                    let p = v.clamp(0.0, 1.0) * 2.0 - 1.0;
+                    if p.abs() < 0.02 {
+                        0.0
+                    } else {
+                        p
+                    }
+                }
+                ContValue::Relative(d) => self.pitch + d * 2.0,
+            };
+            self.set_pitch(v);
+            return;
+        }
+        if t == Target::Modulation {
+            let v = match value {
+                ContValue::Absolute(v) => v,
+                ContValue::Relative(d) => self.modulation + d,
+            };
+            self.set_modulation(v);
+            return;
+        }
         let cur = match t {
             Target::Volume(i) => self.cfg.mix.layers[i].volume,
             Target::Reverb(i) => self.cfg.mix.layers[i].reverb,
@@ -997,6 +1136,10 @@ impl Core {
     /// Mensagem vinda do piano: toca direto no motor.
     pub fn handle_piano(&mut self, msg: &[u8]) {
         let Some(&status) = msg.first() else { return };
+        if self.piano_is_control(msg) {
+            self.handle_piano_control(msg);
+            return;
+        }
         let d1 = msg.get(1).copied().unwrap_or(0) & 0x7F;
         let d2 = msg.get(2).copied().unwrap_or(0) & 0x7F;
         self.piano_activity = Some(Instant::now());
@@ -1015,24 +1158,45 @@ impl Core {
 
     /// Mensagem vinda da mesinha. Devolve true se algo mudou na tela.
     pub fn handle_controller(&mut self, msg: &[u8]) -> bool {
+        self.handle_control(msg, false)
+    }
+
+    /// v0.15: mensagem do teclado (porta Piano) que é controle: o Aprender está esperando,
+    /// ou ela foi ligada a um controle (ex.: botão do AMW = pitch). Não toca nota.
+    pub fn handle_piano_control(&mut self, msg: &[u8]) -> bool {
+        let changed = self.handle_control(msg, true);
+        self.sync_piano_hooks();
+        changed
+    }
+
+    /// Mesinha (`from_piano` = false) ou controles do teclado (true). Cada um tem a sua lista.
+    fn handle_control(&mut self, msg: &[u8], from_piano: bool) -> bool {
         let Some(ev) = ControlEvent::parse(msg) else {
             return false;
         };
-        self.controller_activity = Some(Instant::now());
-        self.last_signal = Some(ev.label());
+        if from_piano {
+            self.piano_activity = Some(Instant::now());
+            self.last_piano_signal = Some(ev.label());
+        } else {
+            self.controller_activity = Some(Instant::now());
+            self.last_signal = Some(ev.label());
+        }
 
         // Botão "apertado" agora? (CC: subiu de <64 para >=64; nota: velocity > 0)
-        let pressed = match ev {
-            ControlEvent::Note { vel, .. } => vel > 0,
+        // `down` = está segurado (para os botões "de segurar" do pitch/modulation).
+        let (pressed, down) = match ev {
+            ControlEvent::Note { vel, .. } => (vel > 0, vel > 0),
             ControlEvent::Cc { ch, num, val } => {
-                let prev = self.last_cc.insert((ch, num), val).unwrap_or(0);
-                val >= 64 && prev < 64
+                let key = (ch | if from_piano { 0x10 } else { 0 }, num);
+                let prev = self.last_cc.insert(key, val).unwrap_or(0);
+                (val >= 64 && prev < 64, val >= 64)
             }
-            ControlEvent::PitchBend { .. } => false,
+            ControlEvent::PitchBend { .. } => (false, false),
         };
 
         if self.wizard.is_some() {
-            return self.wizard_signal(ev);
+            // O assistente é só da mesinha.
+            return !from_piano && self.wizard_signal(ev);
         }
 
         if self.learn.active {
@@ -1040,23 +1204,35 @@ impl Core {
                 if let Some(src) = ev.source_for(t, pressed) {
                     // Um controle faz uma coisa só. Fader/knob: um por alvo (dois faders brigariam).
                     // Botões: vários botões podem fazer a mesma coisa.
-                    let single = t.is_continuous();
+                    let single = t.is_continuous() && !matches!(src, Source::Note { .. });
+                    let list = if from_piano {
+                        &mut self.cfg.piano_mappings
+                    } else {
+                        &mut self.cfg.mappings
+                    };
                     // Avisa o que saiu do lugar (para não "sumir" sem explicação).
                     let mut lost: Vec<String> = Vec::new();
-                    for m in &self.cfg.mappings {
+                    for m in list.iter() {
                         if same_source(m.source, src) && m.target != t {
                             lost.push(format!(
                                 "esse controle deixou de fazer \"{}\"",
                                 m.target.label()
                             ));
-                        } else if single && m.target == t && !same_source(m.source, src) {
+                        } else if single
+                            && m.target == t
+                            && !same_source(m.source, src)
+                            && !matches!(m.source, Source::Note { .. })
+                        {
                             lost.push(format!("{} não comanda mais isso", m.source.label()));
                         }
                     }
-                    self.cfg
-                        .mappings
-                        .retain(|m| !same_source(m.source, src) && !(single && m.target == t));
-                    self.cfg.mappings.push(Mapping {
+                    list.retain(|m| {
+                        !same_source(m.source, src)
+                            && !(single
+                                && m.target == t
+                                && !matches!(m.source, Source::Note { .. }))
+                    });
+                    list.push(Mapping {
                         source: src,
                         target: t,
                     });
@@ -1067,23 +1243,38 @@ impl Core {
                     } else {
                         format!("  (atenção: {})", lost.join("; "))
                     };
-                    self.notify(format!("Aprendido: {} → {}{extra}", src.label(), t.label()));
+                    let from = if from_piano { "Teclado: " } else { "" };
+                    self.notify(format!(
+                        "Aprendido: {from}{} → {}{extra}",
+                        src.label(),
+                        t.label()
+                    ));
+                    self.sync_piano_hooks();
                     return true;
                 }
                 return false;
             }
         }
 
-        let hits: Vec<Mapping> = self
-            .cfg
-            .mappings
+        let list = if from_piano {
+            &self.cfg.piano_mappings
+        } else {
+            &self.cfg.mappings
+        };
+        let hits: Vec<Mapping> = list
             .iter()
             .filter(|m| ev.matches(m.source))
             .copied()
             .collect();
         let mut changed = false;
         for m in hits {
-            if m.target.is_continuous() {
+            let is_button_source = !matches!(m.source, Source::PitchBend { .. })
+                && (matches!(m.source, Source::Note { .. }) || !m.target.is_continuous());
+            if m.target.is_momentary() && is_button_source {
+                // Segurar: apertou = liga; soltou = volta (pitch ao meio, vibrato a zero).
+                self.hold(m.target, down);
+                changed = true;
+            } else if m.target.is_continuous() {
                 if let Some(v) = ev.value(m.source) {
                     self.apply_continuous(m.target, v);
                     changed = true;
@@ -1094,6 +1285,29 @@ impl Core {
             }
         }
         changed
+    }
+
+    /// Mesma pergunta de `piano_routed`, mas olhando o próprio estado (sem as marcas globais).
+    fn piano_is_control(&self, msg: &[u8]) -> bool {
+        let Some(ev) = ControlEvent::parse(msg) else {
+            return false;
+        };
+        if self.learn.active && self.learn.target.is_some() && self.wizard.is_none() {
+            return true;
+        }
+        self.cfg.piano_mappings.iter().any(|m| ev.matches(m.source))
+    }
+
+    /// Tira uma ligação do teclado (Ajustes → Controles do teclado).
+    pub fn remove_piano_mapping(&mut self, idx: usize) {
+        if idx < self.cfg.piano_mappings.len() {
+            let m = self.cfg.piano_mappings.remove(idx);
+            if m.target.is_momentary() {
+                self.hold(m.target, false);
+            }
+            self.dirty = true;
+            self.sync_piano_hooks();
+        }
     }
 
     // ---------- Configurar mesinha (assistente) ----------
@@ -1480,7 +1694,10 @@ impl ControlEvent {
                 num,
                 relative: false,
             }),
-            ControlEvent::Note { ch, num, vel } if !t.is_continuous() && vel > 0 => {
+            // Pitch/modulation também aceitam botão (segurar = liga).
+            ControlEvent::Note { ch, num, vel }
+                if (!t.is_continuous() || t.is_momentary()) && vel > 0 =>
+            {
                 Some(Source::Note { ch, num })
             }
             _ => None,
@@ -1582,6 +1799,140 @@ mod tests {
         // O fader antigo (pitch bend canal 1) não manda mais na camada 1.
         c.handle_controller(&[0xE0, 0, 0]);
         assert!((c.cfg.mix.layers[0].volume - 1.0).abs() < 1e-3);
+    }
+
+    /// Tudo que o motor recebeu até agora.
+    fn drain(rx: &crossbeam_channel::Receiver<Cmd>) -> Vec<Cmd> {
+        rx.try_iter().collect()
+    }
+
+    fn bends(cmds: &[Cmd]) -> Vec<u16> {
+        cmds.iter()
+            .filter_map(|c| match c {
+                Cmd::PitchBend { lsb, msb } => Some((*lsb as u16) | ((*msb as u16) << 7)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn plays_note(cmds: &[Cmd]) -> bool {
+        cmds.iter().any(|c| matches!(c, Cmd::NoteOn { .. }))
+    }
+
+    #[test]
+    fn piano_key_learned_as_pitch_up_holds_and_releases() {
+        // AMW Mini 32: o Theo escolhe uma tecla (nota 36) para segurar o pitch lá em cima.
+        let (mut c, rx) = core();
+        c.learn.active = true;
+        c.learn.target = Some(Target::PitchUp);
+        c.handle_piano(&[0x90, 36, 100]);
+        assert!(c.learn.target.is_none(), "aprendeu");
+        assert_eq!(c.cfg.piano_mappings.len(), 1);
+        assert!(c.cfg.mappings.iter().all(|m| m.target != Target::PitchUp), "não foi para a lista da mesinha");
+        assert!(!plays_note(&drain(&rx)), "a tecla do Aprender não toca");
+        c.learn.active = false;
+        c.handle_piano(&[0x80, 36, 0]);
+        drain(&rx);
+
+        c.handle_piano(&[0x90, 36, 90]); // segura
+        let cmds = drain(&rx);
+        assert!(!plays_note(&cmds), "tecla ligada a controle não toca nota");
+        assert_eq!(bends(&cmds), vec![16383]);
+        assert!((c.pitch - 1.0).abs() < 1e-6);
+        c.handle_piano(&[0x80, 36, 0]); // solta: volta ao meio
+        assert_eq!(bends(&drain(&rx)), vec![8192]);
+        assert_eq!(c.pitch, 0.0);
+
+        // outra tecla continua tocando normal
+        c.handle_piano(&[0x90, 60, 100]);
+        assert!(plays_note(&drain(&rx)));
+    }
+
+    #[test]
+    fn piano_key_learned_as_modulation_and_pitch_down() {
+        let (mut c, rx) = core();
+        c.learn.active = true;
+        c.learn.target = Some(Target::Modulation);
+        c.handle_piano(&[0x90, 37, 100]);
+        c.learn.target = Some(Target::PitchDown);
+        c.handle_piano(&[0x90, 38, 100]);
+        c.learn.active = false;
+        assert_eq!(c.cfg.piano_mappings.len(), 2);
+        drain(&rx);
+
+        c.handle_piano(&[0x90, 37, 100]);
+        let cmds = drain(&rx);
+        assert!(cmds.iter().any(|m| matches!(m, Cmd::Cc { num: 1, val: 127 })), "vibrato cheio");
+        c.handle_piano(&[0x80, 37, 0]);
+        assert!(drain(&rx).iter().any(|m| matches!(m, Cmd::Cc { num: 1, val: 0 })));
+
+        c.handle_piano(&[0x90, 38, 100]);
+        assert_eq!(bends(&drain(&rx)), vec![0]);
+        assert!((c.pitch + 1.0).abs() < 1e-6);
+        c.handle_piano(&[0x90, 38, 0]); // note on com velocity 0 = soltou
+        assert_eq!(bends(&drain(&rx)), vec![8192]);
+    }
+
+    #[test]
+    fn piano_wheel_or_slider_learned_as_pitch_mod_and_volume() {
+        let (mut c, rx) = core();
+        c.learn.active = true;
+        c.learn.target = Some(Target::Pitch);
+        c.handle_piano(&[0xE0, 0, 64]); // roda de pitch
+        c.learn.target = Some(Target::Modulation);
+        c.handle_piano(&[0xB0, 1, 10]); // roda de mod (CC 1)
+        c.learn.target = Some(Target::Master);
+        c.handle_piano(&[0xB0, 7, 50]); // slider de volume (CC 7)
+        c.learn.active = false;
+        assert_eq!(c.cfg.piano_mappings.len(), 3);
+        drain(&rx);
+
+        c.handle_piano(&[0xE0, 0x7F, 0x7F]);
+        assert!((c.pitch - 1.0).abs() < 0.01);
+        c.handle_piano(&[0xE0, 0x00, 0x40]); // meio
+        assert_eq!(c.pitch, 0.0);
+        c.handle_piano(&[0xB0, 1, 127]);
+        assert!((c.modulation - 1.0).abs() < 1e-6);
+        c.handle_piano(&[0xB0, 7, 127]);
+        assert!((c.cfg.master - 1.0).abs() < 1e-3);
+        // a mesinha não é afetada pelo que o teclado aprendeu (CC 7 da mesinha não vira volume geral)
+        let before = c.cfg.master;
+        c.set_master(0.3);
+        c.handle_controller(&[0xB0, 7, 127]);
+        assert!((c.cfg.master - 0.3).abs() < 1e-3, "lista da mesinha separada (antes {before})");
+    }
+
+    #[test]
+    fn piano_mapping_removed_releases_and_plays_again() {
+        let (mut c, rx) = core();
+        c.learn.active = true;
+        c.learn.target = Some(Target::PitchUp);
+        c.handle_piano(&[0x90, 40, 100]);
+        c.learn.active = false;
+        c.handle_piano(&[0x90, 40, 100]);
+        assert!(c.pitch > 0.99);
+        c.remove_piano_mapping(0);
+        assert_eq!(c.pitch, 0.0, "tirou a ligação: pitch volta ao meio");
+        drain(&rx);
+        c.handle_piano(&[0x90, 40, 100]);
+        assert!(plays_note(&drain(&rx)), "a tecla voltou a tocar");
+    }
+
+    #[test]
+    fn pitch_range_goes_to_engine_and_panic_resets() {
+        let (mut c, rx) = core();
+        c.set_pitch_range(7);
+        assert!(drain(&rx).iter().any(|m| matches!(m, Cmd::PitchRange(7))));
+        c.set_pitch_range(40);
+        assert_eq!(c.cfg.pitch_range, 12);
+        c.set_pitch(0.5);
+        c.set_modulation(0.8);
+        c.panic();
+        assert_eq!((c.pitch, c.modulation), (0.0, 0.0));
+        // config antiga (sem os campos novos) abre com o padrão
+        let old: Config = serde_json::from_str(r#"{"master":0.5}"#).unwrap();
+        assert_eq!(old.pitch_range, 2);
+        assert!(old.piano_mappings.is_empty());
     }
 
     #[test]
