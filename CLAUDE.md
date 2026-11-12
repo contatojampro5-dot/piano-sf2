@@ -41,6 +41,11 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   `pick_region` (fim = som mais recente não silencioso, começo depois do ataque), `FreezeVoice` (granular sem mudar altura,
   volume = RMS dos últimos 0,3 s). `Cmd::FreezePlay/FreezeStop`, `Target::Freeze`, `core.freeze_toggle()`. Botão na coluna GERAL.
   Prévia com SF2 de verdade: teste `freeze_real_sf2_preview` (ignored; `PIANO_SF2_FREEZE`, `PIANO_FREEZE_WAV`).
+- Efeitos (v0.17): `src/efeitos.rs` (Tempo/`step_samples`, `pulse_gain`, `Arp`, `DrumKit::build` sons sintetizados, `Drums`,
+  `VoiceFx` coral granular por nota com a textura Coro). No motor: `clock`, arpejo com bloco cortado no passo exato
+  (`arp_next`), pulso no barramento dos pads e no congelado, coral antes do `ring().push` (o Congelar pega), batidas por último.
+  `cfg.efeitos` (ajustes salvos; ligado/desligado não salva), aba 3 `efeitos_page`. Nos testes `freeze::ring()` é por thread.
+  Prévia: teste `efeitos_real_sf2_preview` (ignored; `PIANO_SF2_FREEZE`, `PIANO_EFEITOS_WAV`).
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

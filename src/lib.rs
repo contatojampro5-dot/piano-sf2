@@ -2,6 +2,7 @@
 
 pub mod blemidi;
 pub mod core;
+pub mod efeitos;
 pub mod engine;
 pub mod freeze;
 pub mod granular;

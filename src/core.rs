@@ -121,6 +121,17 @@ pub struct Core {
     pub last_piano_signal: Option<String>,
     /// v0.16: o Congelar está ligado (tem som congelado tocando).
     pub freeze_on: bool,
+    // v0.17: aba Efeitos (o que está ligado não fica salvo: abre sempre desligado)
+    pub pulse_on: bool,
+    pub arp_on: bool,
+    pub voicefx_on: bool,
+    /// Batidas do "bater o tempo" (segundos desde `tap_origin`).
+    taps: Vec<f64>,
+    tap_origin: Instant,
+    drum_kit: Option<Arc<crate::efeitos::DrumKit>>,
+    voicefx_src: Option<Arc<GrainSource>>,
+    /// Quando cada DrumPad foi tocado (a tela acende o botão por um instante).
+    pub drum_flash: [Option<Instant>; crate::efeitos::DRUMS],
 }
 
 pub type SharedCore = Arc<Mutex<Core>>;
@@ -220,7 +231,154 @@ impl Core {
             modulation: 0.0,
             last_piano_signal: None,
             freeze_on: false,
+            pulse_on: false,
+            arp_on: false,
+            voicefx_on: false,
+            taps: Vec::new(),
+            tap_origin: Instant::now(),
+            drum_kit: None,
+            voicefx_src: None,
+            drum_flash: [None; crate::efeitos::DRUMS],
         }
+    }
+
+    // ---------- v0.17: aba Efeitos ----------
+
+    /// Manda para o motor tudo da aba Efeitos (ao iniciar, ao trocar de motor e quando muda algo).
+    pub fn send_efeitos(&self) {
+        let e = &self.cfg.efeitos;
+        self.send(Cmd::Tempo(e.bpm));
+        self.send(Cmd::Pulse(crate::efeitos::PulseParams {
+            on: self.pulse_on,
+            per_beat: e.pulse_per_beat,
+            depth: e.pulse_depth,
+        }));
+        self.send(Cmd::Arp(crate::efeitos::ArpParams {
+            on: self.arp_on,
+            layer: e.arp_layer,
+            pattern: e.arp_pattern,
+            per_beat: e.arp_per_beat,
+            octaves: e.arp_octaves,
+            latch: e.arp_latch,
+        }));
+        self.send(Cmd::DrumVolume(e.drum_volume));
+        if let Some(k) = &self.drum_kit {
+            self.send(Cmd::DrumKit(k.clone()));
+        }
+        if let Some(s) = &self.voicefx_src {
+            self.send(Cmd::VoiceFxSource(s.clone()));
+        }
+        self.send(Cmd::VoiceFx {
+            on: self.voicefx_on,
+            level: e.voicefx_volume,
+            octave: e.voicefx_octave,
+        });
+    }
+
+    /// A tela mudou algum ajuste da aba Efeitos.
+    pub fn set_efeitos(&mut self, e: Efeitos) {
+        if e != self.cfg.efeitos {
+            self.cfg.efeitos = e;
+            self.cfg.efeitos.normalize();
+            self.send_efeitos();
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_bpm(&mut self, bpm: f32) {
+        let mut e = self.cfg.efeitos.clone();
+        e.bpm = bpm;
+        self.set_efeitos(e);
+    }
+
+    /// Bater o tempo: 2 ou mais batidas seguidas (até 2 s entre elas) acertam o BPM,
+    /// e o pulso/arpejo recomeçam na batida.
+    pub fn tap_tempo(&mut self) {
+        let now = self.tap_origin.elapsed().as_secs_f64();
+        if self.taps.last().is_some_and(|t| now - t > 2.0) {
+            self.taps.clear();
+        }
+        self.taps.push(now);
+        if self.taps.len() > 5 {
+            self.taps.remove(0);
+        }
+        if let Some(bpm) = crate::efeitos::bpm_from_taps(&self.taps) {
+            self.set_bpm(bpm);
+            self.notify(format!("Tempo: {bpm:.0} BPM"));
+        }
+        self.send(Cmd::TempoSync);
+    }
+
+    pub fn toggle_pulse(&mut self) {
+        self.pulse_on = !self.pulse_on;
+        self.send_efeitos();
+        self.notify(if self.pulse_on {
+            "PulsePad ligado: os pads e o ❄ congelado pulsam no tempo"
+        } else {
+            "PulsePad desligado"
+        });
+    }
+
+    pub fn toggle_arp(&mut self) {
+        self.arp_on = !self.arp_on;
+        self.send_efeitos();
+        let layer = self.cfg.efeitos.arp_layer;
+        let name = self.cfg.mix.layers[layer]
+            .preset
+            .as_ref()
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "sem timbre".into());
+        if self.arp_on && !self.cfg.mix.audible(layer) {
+            self.notify(format!(
+                "Arpejador ligado na camada {} ({name}) — ligue essa camada para ouvir",
+                layer + 1
+            ));
+        } else if self.arp_on {
+            self.notify(format!("Arpejador ligado na camada {} ({name})", layer + 1));
+        } else {
+            self.notify("Arpejador desligado");
+        }
+    }
+
+    /// Coral do Voice FX: a textura "Coro" que vem no programa (carrega na primeira vez).
+    pub fn toggle_voicefx(&mut self) {
+        if !self.voicefx_on && self.voicefx_src.is_none() {
+            match pads::load_texture(0, None) {
+                Ok(src) => self.voicefx_src = Some(src),
+                Err(e) => {
+                    self.notify(format!("Voice FX: {e}"));
+                    return;
+                }
+            }
+        }
+        self.voicefx_on = !self.voicefx_on;
+        self.send_efeitos();
+        self.notify(if self.voicefx_on {
+            "Voice FX ligado: um coral acompanha as notas que você tocar"
+        } else {
+            "Voice FX desligado"
+        });
+    }
+
+    /// Prepara os sons dos DrumPads (na taxa da placa de som). Chamado quando a aba abre.
+    pub fn ensure_drum_kit(&mut self) {
+        if self.drum_kit.as_ref().is_none_or(|k| k.rate != self.sample_rate) {
+            let kit = Arc::new(crate::efeitos::DrumKit::build(self.sample_rate));
+            self.send(Cmd::DrumKit(kit.clone()));
+            self.drum_kit = Some(kit);
+        }
+    }
+
+    pub fn drum_hit(&mut self, pad: usize, vel: u8) {
+        if pad >= crate::efeitos::DRUMS {
+            return;
+        }
+        self.ensure_drum_kit();
+        self.send(Cmd::Drum {
+            pad,
+            vel: vel.clamp(1, 127),
+        });
+        self.drum_flash[pad] = Some(Instant::now());
     }
 
     /// v0.16: botão ❄ Congelar. Ligar = o som que as camadas estão tocando agora vira um pad
@@ -366,6 +524,7 @@ impl Core {
         self.send(Cmd::PitchRange(self.cfg.pitch_range));
         self.send(Cmd::PadVolume(self.cfg.pad_volume));
         self.send_vivo();
+        self.send_efeitos();
     }
 
     fn send_vivo(&self) {
@@ -1097,6 +1256,11 @@ impl Core {
             Target::PadNext => self.pad_step(1),
             Target::PadBank => self.set_pad_bank(self.cfg.pad_bank + 1),
             Target::Freeze => self.freeze_toggle(),
+            Target::TapTempo => self.tap_tempo(),
+            Target::PulseToggle => self.toggle_pulse(),
+            Target::ArpToggle => self.toggle_arp(),
+            Target::VoiceFxToggle => self.toggle_voicefx(),
+            Target::Drum(i) => self.drum_hit(i, 110),
             Target::TabToggle => {
                 self.cfg.tab = 1 - self.cfg.tab.min(1);
                 self.dirty = true;
@@ -1142,6 +1306,21 @@ impl Core {
                 ContValue::Relative(d) => self.pitch + d * 2.0,
             };
             self.set_pitch(v);
+            return;
+        }
+        if matches!(t, Target::DrumVolume | Target::VoiceFxVolume) {
+            let mut e = self.cfg.efeitos.clone();
+            let cur = if t == Target::DrumVolume {
+                &mut e.drum_volume
+            } else {
+                &mut e.voicefx_volume
+            };
+            *cur = match value {
+                ContValue::Absolute(v) => v,
+                ContValue::Relative(d) => *cur + d,
+            }
+            .clamp(0.0, 1.0);
+            self.set_efeitos(e);
             return;
         }
         if t == Target::Modulation {
@@ -1311,7 +1490,13 @@ impl Core {
         for m in hits {
             let is_button_source = !matches!(m.source, Source::PitchBend { .. })
                 && (matches!(m.source, Source::Note { .. }) || !m.target.is_continuous());
-            if m.target.is_momentary() && is_button_source {
+            if let (Target::Drum(i), ControlEvent::Note { vel, .. }) = (m.target, ev) {
+                // DrumPad numa tecla/botão: a força da batida acompanha a força do dedo.
+                if vel > 0 {
+                    self.drum_hit(i, vel);
+                    changed = true;
+                }
+            } else if m.target.is_momentary() && is_button_source {
                 // Segurar: apertou = liga; soltou = volta (pitch ao meio, vibrato a zero).
                 self.hold(m.target, down);
                 changed = true;
@@ -1454,6 +1639,9 @@ impl Core {
                     Target::Scene(n) => self.cfg.current_scene == Some(n),
                     Target::Pad(k) => self.pad_active == Some(k),
                     Target::Freeze => self.freeze_on,
+                    Target::PulseToggle => self.pulse_on,
+                    Target::ArpToggle => self.arp_on,
+                    Target::VoiceFxToggle => self.voicefx_on,
                     _ => continue,
                 };
                 out.push((ch, num, lit));

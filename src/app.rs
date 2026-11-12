@@ -287,10 +287,10 @@ impl eframe::App for PianoApp {
                 bottom: 10,
             }))
             .show(ui, |ui| {
-                if core.cfg.tab == 0 {
-                    mixer(ui, &mut core, &mut self.ui);
-                } else {
-                    pads_page(ui, &mut core, &mut self.ui);
+                match core.cfg.tab {
+                    0 => mixer(ui, &mut core, &mut self.ui),
+                    1 => pads_page(ui, &mut core, &mut self.ui),
+                    _ => efeitos_page(ui, &mut core),
                 }
             });
 
@@ -1038,6 +1038,10 @@ fn tabs_bar(ui: &mut Ui, core: &mut Core) {
                 core.sf2_name.is_some() && core.cfg.mix.layers.iter().any(|l| l.on),
             ),
             (format!("🎶  Pads{pad_tag}"), core.pad_active.is_some()),
+            (
+                "🥁  Efeitos".to_string(),
+                core.pulse_on || core.arp_on || core.voicefx_on,
+            ),
         ];
         for (i, (label, live)) in tabs.iter().enumerate() {
             if i == 1 && core.cfg.is_hidden("tab_pads") {
@@ -1069,7 +1073,11 @@ fn tabs_bar(ui: &mut Ui, core: &mut Core) {
                         sw: 0,
                         se: 0,
                     },
-                    if i == 0 { LAYER_COLORS[0] } else { PAD_COLOR },
+                    match i {
+                        0 => LAYER_COLORS[0],
+                        1 => PAD_COLOR,
+                        _ => MOD_COLOR,
+                    },
                 );
             }
             p.text(
@@ -1092,6 +1100,252 @@ fn tabs_bar(ui: &mut Ui, core: &mut Core) {
             }
         }
     });
+}
+
+// ---------- v0.17: aba Efeitos ----------
+
+const ARP_COLOR: Color32 = Color32::from_rgb(0x30, 0xd1, 0x58);
+const VOICE_COLOR: Color32 = Color32::from_rgb(0xff, 0x6b, 0x9d);
+const DRUM_COLOR: Color32 = Color32::from_rgb(0xff, 0x45, 0x3a);
+
+/// Painel de vidro com título; devolve o retângulo (para o modo Editar, se um dia precisar).
+fn fx_card(ui: &mut Ui, size: Vec2, title: &str, color: Color32, add: impl FnOnce(&mut Ui)) {
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    theme::glass(ui.painter(), rect, 18, false, None);
+    ui.painter().rect_filled(
+        Rect::from_min_size(rect.min + Vec2::new(16.0, 0.0), Vec2::new(rect.width() - 32.0, 3.0)),
+        2,
+        color,
+    );
+    let inner = rect.shrink2(Vec2::new(14.0, 10.0));
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(inner)
+            .layout(Layout::top_down(Align::Min)),
+    );
+    child.label(RichText::new(title).strong().size(17.0));
+    child.add_space(4.0);
+    add(&mut child);
+}
+
+/// Botão grande de liga/desliga (pode ser ligado na mesinha/teclado pelo Aprender).
+fn fx_toggle(ui: &mut Ui, core: &mut Core, w: f32, on: bool, label: &str, color: Color32, target: Target) -> bool {
+    let b = ui.add_sized(
+        [w, 40.0],
+        egui::Button::new(
+            RichText::new(if on { format!("● {label} LIGADO") } else { format!("○ {label}") })
+                .strong()
+                .size(15.0)
+                .color(if on { th().ink } else { th().text }),
+        )
+        .fill(if on { color } else { th().glass_hi }),
+    );
+    !learnable(ui, core, &b, target) && b.clicked()
+}
+
+/// Fileira de opções (uma marcada). Devolve a escolhida se mudou.
+fn fx_choice<T: Copy + PartialEq>(ui: &mut Ui, label: &str, opts: &[(&str, T)], cur: T, color: Color32) -> Option<T> {
+    let mut out = None;
+    ui.label(RichText::new(label).size(12.0).color(th().dim));
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        for (name, v) in opts {
+            let sel = *v == cur;
+            let b = egui::Button::new(RichText::new(*name).size(13.0).color(if sel { th().ink } else { th().text }))
+                .fill(if sel { color } else { th().glass_hi });
+            if ui.add(b).clicked() && !sel {
+                out = Some(*v);
+            }
+        }
+    });
+    out
+}
+
+fn efeitos_page(ui: &mut Ui, core: &mut Core) {
+    core.ensure_drum_kit();
+    let avail = ui.available_size();
+    let gap = 10.0;
+    let top_h = (avail.y * 0.58).clamp(250.0, 380.0);
+    let drum_h = (avail.y - top_h - gap).max(150.0);
+    let tempo_w = 200.0;
+    let rest = (avail.x - tempo_w - 3.0 * gap).max(600.0);
+    let (pulse_w, arp_w, voice_w) = (rest * 0.28, rest * 0.44, rest * 0.28);
+    let mut e = core.cfg.efeitos.clone();
+
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = gap;
+        // ---- Tempo ----
+        fx_card(ui, Vec2::new(tempo_w, top_h), "⏱ Tempo", th().text, |ui| {
+            let w = ui.available_width();
+            ui.vertical_centered(|ui| {
+                ui.label(RichText::new(format!("{:.0}", e.bpm)).size(44.0).strong());
+                ui.label(RichText::new("BPM").size(13.0).color(th().dim));
+            });
+            ui.horizontal(|ui| {
+                let bw = (w - 3.0 * ui.spacing().item_spacing.x) / 4.0;
+                for (t, d) in [("−5", -5.0), ("−1", -1.0), ("+1", 1.0), ("+5", 5.0)] {
+                    if ui.add_sized([bw, 30.0], egui::Button::new(t).fill(th().glass_hi)).clicked() {
+                        e.bpm += d;
+                    }
+                }
+            });
+            ui.add_space(6.0);
+            let tap = ui.add_sized(
+                [w, (ui.available_height() - 24.0).clamp(50.0, 110.0)],
+                egui::Button::new(RichText::new("TAP\nbata no tempo").strong().size(18.0)).fill(th().glass_hi),
+            );
+            let tap = tap.on_hover_text("Clique 2 a 4 vezes no tempo da música: o PulsePad e o Arpejador acompanham");
+            if !learnable(ui, core, &tap, Target::TapTempo) && tap.clicked() {
+                core.tap_tempo();
+                e.bpm = core.cfg.efeitos.bpm;
+            }
+            ui.label(RichText::new("vale para o PulsePad e o Arpejador").size(11.0).color(th().dim));
+        });
+
+        // ---- PulsePad ----
+        fx_card(ui, Vec2::new(pulse_w, top_h), "💓 PulsePad", PAD_COLOR, |ui| {
+            let w = ui.available_width();
+            if fx_toggle(ui, core, w, core.pulse_on, "PULSO", PAD_COLOR, Target::PulseToggle) {
+                core.toggle_pulse();
+            }
+            ui.label(RichText::new("Os pads e o ❄ congelado pulsam no tempo.").size(12.0).color(th().dim));
+            ui.add_space(4.0);
+            if let Some(v) = fx_choice(ui, "Pulsos por tempo", &[("1 ♩", 1u32), ("2 ♪", 2), ("4 ♬", 4)], e.pulse_per_beat, PAD_COLOR) {
+                e.pulse_per_beat = v;
+            }
+            ui.add_space(4.0);
+            ui.label(RichText::new(format!("Profundidade {:.0}%", e.pulse_depth * 100.0)).size(12.0).color(th().dim));
+            let r = hbar(ui, Vec2::new(w, 26.0), e.pulse_depth, false, PAD_COLOR);
+            if r.is_pointer_button_down_on() {
+                if let Some(p) = r.interact_pointer_pos() {
+                    e.pulse_depth = ((p.x - r.rect.left()) / r.rect.width()).clamp(0.0, 1.0);
+                }
+            }
+        });
+
+        // ---- Arpejador ----
+        fx_card(ui, Vec2::new(arp_w, top_h), "🎼 Arpejador", ARP_COLOR, |ui| {
+            let w = ui.available_width();
+            if fx_toggle(ui, core, w, core.arp_on, "ARPEJADOR", ARP_COLOR, Target::ArpToggle) {
+                core.toggle_arp();
+            }
+            ui.label(
+                RichText::new("Segure o acorde: a camada escolhida toca as notas uma a uma; as outras tocam normal.")
+                    .size(12.0)
+                    .color(th().dim),
+            );
+            let names: Vec<String> = (0..LAYERS)
+                .map(|i| {
+                    let p = core.cfg.mix.layers[i].preset.as_ref().map(|p| p.name.as_str()).unwrap_or("—");
+                    let short: String = p.chars().take(10).collect();
+                    format!("{} {}", i + 1, short)
+                })
+                .collect();
+            let opts: Vec<(&str, usize)> = names.iter().enumerate().map(|(i, n)| (n.as_str(), i)).collect();
+            if let Some(v) = fx_choice(ui, "Camada que arpeja", &opts, e.arp_layer, ARP_COLOR) {
+                e.arp_layer = v;
+            }
+            let pats: Vec<(&str, u8)> = crate::efeitos::ARP_PATTERNS.iter().enumerate().map(|(i, n)| (*n, i as u8)).collect();
+            if let Some(v) = fx_choice(ui, "Padrão", &pats, e.arp_pattern, ARP_COLOR) {
+                e.arp_pattern = v;
+            }
+            ui.horizontal_top(|ui| {
+                ui.vertical(|ui| {
+                    if let Some(v) = fx_choice(ui, "Velocidade", &[("♪ colcheia", 2u32), ("tercina", 3), ("♬ semicolch.", 4)], e.arp_per_beat, ARP_COLOR) {
+                        e.arp_per_beat = v;
+                    }
+                });
+                ui.add_space(8.0);
+                ui.vertical(|ui| {
+                    if let Some(v) = fx_choice(ui, "Oitavas", &[("1", 1u8), ("2", 2), ("3", 3)], e.arp_octaves, ARP_COLOR) {
+                        e.arp_octaves = v;
+                    }
+                });
+            });
+            ui.checkbox(&mut e.arp_latch, "Segurar (continua depois de soltar as teclas)");
+        });
+
+        // ---- Voice FX ----
+        fx_card(ui, Vec2::new(voice_w, top_h), "🎤 Voice FX", VOICE_COLOR, |ui| {
+            let w = ui.available_width();
+            if fx_toggle(ui, core, w, core.voicefx_on, "VOZES", VOICE_COLOR, Target::VoiceFxToggle) {
+                core.toggle_voicefx();
+            }
+            ui.label(RichText::new("Um coral (\"aah\") acompanha cada nota que você tocar.").size(12.0).color(th().dim));
+            ui.add_space(4.0);
+            ui.label(RichText::new(format!("Volume {:.0}%", e.voicefx_volume * 100.0)).size(12.0).color(th().dim));
+            let r = hbar(ui, Vec2::new(w, 26.0), e.voicefx_volume, false, VOICE_COLOR);
+            if !learnable(ui, core, &r, Target::VoiceFxVolume) && r.is_pointer_button_down_on() {
+                if let Some(p) = r.interact_pointer_pos() {
+                    e.voicefx_volume = ((p.x - r.rect.left()) / r.rect.width()).clamp(0.0, 1.0);
+                }
+            }
+            ui.add_space(4.0);
+            if let Some(v) = fx_choice(ui, "Oitava do coral", &[("−1 grave", -1i8), ("normal", 0), ("+1 agudo", 1)], e.voicefx_octave, VOICE_COLOR) {
+                e.voicefx_octave = v;
+            }
+        });
+    });
+
+    ui.add_space(gap);
+    // ---- DrumPads ----
+    fx_card(ui, Vec2::new(avail.x, drum_h), "🥁 DrumPads", DRUM_COLOR, |ui| {
+        let w = ui.available_width();
+        let vol_w = 170.0;
+        let n = crate::efeitos::DRUMS as f32;
+        let pad = ((w - vol_w - 12.0 - (n - 1.0) * 8.0) / n).min(ui.available_height() - 4.0).max(60.0);
+        let now = Instant::now();
+        let mut flashing = false;
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            for i in 0..crate::efeitos::DRUMS {
+                let lit = core.drum_flash[i].is_some_and(|t| now.duration_since(t) < Duration::from_millis(160));
+                flashing |= lit;
+                let (rect, resp) = ui.allocate_exact_size(Vec2::splat(pad), Sense::click());
+                let p = ui.painter();
+                p.rect_filled(rect, 14, if lit { DRUM_COLOR } else { th().glass_hi });
+                p.rect_stroke(rect, 14, Stroke::new(1.5, DRUM_COLOR.gamma_multiply(0.6)), StrokeKind::Inside);
+                p.text(
+                    rect.center() - Vec2::new(0.0, 8.0),
+                    Align2::CENTER_CENTER,
+                    crate::efeitos::DRUM_NAMES[i],
+                    FontId::proportional(16.0),
+                    if lit { th().ink } else { th().text },
+                );
+                p.text(
+                    rect.center() + Vec2::new(0.0, 14.0),
+                    Align2::CENTER_CENTER,
+                    format!("{}", i + 1),
+                    FontId::proportional(12.0),
+                    if lit { th().ink } else { th().dim },
+                );
+                if !learnable(ui, core, &resp, Target::Drum(i)) && resp.clicked() {
+                    core.drum_hit(i, 110);
+                }
+            }
+            ui.vertical(|ui| {
+                ui.set_width(vol_w);
+                ui.label(RichText::new(format!("Volume {:.0}%", e.drum_volume * 100.0)).size(12.0).color(th().dim));
+                let r = hbar(ui, Vec2::new(vol_w, 26.0), e.drum_volume, false, DRUM_COLOR);
+                if !learnable(ui, core, &r, Target::DrumVolume) && r.is_pointer_button_down_on() {
+                    if let Some(p) = r.interact_pointer_pos() {
+                        e.drum_volume = ((p.x - r.rect.left()) / r.rect.width()).clamp(0.0, 1.0);
+                    }
+                }
+                ui.add_space(6.0);
+                ui.label(
+                    RichText::new("Dica: Aprender → clique num pad → aperte uma tecla do AMW ou um botão da mesinha. A força do dedo vale.")
+                        .size(11.0)
+                        .color(th().dim),
+                );
+            });
+        });
+        if flashing {
+            ui.ctx().request_repaint_after(Duration::from_millis(40));
+        }
+    });
+
+    core.set_efeitos(e);
 }
 
 // ---------- Pads ----------

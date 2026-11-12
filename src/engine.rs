@@ -10,6 +10,7 @@ use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
 use rustysynth::{SoundFont, Synthesizer, SynthesizerSettings};
 
+use crate::efeitos::{self, Arp, ArpParams, DrumKit, Drums, PulseParams, VoiceFx};
 use crate::freeze::FreezeVoice;
 use crate::granular::{ChurchReverb, GrainParams, GranularVoice};
 use crate::model::LAYERS;
@@ -72,6 +73,26 @@ pub enum Cmd {
     FreezePlay(Box<FreezeVoice>),
     /// v0.16: desliga o congelado (some em `segundos`).
     FreezeStop(f32),
+    /// v0.17: andamento (BPM) do PulsePad e do Arpejador.
+    Tempo(f32),
+    /// v0.17: "bater o tempo": o pulso e o arpejo recomeçam agora (ficam no tempo da batida).
+    TempoSync,
+    Pulse(PulseParams),
+    Arp(ArpParams),
+    /// v0.17: os sons dos DrumPads (gerados fora daqui).
+    DrumKit(Arc<DrumKit>),
+    Drum {
+        pad: usize,
+        vel: u8,
+    },
+    DrumVolume(f32),
+    /// v0.17: textura do coral do Voice FX.
+    VoiceFxSource(Arc<crate::granular::GrainSource>),
+    VoiceFx {
+        on: bool,
+        level: f32,
+        octave: i8,
+    },
     Panic,
     /// Novo sintetizador (SF2 novo ou taxa de amostragem nova).
     Replace(Box<Synthesizer>),
@@ -139,6 +160,21 @@ pub struct Engine {
     /// v0.16: sons congelados (o último é o atual; os outros estão sumindo).
     #[allow(clippy::vec_box)]
     freezes: Vec<Box<FreezeVoice>>,
+    // v0.17: efeitos
+    /// Relógio (amostras desde que o motor começou).
+    clock: u64,
+    bpm: f32,
+    pulse: PulseParams,
+    /// Onde o pulso começou a contar (bater o tempo recomeça aqui).
+    pulse_origin: u64,
+    arp: Arp,
+    /// Quando toca a próxima nota do arpejo (no relógio).
+    arp_next: f64,
+    drums: Drums,
+    drum_vol: f32,
+    voicefx: VoiceFx,
+    fz_l: Vec<f32>,
+    fz_r: Vec<f32>,
     reverb: ChurchReverb,
     church_pads: f32,
     church_sf2: f32,
@@ -177,6 +213,17 @@ impl Engine {
             grains: Vec::with_capacity(MAX_PADS + 1),
             grain_params: GrainParams::default(),
             freezes: Vec::with_capacity(MAX_FREEZE + 1),
+            clock: 0,
+            bpm: 75.0,
+            pulse: PulseParams::default(),
+            pulse_origin: 0,
+            arp: Arp::default(),
+            arp_next: 0.0,
+            drums: Drums::default(),
+            drum_vol: 0.8,
+            voicefx: VoiceFx::new(),
+            fz_l: vec![0.0; 8192],
+            fz_r: vec![0.0; 8192],
             reverb: ChurchReverb::new(48_000),
             church_pads: 0.4,
             church_sf2: 0.0,
@@ -284,24 +331,90 @@ impl Engine {
                 // Se a mesma tecla ainda estava presa (sem note off), solta antes.
                 if let Some(prev) = self.held[key as usize].take() {
                     self.note_off_all_layers(prev);
+                    self.arp.key_up(prev);
+                    self.voicefx.note_off(prev);
                 }
                 self.held[key as usize] = Some(k);
+                // v0.17: a camada do arpejador não toca o acorde direto (ela arpeja).
+                let arp_layer = self.arp.p.on.then_some(self.arp.p.layer);
                 if let Some(s) = self.synth.as_mut() {
                     for i in 0..LAYERS {
-                        if self.audible[i] && self.presets[i].is_some() {
+                        if self.audible[i] && self.presets[i].is_some() && Some(i) != arp_layer {
                             s.note_on(i as i32, k as i32, vel as i32);
                         }
                     }
+                }
+                if self.arp.p.on {
+                    let was_empty = self.arp.is_empty() || self.arp.playing.is_none();
+                    self.arp.key_down(k, vel);
+                    if was_empty {
+                        // primeiro dedo: o arpejo começa na hora
+                        self.arp_next = self.clock as f64;
+                    }
+                }
+                if self.voicefx.on {
+                    let sr = self.sample_rate;
+                    self.voicefx.note_on(k, vel, sr);
                 }
             }
             Cmd::NoteOff { key } => {
                 let k = self.held[key as usize].take().unwrap_or(key);
                 self.note_off_all_layers(k);
+                self.arp.key_up(k);
+                if self.arp.is_empty() {
+                    self.arp_silence();
+                }
+                self.voicefx.note_off(k);
+            }
+            Cmd::Tempo(bpm) => self.bpm = bpm.clamp(efeitos::BPM_MIN, efeitos::BPM_MAX),
+            Cmd::TempoSync => {
+                self.pulse_origin = self.clock;
+                self.arp_next = self.clock as f64;
+            }
+            Cmd::Pulse(p) => {
+                if p.on && !self.pulse.on {
+                    self.pulse_origin = self.clock;
+                }
+                self.pulse = p;
+            }
+            Cmd::Arp(p) => {
+                let changed_layer = p.layer != self.arp.p.layer;
+                if !p.on || changed_layer {
+                    self.arp_silence();
+                }
+                if self.arp.p.latch && !p.latch {
+                    self.arp.drop_latched();
+                }
+                let turned_on = p.on && !self.arp.p.on;
+                self.arp.p = p;
+                if turned_on {
+                    // começa com as teclas que já estão seguradas
+                    self.arp.clear();
+                    for h in self.held.iter().flatten() {
+                        self.arp.key_down(*h, 96);
+                    }
+                    self.arp_next = self.clock as f64;
+                }
+            }
+            Cmd::DrumKit(kit) => self.drums.kit = Some(kit),
+            Cmd::Drum { pad, vel } => self.drums.hit(pad, vel),
+            Cmd::DrumVolume(v) => self.drum_vol = v.clamp(0.0, 1.0),
+            Cmd::VoiceFxSource(src) => self.voicefx.src = Some(src),
+            Cmd::VoiceFx { on, level, octave } => {
+                if !on && self.voicefx.on {
+                    self.voicefx.all_off();
+                }
+                self.voicefx.on = on;
+                self.voicefx.level = level.clamp(0.0, 1.0);
+                self.voicefx.octave = octave.clamp(-2, 2);
             }
             Cmd::Cc { num, val } => {
                 // Volume/expressão/reverb do piano não mexem na mistura: quem manda é a mesa.
                 if matches!(num, 0x00 | 0x07 | 0x0B | 0x20 | 0x27 | 0x2B | 0x5B | 0x5D) {
                     return;
+                }
+                if num == 64 {
+                    self.voicefx.set_sustain(val >= 64);
                 }
                 if let Some(s) = self.synth.as_mut() {
                     for i in 0..LAYERS {
@@ -418,11 +531,16 @@ impl Engine {
             Cmd::PadVolume(v) => self.pad_vol = v.clamp(0.0, 1.0).powi(2),
             Cmd::SetTranspose(t) => self.transpose = t.clamp(-24, 24),
             Cmd::Panic => {
-                // pânico também cala o congelado (rápido, sem estalo)
+                // pânico também cala o congelado (rápido, sem estalo), o arpejo, o coral e as batidas
                 let sr = self.sample_rate;
                 for f in &mut self.freezes {
                     f.fade_out(sr, 0.3);
                 }
+                self.arp_silence();
+                self.arp.clear();
+                self.voicefx.set_sustain(false);
+                self.voicefx.all_off();
+                self.drums.stop();
                 if let Some(s) = self.synth.as_mut() {
                     s.note_off_all(true);
                     for i in 0..LAYERS {
@@ -438,9 +556,50 @@ impl Engine {
     }
 
     fn note_off_all_layers(&mut self, key: u8) {
+        // a camada do arpejador é dele: soltar a tecla não pode cortar a nota do arpejo
+        let arp_layer = self.arp.p.on.then_some(self.arp.p.layer);
         if let Some(s) = self.synth.as_mut() {
             for i in 0..LAYERS {
-                s.note_off(i as i32, key as i32);
+                if Some(i) != arp_layer {
+                    s.note_off(i as i32, key as i32);
+                }
+            }
+        }
+    }
+
+    /// Para os testes: nota do arpejo soando agora e vozes do coral.
+    #[cfg(test)]
+    pub fn test_arp_playing(&self) -> Option<u8> {
+        self.arp.playing
+    }
+
+    #[cfg(test)]
+    pub fn test_choir_voices(&self) -> usize {
+        self.voicefx.active_voices()
+    }
+
+    /// Solta a nota do arpejo que está soando.
+    fn arp_silence(&mut self) {
+        if let Some(n) = self.arp.playing.take() {
+            let layer = self.arp.p.layer.min(LAYERS - 1) as i32;
+            if let Some(s) = self.synth.as_mut() {
+                s.note_off(layer, n as i32);
+            }
+        }
+    }
+
+    /// Próxima nota do arpejo (chamado no tempo certo pelo `render_interleaved`).
+    fn arp_tick(&mut self) {
+        self.arp_silence();
+        let layer = self.arp.p.layer.min(LAYERS - 1);
+        if !(self.audible[layer] && self.presets[layer].is_some()) {
+            return;
+        }
+        if let Some(n) = self.arp.next_note() {
+            let vel = self.arp.vel as i32;
+            if let Some(s) = self.synth.as_mut() {
+                s.note_on(layer as i32, n as i32, vel);
+                self.arp.playing = Some(n);
             }
         }
     }
@@ -458,7 +617,28 @@ impl Engine {
         let mut done = 0;
         let sr = self.sample_rate;
         while done < frames {
-            let n = (frames - done).min(self.left.len());
+            let mut n = (frames - done).min(self.left.len());
+            // v0.17: arpejo no tempo certo (o bloco é cortado exatamente na hora da próxima nota).
+            if self.arp.p.on {
+                let step = efeitos::step_samples(self.bpm, self.arp.p.per_beat, sr);
+                while self.clock as f64 >= self.arp_next {
+                    self.arp_tick();
+                    self.arp_next += step;
+                    if self.arp_next < self.clock as f64 {
+                        self.arp_next = self.clock as f64 + step; // ficou para trás (mudou o tempo): segue daqui
+                    }
+                }
+                let until = (self.arp_next - self.clock as f64).ceil().max(1.0) as usize;
+                n = n.min(until);
+            }
+            // Ganho do PulsePad para a amostra `f` deste bloco.
+            let (pulse_on, pulse_depth) = (self.pulse.on, self.pulse.depth);
+            let pulse_step = efeitos::step_samples(self.bpm, self.pulse.per_beat, sr);
+            let pulse_t0 = self.clock.wrapping_sub(self.pulse_origin) as f64;
+            let pulse_at = |f: usize| -> f32 {
+                let ph = ((pulse_t0 + f as f64) / pulse_step).fract() as f32;
+                efeitos::pulse_gain(ph, pulse_depth)
+            };
             let (l, r) = (&mut self.left[..n], &mut self.right[..n]);
             match self.synth.as_mut() {
                 Some(synth) => synth.render(l, r),
@@ -467,11 +647,27 @@ impl Engine {
                     r.fill(0.0);
                 }
             }
+            // v0.17: coral do Voice FX junto das camadas (o Congelar também pega ele).
+            if self.voicefx.active_voices() > 0 {
+                let g = self.voicefx.level * self.master;
+                self.voicefx.mix(l, r, sr, g);
+            }
             // v0.16: guarda o som das camadas (para o Congelar) e soma o congelado.
             // Ele entra aqui, junto das camadas, para ganhar o mesmo reverb de igreja delas.
             crate::freeze::ring().push(l, r);
-            for fz in &mut self.freezes {
-                fz.mix(l, r, sr);
+            if !self.freezes.is_empty() {
+                let (fl, fr) = (&mut self.fz_l[..n], &mut self.fz_r[..n]);
+                fl.fill(0.0);
+                fr.fill(0.0);
+                for fz in &mut self.freezes {
+                    fz.mix(fl, fr, sr);
+                }
+                for f in 0..n {
+                    // v0.17: o congelado também pulsa no PulsePad
+                    let g = if pulse_on { pulse_at(f) } else { 1.0 };
+                    l[f] += fl[f] * g;
+                    r[f] += fr[f] * g;
+                }
             }
             // Pads (loop e Vivo) num "barramento" próprio; depois vão para a saída e para o reverb de igreja.
             let has_pads = !self.pads.is_empty() || !self.grains.is_empty();
@@ -490,6 +686,14 @@ impl Engine {
                 for g in &mut self.grains {
                     g.mix(pl, pr, &gp, sr);
                 }
+                if pulse_on && has_pads {
+                    // v0.17: PulsePad — o pad pulsa no tempo (antes do reverb: a cauda fica lisa)
+                    for f in 0..n {
+                        let g = pulse_at(f);
+                        pl[f] *= g;
+                        pr[f] *= g;
+                    }
+                }
                 if church {
                     let (rl, rr) = (&mut self.rev_l[..n], &mut self.rev_r[..n]);
                     let (sp, ss) = (self.church_pads * gain, self.church_sf2);
@@ -507,6 +711,9 @@ impl Engine {
                         .process(&self.rev_l[..n], &self.rev_r[..n], l, r, 1.0);
                 }
             }
+            // v0.17: DrumPads por último, secos (não entram no Congelar nem no pulso).
+            self.drums.mix(l, r, self.drum_vol * self.master);
+            self.clock += n as u64;
             for f in 0..n {
                 let a = soft_clip(l[f]);
                 let b = soft_clip(r[f]);

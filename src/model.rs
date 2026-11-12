@@ -123,6 +123,14 @@ pub enum Target {
     Modulation,
     /// v0.16: Congelar — liga: o som que está tocando fica soando sozinho; desliga: some devagar.
     Freeze,
+    /// v0.17 (aba Efeitos): bater o tempo, ligar PulsePad / Arpejador / Voice FX, DrumPad 0..7 e volumes.
+    TapTempo,
+    PulseToggle,
+    ArpToggle,
+    VoiceFxToggle,
+    Drum(usize),
+    DrumVolume,
+    VoiceFxVolume,
 }
 
 impl Target {
@@ -137,6 +145,8 @@ impl Target {
                 | Target::PadKnob
                 | Target::Pitch
                 | Target::Modulation
+                | Target::DrumVolume
+                | Target::VoiceFxVolume
         )
     }
 
@@ -174,6 +184,16 @@ impl Target {
             Target::PitchDown => "Pitch ▼ (segurar desce)".into(),
             Target::Modulation => "Modulation (vibrato)".into(),
             Target::Freeze => "Congelar o som (liga/desliga)".into(),
+            Target::TapTempo => "Bater o tempo (TAP)".into(),
+            Target::PulseToggle => "PulsePad (liga/desliga)".into(),
+            Target::ArpToggle => "Arpejador (liga/desliga)".into(),
+            Target::VoiceFxToggle => "Voice FX (liga/desliga)".into(),
+            Target::Drum(i) => format!(
+                "DrumPad {}",
+                crate::efeitos::DRUM_NAMES[i % crate::efeitos::DRUMS]
+            ),
+            Target::DrumVolume => "Volume dos DrumPads".into(),
+            Target::VoiceFxVolume => "Volume do Voice FX".into(),
         }
     }
 }
@@ -391,6 +411,8 @@ pub struct Config {
     pub piano_mappings: Vec<Mapping>,
     /// v0.15: quantos semitons o pitch bend sobe/desce no máximo (1..12, padrão 2).
     pub pitch_range: u8,
+    /// v0.17: ajustes da aba Efeitos (tempo, PulsePad, Arpejador, DrumPads, Voice FX).
+    pub efeitos: Efeitos,
     /// Ajuste manual da função de cada porta (nome → função).
     pub port_roles: Vec<(String, PortRole)>,
     pub audio_device: Option<String>,
@@ -490,6 +512,68 @@ impl Default for VivoCfg {
     }
 }
 
+/// v0.17: ajustes da aba Efeitos. O que está ligado (PulsePad, Arpejador, Voice FX) não fica salvo:
+/// o programa sempre abre com tudo desligado (mais seguro no culto).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Efeitos {
+    pub bpm: f32,
+    /// PulsePad: pulsos por tempo (1, 2 ou 4) e o quanto cai entre eles (0..1).
+    pub pulse_per_beat: u32,
+    pub pulse_depth: f32,
+    /// Arpejador: camada (0..5), padrão (0 sobe, 1 desce, 2 sobe e desce, 3 aleatório),
+    /// notas por tempo (2, 3 ou 4), oitavas (1..3) e "segurar".
+    pub arp_layer: usize,
+    pub arp_pattern: u8,
+    pub arp_per_beat: u32,
+    pub arp_octaves: u8,
+    pub arp_latch: bool,
+    pub drum_volume: f32,
+    pub voicefx_volume: f32,
+    /// Voice FX: oitava do coral (−1, 0, +1).
+    pub voicefx_octave: i8,
+}
+
+impl Default for Efeitos {
+    fn default() -> Self {
+        Self {
+            bpm: 75.0,
+            pulse_per_beat: 2,
+            pulse_depth: 0.85,
+            arp_layer: 1,
+            arp_pattern: 0,
+            arp_per_beat: 2,
+            arp_octaves: 2,
+            arp_latch: false,
+            drum_volume: 0.8,
+            voicefx_volume: 0.6,
+            voicefx_octave: 0,
+        }
+    }
+}
+
+impl Efeitos {
+    pub fn normalize(&mut self) {
+        self.bpm = self
+            .bpm
+            .clamp(crate::efeitos::BPM_MIN, crate::efeitos::BPM_MAX)
+            .round();
+        if !matches!(self.pulse_per_beat, 1 | 2 | 4) {
+            self.pulse_per_beat = 2;
+        }
+        self.pulse_depth = self.pulse_depth.clamp(0.0, 1.0);
+        self.arp_layer = self.arp_layer.min(LAYERS - 1);
+        self.arp_pattern = self.arp_pattern.min(3);
+        if !matches!(self.arp_per_beat, 2..=4) {
+            self.arp_per_beat = 2;
+        }
+        self.arp_octaves = self.arp_octaves.clamp(1, 3);
+        self.drum_volume = self.drum_volume.clamp(0.0, 1.0);
+        self.voicefx_volume = self.voicefx_volume.clamp(0.0, 1.0);
+        self.voicefx_octave = self.voicefx_octave.clamp(-1, 1);
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MyPad {
     pub name: String,
@@ -518,6 +602,7 @@ impl Default for Config {
             mappings: smc_default_mappings(),
             piano_mappings: Vec::new(),
             pitch_range: 2,
+            efeitos: Efeitos::default(),
             port_roles: Vec::new(),
             audio_device: None,
             buffer_frames: 256,
@@ -569,6 +654,7 @@ impl Config {
         }
         self.polyphony = self.polyphony.clamp(16, 256);
         self.pitch_range = self.pitch_range.clamp(1, 12);
+        self.efeitos.normalize();
         self.pad_volume = self.pad_volume.clamp(0.0, 1.0);
         self.pad_bank %= crate::pads::ALL_BANKS;
         if !self.pads_v13 {
@@ -611,7 +697,7 @@ impl Config {
             *v = v.clamp(0.0, 1.0);
         }
         self.vivo.files.retain(|(n, _, _)| *n < 3);
-        self.tab = self.tab.min(1);
+        self.tab = self.tab.min(2);
         self.look.frost = self.look.frost.clamp(0.0, 1.0);
         self.look.glow = self.look.glow.clamp(0.0, 1.0);
         self.look.scale = self.look.scale.clamp(0.75, 1.5);

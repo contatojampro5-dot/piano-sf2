@@ -194,6 +194,17 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.17 — aba 🥁 Efeitos (PulsePad, Arpejador, DrumPads, Voice FX)
+- **Tempo** único (BPM com − / + ou **TAP**: bata 2 a 4 vezes no tempo da música). PulsePad e Arpejador andam juntos.
+- **PulsePad**: os pads e o ❄ congelado pulsam no tempo (1, 2 ou 4 pulsos por tempo, profundidade ajustável).
+- **Arpejador**: segure o acorde e a camada escolhida toca as notas uma a uma (sobe, desce, sobe e desce, aleatório;
+  colcheia, tercina ou semicolcheia; 1 a 3 oitavas; **Segurar** continua depois de soltar). As outras camadas tocam normal.
+- **DrumPads**: 8 sons (bumbo, caixa, palmas, chimbal, prato, 808, subida, impacto) feitos pelo próprio programa
+  (sem direito autoral). Numa tecla do AMW ou botão da mesinha (Aprender), a força do dedo vale.
+- **Voice FX**: um coral ("aah", da textura Coro do Pad Vivo) acompanha cada nota; volume e oitava ajustáveis; respeita o pedal.
+- Tudo dá para ligar na mesinha/teclado com **Aprender**. Pânico para arpejo, coral e batidas.
+  Abre sempre com os efeitos desligados. Tudo junto usa ~2% do processador do notebook.
+
 ### v0.16 — ❄ Congelar
 - Botão **❄ CONGELAR** na coluna GERAL: toque um acorde (ex.: Sol) e aperte. Aquele som fica soando **sozinho**, como um pad,
   enquanto você troca os timbres, as cenas e toca por cima. Aperte de novo (**❄ CONGELADO**): ele some devagar (3 s).

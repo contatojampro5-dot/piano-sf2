@@ -7,7 +7,7 @@ use rustysynth::SoundFont;
 
 use crate::core::Core;
 use crate::engine::{Cmd, Engine, Stats};
-use crate::model::Config;
+use crate::model::{Config, Target};
 
 fn chunk(id: &[u8; 4], data: &[u8]) -> Vec<u8> {
     let mut v = id.to_vec();
@@ -806,6 +806,251 @@ fn freeze_real_sf2_preview() {
     assert!(avg > now * 0.6 && avg < now * 1.6, "mesmo volume do que se ouvia");
     assert!(rms(&tail[tail.len() - 4800..]) < 1e-4, "sumiu no fim");
     if let Ok(out) = std::env::var("PIANO_FREEZE_WAV") {
+        let mut b: Vec<u8> = Vec::new();
+        let data_len = (wav.len() * 2) as u32;
+        b.extend(b"RIFF");
+        b.extend((36 + data_len).to_le_bytes());
+        b.extend(b"WAVEfmt ");
+        b.extend(16u32.to_le_bytes());
+        b.extend(1u16.to_le_bytes());
+        b.extend(2u16.to_le_bytes());
+        b.extend(48_000u32.to_le_bytes());
+        b.extend((48_000u32 * 4).to_le_bytes());
+        b.extend(4u16.to_le_bytes());
+        b.extend(16u16.to_le_bytes());
+        b.extend(b"data");
+        b.extend(data_len.to_le_bytes());
+        for s in &wav {
+            b.extend(((s.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+        }
+        std::fs::write(out, b).unwrap();
+    }
+}
+
+// ---------- v0.17: aba Efeitos ----------
+
+#[test]
+fn arpeggiator_plays_chord_notes_on_the_beat() {
+    let mut r = rig();
+    r.core.cfg.efeitos.arp_layer = 0;
+    r.core.cfg.efeitos.arp_octaves = 2;
+    r.core.cfg.efeitos.arp_per_beat = 2;
+    r.core.set_bpm(120.0); // colcheia a 120 = 0,25 s = 12000 amostras
+    r.core.toggle_arp();
+    r.render(64);
+    for k in [60u8, 64, 67] {
+        r.core.handle_piano(&[0x90, k, 100]);
+    }
+    let mut seq = Vec::new();
+    // logo depois de cada passo (o passo começa quando a 1ª tecla entrou)
+    r.render(16);
+    seq.push(r.engine.test_arp_playing());
+    for _ in 0..5 {
+        r.render(12_000);
+        seq.push(r.engine.test_arp_playing());
+    }
+    assert_eq!(
+        seq,
+        vec![Some(60), Some(64), Some(67), Some(72), Some(76), Some(79)],
+        "sobe pelo acorde e pela oitava de cima, uma nota por colcheia"
+    );
+    // soltou (sem "segurar"): o arpejo para
+    for k in [60u8, 64, 67] {
+        r.core.handle_piano(&[0x80, k, 0]);
+    }
+    r.render(12_000);
+    assert_eq!(r.engine.test_arp_playing(), None);
+}
+
+#[test]
+fn arpeggiator_latch_keeps_going_after_release() {
+    let mut r = rig();
+    r.core.cfg.efeitos.arp_layer = 0;
+    r.core.cfg.efeitos.arp_octaves = 1;
+    r.core.cfg.efeitos.arp_latch = true;
+    r.core.set_bpm(120.0);
+    r.core.toggle_arp();
+    r.render(64);
+    r.core.handle_piano(&[0x90, 60, 100]);
+    r.core.handle_piano(&[0x90, 67, 100]);
+    r.core.handle_piano(&[0x80, 60, 0]);
+    r.core.handle_piano(&[0x80, 67, 0]);
+    r.render(16);
+    let a = r.engine.test_arp_playing();
+    r.render(12_000);
+    let b = r.engine.test_arp_playing();
+    assert_eq!((a, b), (Some(60), Some(67)), "segurou o acorde");
+    r.core.panic();
+    r.render(12_100);
+    assert_eq!(r.engine.test_arp_playing(), None, "pânico para o arpejo");
+}
+
+#[test]
+fn pulse_makes_the_frozen_sound_breathe_in_time() {
+    let mut r = rig();
+    r.render(64);
+    r.core.handle_piano(&[0x90, 60, 100]);
+    r.render(48_000);
+    r.core.freeze_capture();
+    assert!(r.core.freeze_on);
+    r.core.handle_piano(&[0x80, 60, 0]);
+    r.core.set_bpm(60.0); // 1 pulso por tempo a 60 = 1 s
+    r.core.cfg.efeitos.pulse_per_beat = 1;
+    r.core.cfg.efeitos.pulse_depth = 1.0;
+    r.core.toggle_pulse();
+    r.render(96_000); // deixa a nota tocada sumir
+    r.core.tap_tempo(); // pulso recomeça agora
+    r.render(64);
+    let out = r.render(48_000);
+    let lvl = |a: usize, b: usize| {
+        let s = &out[a * 2..b * 2];
+        (s.iter().map(|x| x * x).sum::<f32>() / s.len() as f32).sqrt()
+    };
+    let start = lvl(2_000, 8_000); // logo depois do "tum"
+    let end = lvl(40_000, 47_000); // fim do pulso
+    assert!(start > end * 4.0, "pulsa: começo {start} > fim {end}");
+}
+
+#[test]
+fn voice_fx_choir_follows_notes_with_the_real_texture() {
+    let mut r = rig();
+    r.core.toggle_voicefx();
+    assert!(r.core.voicefx_on);
+    r.render(64);
+    r.core.handle_piano(&[0x90, 60, 100]);
+    r.core.handle_piano(&[0x90, 64, 100]);
+    let out = r.render(24_000);
+    assert_eq!(r.engine.test_choir_voices(), 2);
+    assert!(rms(&out) > 0.005);
+    r.core.handle_piano(&[0x80, 60, 0]);
+    r.core.handle_piano(&[0x80, 64, 0]);
+    r.render(60_000);
+    assert_eq!(r.engine.test_choir_voices(), 0, "soltou: o coral some");
+    r.core.toggle_voicefx();
+    r.core.handle_piano(&[0x90, 62, 100]);
+    r.render(4_800);
+    assert_eq!(r.engine.test_choir_voices(), 0, "desligado não canta");
+}
+
+#[test]
+fn drum_pads_play_from_the_screen_and_from_an_amw_key_with_velocity() {
+    let mut r = rig();
+    r.render(64);
+    r.core.panic(); // nada do SF2 tocando
+    r.render(4_800);
+    r.core.drum_hit(0, 127);
+    let hard = rms(&r.render(4_800));
+    assert!(hard > 0.05, "bumbo soou: {hard}");
+    r.render(48_000);
+    // AMW: tecla 36 aprendida como Palmas
+    r.core.learn.active = true;
+    r.core.learn.target = Some(Target::Drum(2));
+    r.core.handle_piano(&[0x90, 36, 100]);
+    r.core.learn.active = false;
+    r.render(24_000);
+    r.core.handle_piano(&[0x90, 36, 30]);
+    let soft = rms(&r.render(4_800));
+    r.render(48_000);
+    r.core.handle_piano(&[0x90, 36, 127]);
+    let loud = rms(&r.render(4_800));
+    assert!(soft > 0.001 && loud > soft * 2.0, "força do dedo: {soft} → {loud}");
+}
+
+/// v0.17: prévia de tudo da aba Efeitos com um SF2 de verdade + quanto pesa no processador.
+/// `PIANO_SF2_FREEZE=<arquivo.sf2>` e `PIANO_EFEITOS_WAV=<saida.wav>`.
+#[test]
+#[ignore]
+fn efeitos_real_sf2_preview() {
+    let Ok(path) = std::env::var("PIANO_SF2_FREEZE") else {
+        return;
+    };
+    let sf = Arc::new(SoundFont::new(&mut std::fs::File::open(&path).unwrap()).unwrap());
+    let (tx, rx) = unbounded::<Cmd>();
+    let (gtx, _grx) = unbounded();
+    let mut engine = Engine::new(rx, gtx, Arc::new(Stats::default()));
+    let mut core = Core::new(Config::default(), tx);
+    core.sample_rate = 48_000;
+    core.install_sound_font(sf, "real.sf2".into());
+    let find = |c: &Core, words: &[&str]| {
+        c.presets
+            .iter()
+            .find(|p| words.iter().any(|w| p.name.to_lowercase().contains(w)))
+            .cloned()
+            .unwrap_or_else(|| c.presets[0].clone())
+    };
+    let piano = core.presets[0].clone();
+    let bells = find(&core, &["sino", "bell", "harpa"]);
+    let pad = find(&core, &["pad", "cord", "string"]);
+    println!("piano: {}  arpejo: {}  pad: {}", piano.name, bells.name, pad.name);
+    core.set_preset(0, piano);
+    core.set_on(0, true);
+    core.set_preset(1, bells);
+    core.set_on(1, true);
+    core.cfg.efeitos.arp_layer = 1;
+    core.set_bpm(84.0);
+    core.cfg.efeitos.arp_per_beat = 4;
+    core.toggle_arp();
+
+    let mut wav: Vec<f32> = Vec::new();
+    let mut busy = std::time::Duration::ZERO;
+    let mut render = |engine: &mut Engine, secs: f32, wav: &mut Vec<f32>| {
+        let mut out = vec![0.0; (48_000.0 * secs) as usize * 2];
+        let t = std::time::Instant::now();
+        for chunk in out.chunks_mut(512) {
+            engine.render_interleaved(chunk, 2);
+        }
+        busy += t.elapsed();
+        wav.extend_from_slice(&out);
+    };
+    let chord = [43u8, 55, 59, 62];
+    // 1) Sol com piano + arpejo de sinos
+    for k in chord {
+        core.handle_piano(&[0x90, k, 95]);
+    }
+    render(&mut engine, 4.0, &mut wav);
+    // 2) congela com um pad e liga o PulsePad
+    core.set_preset(0, pad);
+    render(&mut engine, 1.0, &mut wav);
+    core.freeze_capture();
+    for k in chord {
+        core.handle_piano(&[0x80, k, 0]);
+    }
+    core.toggle_arp();
+    core.cfg.efeitos.pulse_per_beat = 2;
+    core.toggle_pulse();
+    core.tap_tempo();
+    let beat = 60.0 / 84.0;
+    // 3) bateria por cima (bumbo, palmas, chimbal) por 2 compassos
+    for b in 0..8 {
+        core.drum_hit(if b % 2 == 0 { 0 } else { 2 }, 110);
+        render(&mut engine, beat / 2.0, &mut wav);
+        core.drum_hit(3, 70);
+        render(&mut engine, beat / 2.0, &mut wav);
+    }
+    // 4) Voice FX: coral com o piano num Mi menor, congelado ainda pulsando
+    core.set_preset(0, core.presets[0].clone());
+    core.toggle_voicefx();
+    for k in [52u8, 59, 64, 67] {
+        core.handle_piano(&[0x90, k, 90]);
+    }
+    render(&mut engine, 4.0, &mut wav);
+    for k in [52u8, 59, 64, 67] {
+        core.handle_piano(&[0x80, k, 0]);
+    }
+    core.drum_hit(7, 120);
+    core.freeze_toggle();
+    render(&mut engine, 4.0, &mut wav);
+
+    let secs = wav.len() as f32 / 2.0 / 48_000.0;
+    println!(
+        "{secs:.1} s de áudio em {:.2} s ({:.1}% de um núcleo deste PC)",
+        busy.as_secs_f32(),
+        busy.as_secs_f32() / secs * 100.0
+    );
+    let peak = wav.iter().fold(0.0f32, |m, x| m.max(x.abs()));
+    println!("pico: {peak:.3}");
+    assert!(peak < 1.0);
+    if let Ok(out) = std::env::var("PIANO_EFEITOS_WAV") {
         let mut b: Vec<u8> = Vec::new();
         let data_len = (wav.len() * 2) as u32;
         b.extend(b"RIFF");

@@ -10,7 +10,9 @@
 //!    do trecho, em lugares sorteados, com janelas suaves. O volume acompanha o do acorde tocado.
 
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
+#[cfg(not(test))]
+use std::sync::OnceLock;
 
 /// Tamanho da memória (quadros, potência de 2): ~5,4 s a 48 kHz, ~2,7 s a 96 kHz.
 const RING: usize = 1 << 18;
@@ -66,11 +68,25 @@ impl CaptureRing {
     }
 }
 
+#[cfg(not(test))]
 static RING_CELL: OnceLock<CaptureRing> = OnceLock::new();
 
 /// A memória do som (criada na primeira chamada: chamar antes de o áudio começar, em `Engine::new`).
+#[cfg(not(test))]
 pub fn ring() -> &'static CaptureRing {
     RING_CELL.get_or_init(CaptureRing::new)
+}
+
+// Nos testes, cada teste (uma thread) tem a sua memória: os testes rodam juntos e um não pode
+// "ouvir" o som do outro. No programa de verdade é uma só (áudio escreve, tela lê).
+#[cfg(test)]
+thread_local! {
+    static TEST_RING: &'static CaptureRing = Box::leak(Box::new(CaptureRing::new()));
+}
+
+#[cfg(test)]
+pub fn ring() -> &'static CaptureRing {
+    TEST_RING.with(|r| *r)
 }
 
 /// Trecho congelado (estéreo).
