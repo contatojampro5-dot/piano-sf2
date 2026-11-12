@@ -194,6 +194,12 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.23.1 — aba Pads arrumada
+- Com o ⚙ aberto, os ajustes do pad ficam num **quadro só**, alinhado: Nome e "está em" numa linha, Reverb de igreja na outra,
+  e os botões (Pôr pad, ↺ pads da parceria, Tirar este pad) no fim.
+- A caixa da escala só aparece com um pad tocando; sem pad, o espaço vai para os 12 tons.
+- O fader de volume do pad não fica mais espremido.
+
 ### v0.23 — abrir e fechar o som (filtro) e swell
 - Painel **Abrir / fechar** na aba Efeitos: barra **Filtro** (esquerda = escuro, abafado, "de longe"; direita = aberto, brilhante).
   Ligue num **knob da mesinha** pelo Aprender e "abra" o som girando, como os tecladistas fazem no pré-refrão.

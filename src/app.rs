@@ -1677,100 +1677,122 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             }
         });
     });
-    if details {
-        ui.horizontal(|ui| {
-        if core.cfg.my_pads.len() < pads::MY_SLOTS
-            && ui
-                .add_sized(
-                    [210.0, 34.0],
-                    egui::Button::new(RichText::new("+ Pôr um pad meu (MP3/WAV)...").size(14.0))
-                        .fill(th().glass),
-                )
-                .on_hover_text("Um pad baixado (ex.: do YouTube) em qualquer tom: o programa descobre o tom e toca nos 12")
-                .clicked()
-        {
-            st.my_pad_dialog = true;
-        }
-        if core.cfg.my_pads.len() < pads::MY_SLOTS {
-            for (n, pp) in pads::PARTNER_PADS.iter().enumerate() {
-                let path = pads::partner_path(n);
-                if !core.cfg.my_pads.iter().any(|m| m.path == path)
-                    && ui
-                        .small_button(format!("↺ {}", pp.name))
-                        .on_hover_text("Pôr de volta este pad da parceria")
-                        .clicked()
-                {
-                    core.restore_partner_pad(n);
-                }
-            }
-        }
-        });
-    }
-    if let Some(i) = pads::my_slot(core.cfg.pad_bank).filter(|i| details && *i < core.cfg.my_pads.len()) {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Nome:").color(th().dim));
-            let mut name = core.cfg.my_pads[i].name.clone();
-            if ui
-                .add(
-                    egui::TextEdit::singleline(&mut name)
-                        .desired_width(220.0)
-                        .char_limit(28),
-                )
-                .changed()
-            {
-                core.rename_my_pad(i, &name);
-            }
-            ui.add_space(8.0);
-            ui.label(RichText::new("O som está em:").color(th().dim));
-            let mut key = core.cfg.my_pads[i].key;
-            egui::ComboBox::from_id_salt("my_pad_key")
-                .width(60.0)
-                .selected_text(pads::KEY_NAMES[key])
-                .show_ui(ui, |ui| {
-                    for k in 0..pads::PAD_KEYS {
-                        ui.selectable_value(&mut key, k, pads::KEY_NAMES[k]);
-                    }
-                });
-            core.set_my_pad_key(i, key);
-            let credit = core.cfg.my_pads[i]
-                .path
-                .strip_prefix("embutido:")
-                .and_then(|n| n.parse::<usize>().ok())
-                .and_then(|n| pads::PARTNER_PADS.get(n))
-                .map(|p| format!("pad de {} (parceria)", p.credit))
-                .or_else(|| {
-                    core.cfg.my_pads[i]
-                        .path
-                        .starts_with("livre:")
-                        .then(|| format!("pad do programa · sons {}", pads::FREE_CREDIT))
-                });
-            ui.label(
-                RichText::new(credit.unwrap_or_else(|| {
-                    "(o programa descobriu pelo som; corrija se precisar)".into()
-                }))
-                .size(12.0)
-                .color(th().dim),
-            );
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui
-                    .small_button("Tirar este pad")
-                    .on_hover_text("Tira da lista (o arquivo continua no seu computador)")
-                    .clicked()
-                {
-                    core.remove_my_pad(i);
-                }
-            });
-        });
-    }
     // Ajustes ao vivo
     let mut v = core.cfg.vivo.clone();
     let vivo = pads::is_vivo(core.cfg.pad_bank);
-    if details || vivo {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().slider_width = 120.0;
-        ui.label(RichText::new("Reverb de igreja").color(th().dim));
-        ui.add(egui::Slider::new(&mut v.church_pads, 0.0..=1.0).show_value(false));
-        if vivo {
+    let cur_slot = pads::my_slot(core.cfg.pad_bank).filter(|i| *i < core.cfg.my_pads.len());
+    if details {
+        // v0.23.1: todos os ajustes do pad num quadro só, alinhados (antes eram fileiras soltas)
+        ui.add_space(4.0);
+        egui::Frame::new()
+            .fill(th().glass)
+            .corner_radius(14)
+            .inner_margin(egui::Margin::symmetric(14, 10))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                egui::Grid::new("pad_ajustes")
+                    .num_columns(2)
+                    .spacing([14.0, 10.0])
+                    .show(ui, |ui| {
+                        if let Some(i) = cur_slot {
+                            ui.label(RichText::new("Nome").color(th().dim));
+                            ui.horizontal(|ui| {
+                                let mut name = core.cfg.my_pads[i].name.clone();
+                                if ui
+                                    .add(egui::TextEdit::singleline(&mut name).desired_width(170.0).char_limit(28))
+                                    .changed()
+                                {
+                                    core.rename_my_pad(i, &name);
+                                }
+                                ui.add_space(12.0);
+                                ui.label(RichText::new("está em").color(th().dim));
+                                let mut key = core.cfg.my_pads[i].key;
+                                egui::ComboBox::from_id_salt("my_pad_key")
+                                    .width(56.0)
+                                    .selected_text(pads::KEY_NAMES[key])
+                                    .show_ui(ui, |ui| {
+                                        for k in 0..pads::PAD_KEYS {
+                                            ui.selectable_value(&mut key, k, pads::KEY_NAMES[k]);
+                                        }
+                                    });
+                                core.set_my_pad_key(i, key);
+                                let path = core.cfg.my_pads[i].path.clone();
+                                let credit = path
+                                    .strip_prefix("embutido:")
+                                    .and_then(|n| n.parse::<usize>().ok())
+                                    .and_then(|n| pads::PARTNER_PADS.get(n))
+                                    .map(|p| format!("pad de {} (parceria)", p.credit))
+                                    .or_else(|| {
+                                        path.starts_with("livre:")
+                                            .then(|| format!("sons {}", pads::FREE_CREDIT))
+                                    })
+                                    .unwrap_or_else(|| "o programa descobriu o tom pelo som".into());
+                                ui.add_space(12.0);
+                                ui.label(RichText::new(credit).size(12.0).color(th().dim));
+                            });
+                            ui.end_row();
+                        }
+                        ui.label(RichText::new("Reverb de igreja").color(th().dim));
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().slider_width = 200.0;
+                            ui.add(egui::Slider::new(&mut v.church_pads, 0.0..=1.0).show_value(false));
+                            ui.label(RichText::new(format!("{:.0}%", v.church_pads * 100.0)).size(12.0).color(th().dim));
+                            if vivo {
+                                ui.spacing_mut().slider_width = 110.0;
+                                ui.add_space(12.0);
+                                ui.label(RichText::new("Brilho").color(th().dim));
+                                ui.add(egui::Slider::new(&mut v.bright, 0.0..=1.0).show_value(false));
+                                ui.label(RichText::new("Shimmer").color(th().dim));
+                                ui.add(egui::Slider::new(&mut v.shimmer, 0.0..=1.0).show_value(false));
+                                ui.label(RichText::new("Movimento").color(th().dim));
+                                ui.add(egui::Slider::new(&mut v.motion, 0.0..=1.0).show_value(false));
+                            }
+                        });
+                        ui.end_row();
+                        ui.label("");
+                        ui.horizontal(|ui| {
+                            if core.cfg.my_pads.len() < pads::MY_SLOTS
+                                && ui
+                                    .button("+ Pôr um pad meu (MP3/WAV)...")
+                                    .on_hover_text("Um pad baixado (ex.: do YouTube) em qualquer tom: o programa descobre o tom e toca nos 12")
+                                    .clicked()
+                            {
+                                st.my_pad_dialog = true;
+                            }
+                            if core.cfg.my_pads.len() < pads::MY_SLOTS {
+                                for (n, pp) in pads::PARTNER_PADS.iter().enumerate() {
+                                    let path = pads::partner_path(n);
+                                    let name = pads::planet_name(&path).map(|(x, _)| x).unwrap_or(pp.name);
+                                    if !core.cfg.my_pads.iter().any(|m| m.path == path)
+                                        && ui
+                                            .button(format!("↺ {name}"))
+                                            .on_hover_text("Pôr de volta este pad da parceria")
+                                            .clicked()
+                                    {
+                                        core.restore_partner_pad(n);
+                                    }
+                                }
+                            }
+                            if let Some(i) = cur_slot {
+                                ui.add_space(12.0);
+                                if ui
+                                    .button("Tirar este pad")
+                                    .on_hover_text("Tira da lista (o arquivo continua no seu computador)")
+                                    .clicked()
+                                {
+                                    core.remove_my_pad(i);
+                                }
+                            }
+                        });
+                        ui.end_row();
+                    });
+            });
+        ui.add_space(4.0);
+    } else if vivo {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().slider_width = 120.0;
+            ui.label(RichText::new("Reverb de igreja").color(th().dim));
+            ui.add(egui::Slider::new(&mut v.church_pads, 0.0..=1.0).show_value(false));
             ui.add_space(12.0);
             ui.label(RichText::new("Brilho").color(th().dim));
             ui.add(egui::Slider::new(&mut v.bright, 0.0..=1.0).show_value(false));
@@ -1778,8 +1800,7 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             ui.add(egui::Slider::new(&mut v.shimmer, 0.0..=1.0).show_value(false));
             ui.label(RichText::new("Movimento").color(th().dim));
             ui.add(egui::Slider::new(&mut v.motion, 0.0..=1.0).show_value(false));
-        }
-    });
+        });
     }
     if vivo && details {
         let n = core.cfg.pad_bank - pads::PAD_BANKS;
@@ -1829,7 +1850,8 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
 
     let grid_w = avail.x - side_w - gap;
     // A ajuda de escala grande fica no ⚙ (o lembrete da escala continua na barra de baixo).
-    let show_scale = details && !core.cfg.is_hidden("scale_help");
+    // v0.23.1: a escala só aparece com um pad tocando (sem pad, o espaço vai para os tons e o volume)
+    let show_scale = details && core.pad_active.is_some() && !core.cfg.is_hidden("scale_help");
     let scale_h = if show_scale { 196.0 } else { 0.0 };
     let rows_h = ui.available_height() - 30.0 - scale_h;
     // Escolhe a grade (6×2, 4×3 ou 3×4) que deixa os quadrados maiores na tela.
@@ -1860,7 +1882,7 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         });
 
         // Coluna da direita: volume, anterior/próximo, parar
-        let h = rows as f32 * cell + (rows as f32 - 1.0) * gap;
+        let h = (rows as f32 * cell + (rows as f32 - 1.0) * gap).max(250.0);
         let (rect, _) = ui.allocate_exact_size(Vec2::new(side_w, h), Sense::hover());
         crate::theme::glass(ui.painter(), rect, 18, false, None);
         let inner = rect.shrink2(Vec2::new(12.0, 10.0));
@@ -1872,7 +1894,8 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         let ui = &mut child;
         ui.label(RichText::new("Volume").strong().size(14.0));
         ui.label(RichText::new(format!("{:.0}%", core.cfg.pad_volume * 100.0)).monospace());
-        let fader_h = (ui.available_height() - 100.0).max(36.0);
+        // v0.23.1: o fader nunca fica espremido (a coluna tem altura mínima)
+        let fader_h = (ui.available_height() - 100.0).max(80.0);
         let (resp, newv) = fader(
             ui,
             Vec2::new(inner.width(), fader_h),
