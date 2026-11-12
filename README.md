@@ -1,4 +1,4 @@
-# 🎹 Piano SF2
+# 🎹 NoahPad (antes "Piano SF2")
 
 Programa **leve** para Windows que toca sons **SF2** ao vivo, feito para a igreja:
 piano **Casio Privia PX-S3000** + mesinha **M-Vave SMC-Mixer** + notebook simples (i5 de 5ª geração, 8 GB).
@@ -193,6 +193,10 @@ Os pads padrão ficam em `assets/pads/<escuro|coral>/NN.ogg` (00 = C ... 11 = B)
 O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada push em `main` e publica em Releases.
 
 ## Versões
+
+### v0.22 — NoahPad
+- O programa agora se chama **NoahPad** ("o pad do Noah"): logo **Noah**+**Pad** lá em cima e no título da janela.
+  As configurações continuam no mesmo lugar (`%APPDATA%PianoSF2`), nada se perde.
 
 ### v0.18 — tela limpa ("modo palco")
 - Cada tela mostra só o que se usa tocando; os ajustes finos ficam atrás de um **⚙** (aparecem sozinhos no modo Aprender).

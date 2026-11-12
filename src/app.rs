@@ -783,7 +783,14 @@ fn top_bar(
     st: &mut UiState,
 ) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new("Piano SF2").size(18.0).strong());
+        // v0.22: o nome agora é NoahPad — "Noah" forte e "Pad" na cor dos pads, grudados, como um logo
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.label(RichText::new("Noah").size(20.0).strong().color(th().text));
+            ui.label(RichText::new("Pad").size(20.0).strong().color(PAD_COLOR));
+        })
+        .response
+        .on_hover_text("NoahPad — o pad do Noah");
         ui.add_space(10.0);
 
         // Arquivo SF2
@@ -3877,7 +3884,7 @@ fn settings_window(
 
                 ui.separator();
                 ui.label(RichText::new(format!("Configurações salvas em: {}", config_path.display())).size(12.0).color(th().dim));
-                ui.label(RichText::new(concat!("Piano SF2 v", env!("CARGO_PKG_VERSION"))).size(12.0).color(th().dim));
+                ui.label(RichText::new("NoahPad — o pad do Noah · motor Piano SF2 v0.22").size(12.0).color(th().dim));
                 // v0.20: créditos dos sons que vêm no programa (a licença MIT pede)
                 ui.label(
                     RichText::new(

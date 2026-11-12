@@ -6,7 +6,7 @@ fn main() -> eframe::Result {
     raise_priority();
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_title("Piano SF2")
+            .with_title("NoahPad")
             .with_inner_size([1280.0, 720.0])
             .with_min_inner_size([960.0, 560.0])
             .with_maximized(true),
@@ -14,7 +14,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "Piano SF2",
+        "NoahPad",
         options,
         Box::new(|cc| Ok(Box::new(piano_sf2::app::PianoApp::new(cc)))),
     )
