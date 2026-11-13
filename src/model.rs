@@ -483,6 +483,9 @@ pub struct Config {
     /// v0.21: já trocou os nomes compridos pelos nomes de planeta?
     #[serde(default)]
     pub pads_v21: bool,
+    /// v0.30: já colocou os pads e DrumPads novos (Pixabay) que o Theo trouxe?
+    #[serde(default)]
+    pub pads_v30: bool,
     /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
     #[serde(default)]
     pub mappings_version: u32,
@@ -629,7 +632,7 @@ impl Default for Efeitos {
             pulse_on: false,
             arp_on: false,
             voicefx_on: false,
-            drum_count: crate::efeitos::DRUMS,
+            drum_count: crate::efeitos::BUILTIN_DRUMS,
             drum_names: Vec::new(),
             drum_colors: Vec::new(),
         }
@@ -662,7 +665,7 @@ impl Efeitos {
             self.voicefx_voice = 0;
         }
         self.drum_files.retain(|(i, _)| *i < crate::efeitos::MAX_DRUMS);
-        self.drum_count = if self.drum_count == 0 { crate::efeitos::DRUMS } else { self.drum_count.clamp(4, crate::efeitos::MAX_DRUMS) };
+        self.drum_count = if self.drum_count == 0 { crate::efeitos::BUILTIN_DRUMS } else { self.drum_count.clamp(4, crate::efeitos::MAX_DRUMS) };
         self.drum_names.truncate(crate::efeitos::MAX_DRUMS);
         self.drum_colors.truncate(crate::efeitos::MAX_DRUMS);
         self.drum_files.sort_by_key(|(i, _)| *i);
@@ -720,6 +723,7 @@ impl Default for Config {
             pads_v13: false,
             pads_v20: false,
             pads_v21: false,
+            pads_v30: false,
         }
     }
 }
@@ -804,6 +808,22 @@ impl Config {
                     }
                 }
             }
+        }
+        if !self.pads_v30 {
+            // v0.30: os 4 pads novos entram nas vagas livres e aparecem os DrumPads 9 e 10 (Choir Rise, Prayer)
+            self.pads_v30 = true;
+            for (n, p) in crate::pads::FREE_PADS.iter().enumerate().skip(3) {
+                let path = crate::pads::free_path(n);
+                if self.my_pads.len() < crate::pads::MY_SLOTS && !self.my_pads.iter().any(|m| m.path == path) {
+                    self.my_pads.push(MyPad {
+                        name: p.name.into(),
+                        path,
+                        key: p.key,
+                        auto_key: false,
+                    });
+                }
+            }
+            self.efeitos.drum_count = self.efeitos.drum_count.max(crate::efeitos::BUILTIN_DRUMS);
         }
         self.my_pads.truncate(crate::pads::MY_SLOTS);
         // v0.24: o segundo pad tem que ser um dos "Meus pads" e diferente do principal

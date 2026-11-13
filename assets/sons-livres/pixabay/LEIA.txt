@@ -1,0 +1,8 @@
+Sons baixados da Pixabay (Pixabay Content License) e trazidos pelo Theo em 13/11/2026.
+Podem ser usados dentro do programa; NÃO publicar estes arquivos soltos (redistribuição avulsa não é permitida).
+pads/03.ogg  Urano    = freesound_community "angelic choir" (6793)
+pads/04.ogg  Mercúrio = dragon-studio "heavenly choir" (515273)
+pads/05.ogg  Lua      = gigidelaromusic "celestial chime soft short" (450958)
+pads/06.ogg  Plutão   = freesound_community "vocal chords morphagene reel" (26171)
+drums/08.ogg Choir Rise = floraphonic "gospel choir heavenly transition 2" (186879)
+drums/09.ogg Prayer     = darren_hirst "prayer for souls 120 bpm C major" (365603)

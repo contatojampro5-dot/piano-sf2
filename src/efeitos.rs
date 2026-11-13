@@ -229,13 +229,25 @@ impl Arp {
 pub const DRUMS: usize = 8;
 /// v0.28: dá para ter até 16 DrumPads (do 9º em diante, cada um toca o som que o Theo escolher).
 pub const MAX_DRUMS: usize = 16;
+/// v0.30: DrumPads extras que já vêm com som (Pixabay, trazidos pelo Theo): 9º e 10º pad.
+pub const EXTRA_DRUM_NAMES: [&str; 2] = ["Choir Rise", "Prayer"];
+static EXTRA_DRUM_SAMPLES: [&[u8]; 2] = [
+    include_bytes!("../assets/sons-livres/drums/08.ogg"),
+    include_bytes!("../assets/sons-livres/drums/09.ogg"),
+];
+/// Quantos DrumPads têm som do programa (os 8 de fábrica + os extras).
+pub const BUILTIN_DRUMS: usize = DRUMS + EXTRA_DRUM_NAMES.len();
 pub const DRUM_NAMES: [&str; DRUMS] = [
     "Kick", "Snare", "Clap", "Hi-hat", "Crash", "808", "Riser", "Impact",
 ];
 
 /// v0.28: nome do programa para um DrumPad (os 8 de fábrica ou "Pad 9", "Pad 10"...).
 pub fn drum_default_name(i: usize) -> String {
-    DRUM_NAMES.get(i).map(|s| s.to_string()).unwrap_or_else(|| format!("Pad {}", i + 1))
+    DRUM_NAMES
+        .get(i)
+        .or_else(|| EXTRA_DRUM_NAMES.get(i.wrapping_sub(DRUMS)))
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("Pad {}", i + 1))
 }
 
 /// Os 8 sons, prontos (estéreo), na taxa de amostragem da placa.
@@ -420,7 +432,7 @@ impl DrumKit {
 }
 
 /// v0.19: maior duração de um som próprio num DrumPad (o resto do arquivo é ignorado).
-pub const DRUM_FILE_MAX_S: usize = 8;
+pub const DRUM_FILE_MAX_S: usize = 12; // v0.30: 8 → 12 s (transição de coral)
 
 /// Abre o som do Theo para um DrumPad: pula o silêncio do começo (a batida sai na hora),
 /// converte para a taxa da placa, guarda no máximo 8 s, não deixa estourar e some no finalzinho.
@@ -500,6 +512,10 @@ impl DrumKit {
             if let Ok(hit) = load_drum_bytes(bytes, rate) {
                 kit.hits[i] = hit;
             }
+        }
+        // v0.30: os extras (se não abrirem, ficam mudos)
+        for bytes in EXTRA_DRUM_SAMPLES.iter() {
+            kit.hits.push(load_drum_bytes(bytes, rate).unwrap_or_default());
         }
         kit
     }
@@ -911,11 +927,11 @@ mod tests {
     #[test]
     fn drum_kit_sounds_and_stops() {
         let kit = DrumKit::build(48_000);
-        assert_eq!(kit.hits.len(), DRUMS);
+        assert_eq!(kit.hits.len(), BUILTIN_DRUMS);
         for (i, (l, r)) in kit.hits.iter().enumerate() {
             let peak = l.iter().chain(r).fold(0.0f32, |m, x| m.max(x.abs()));
-            assert!(peak > 0.05 && peak <= 1.0, "{} pico {peak}", DRUM_NAMES[i]);
-            assert!(l.last().unwrap().abs() < 0.05, "{} termina quieto", DRUM_NAMES[i]);
+            assert!(peak > 0.05 && peak <= 1.0, "{} pico {peak}", drum_default_name(i));
+            assert!(l.last().unwrap().abs() < 0.05, "{} termina quieto", drum_default_name(i));
         }
         let mut d = Drums {
             kit: Some(Arc::new(kit)),

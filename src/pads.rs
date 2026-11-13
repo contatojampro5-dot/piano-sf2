@@ -64,7 +64,7 @@ static BUILTIN: [[&[u8]; PAD_KEYS]; PAD_BANKS] = [bank!("escuro"), bank!("coral"
 /// "Meus pads": arquivos do Theo (ex.: pad do YouTube em G) tocados nos 12 tons, mudando a altura.
 /// Bancos 6..9 (até 4, cada um com nome).
 pub const MY_BANK: usize = PAD_BANKS + 3;
-pub const MY_SLOTS: usize = 8;
+pub const MY_SLOTS: usize = 12; // v0.30: 8 → 12 (pads novos da Pixabay)
 
 /// Estilos ao todo: 3 de loop (Escuro, Coral, Suave) + 3 "Vivos" (motor granular) + 4 "Meus pads".
 pub const ALL_BANKS: usize = MY_BANK + MY_SLOTS;
@@ -322,7 +322,7 @@ pub struct FreePad {
     bytes: &'static [u8],
 }
 
-pub const FREE_PADS: [FreePad; 3] = [
+pub const FREE_PADS: [FreePad; 7] = [
     FreePad {
         name: "Vênus",
         key: 0,
@@ -337,6 +337,27 @@ pub const FREE_PADS: [FreePad; 3] = [
         name: "Marte",
         key: 0,
         bytes: include_bytes!("../assets/sons-livres/pads/02.ogg"),
+    },
+    // v0.30: sons da Pixabay que o Theo trouxe (ver assets/sons-livres/pixabay/LEIA.txt)
+    FreePad {
+        name: "Urano",
+        key: 1, // C# (achado pelo som)
+        bytes: include_bytes!("../assets/sons-livres/pads/03.ogg"),
+    },
+    FreePad {
+        name: "Mercúrio",
+        key: 11, // B
+        bytes: include_bytes!("../assets/sons-livres/pads/04.ogg"),
+    },
+    FreePad {
+        name: "Lua",
+        key: 6, // F#
+        bytes: include_bytes!("../assets/sons-livres/pads/05.ogg"),
+    },
+    FreePad {
+        name: "Plutão",
+        key: 7, // G
+        bytes: include_bytes!("../assets/sons-livres/pads/06.ogg"),
     },
 ];
 
@@ -357,6 +378,10 @@ pub fn planet_name(path: &str) -> Option<(&'static str, &'static str)> {
         "livre:0" => Some(("Vênus", "Coral Celeste")),
         "livre:1" => Some(("Terra", "Cordas Suaves")),
         "livre:2" => Some(("Marte", "Atmosfera")),
+        "livre:3" => Some(("Urano", "Urano")),
+        "livre:4" => Some(("Mercúrio", "Mercúrio")),
+        "livre:5" => Some(("Lua", "Lua")),
+        "livre:6" => Some(("Plutão", "Plutão")),
         _ => None,
     }
 }

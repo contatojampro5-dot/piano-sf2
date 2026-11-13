@@ -194,6 +194,13 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.30 — sons novos (Pixabay) nos Pads e DrumPads
+- 4 pads novos nos "Meus pads" (agora com **12 vagas**): **Urano** (Angelic Choir, C#), **Mercúrio** (Heavenly Choir, B),
+  **Lua** (Celestial Chime, F#) e **Plutão** (Vocal Chords, G). Tom achado pelo som; entram sozinhos uma vez.
+- 2 DrumPads novos que já vêm com som: **Choir Rise** (transição de coral gospel, ~10 s) e **Prayer** (trecho em Dó maior, 120 BPM).
+  Os DrumPads passam a ser 10 (2 linhas de 5). Som próprio num DrumPad agora pode ter até **12 s**.
+- Sons da Pixabay trazidos pelo Theo (ver `assets/sons-livres/pixabay/LEIA.txt`): usar só dentro do programa, não publicar soltos.
+
 ### v0.29 — luz neon em tudo + Cutoff nos timbres
 - **Luz neon suave** ao passar o mouse (bem mais leve que a dos DrumPads), cada um na sua cor: blocos da aba Efeitos,
   pads da aba Pads, camadas e colunas da aba Sons SF2. A luz segue o mouse e escorre pela borda.

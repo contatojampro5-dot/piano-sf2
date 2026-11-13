@@ -677,7 +677,7 @@ fn old_config_hides_builtin_pads_once() {
     c.normalize();
     assert!(!c.is_hidden("pad_styles"), "não esconde de novo");
     // v0.20: 3 da parceria + 3 pads livres (MuseScore General)
-    assert_eq!(c.my_pads.len(), 6, "pads da parceria e os livres já colocados");
+    assert_eq!(c.my_pads.len(), 10, "pads da parceria e os livres já colocados");
     assert_eq!(c.pad_bank, crate::pads::MY_BANK);
     for (n, p) in crate::pads::PARTNER_PADS.iter().enumerate() {
         let clip = crate::pads::load_my_pad(&crate::pads::partner_path(n)).unwrap();
@@ -688,11 +688,12 @@ fn old_config_hides_builtin_pads_once() {
 
 #[test]
 fn free_sounds_come_inside_the_program() {
-    // os 3 pads livres abrem, estão em C e são longos
+    // os pads livres abrem e estão no tom cadastrado (os 3 do MuseScore em C, ~1 min; v0.30: os da Pixabay, 13 s ou mais)
     for (n, p) in crate::pads::FREE_PADS.iter().enumerate() {
         let clip = crate::pads::load_my_pad(&crate::pads::free_path(n)).unwrap();
-        assert_eq!(crate::pads::detect_key(&clip), p.key, "{} está em C", p.name);
-        assert!(clip.frames() > 48_000 * 55, "{} tem ~1 min", p.name);
+        assert_eq!(crate::pads::detect_key(&clip), p.key, "{} no tom certo", p.name);
+        let min_s = if n < 3 { 55 } else { 12 };
+        assert!(clip.frames() > clip.rate as usize * min_s, "{} é longo o bastante", p.name);
     }
     // config antiga ganha os pads livres uma vez só, sem apagar os do Theo
     let mut c = Config::default();
@@ -704,11 +705,11 @@ fn free_sounds_come_inside_the_program() {
     });
     c.pads_v13 = true;
     c.normalize();
-    assert_eq!(c.my_pads.len(), 4);
+    assert_eq!(c.my_pads.len(), 8, "o do Theo + 7 livres");
     assert_eq!(c.my_pads[0].name, "Meu pad do YouTube");
     c.my_pads.retain(|m| m.name != "Marte"); // Theo tirou um
     c.normalize();
-    assert_eq!(c.my_pads.len(), 3, "não volta sozinho depois que o Theo tirou");
+    assert_eq!(c.my_pads.len(), 7, "não volta sozinho depois que o Theo tirou");
     // bateria gravada: os 8 sons abrem (nenhum caiu no sintetizado) e são diferentes dos sintetizados
     let real = crate::efeitos::DrumKit::build(48_000);
     let synth = crate::efeitos::DrumKit::build_synth(48_000);
@@ -1423,7 +1424,7 @@ fn voice_fx_voice_can_be_chosen_while_playing() {
 #[test]
 fn pads_get_planet_names_once_and_keep_mine() {
     let mut c: Config = serde_json::from_str(
-        r#"{"pads_v13":true,"pads_v20":true,"my_pads":[
+        r#"{"pads_v13":true,"pads_v20":true,"pads_v30":true,"my_pads":[
             {"name":"Pad + Reverse em G - Em","path":"embutido:0","key":7},
             {"name":"Meu C#","path":"embutido:1","key":1},
             {"name":"Coral Celeste","path":"livre:0","key":0}]}"#,
@@ -1439,7 +1440,10 @@ fn pads_get_planet_names_once_and_keep_mine() {
     let mut d = Config::default();
     d.normalize();
     let names: Vec<&str> = d.my_pads.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(names, vec!["Júpiter", "Saturno", "Netuno", "Vênus", "Terra", "Marte"]);
+    assert_eq!(
+        names,
+        vec!["Júpiter", "Saturno", "Netuno", "Vênus", "Terra", "Marte", "Urano", "Mercúrio", "Lua", "Plutão"]
+    );
 }
 
 // ---------- v0.23: filtro de abrir/fechar e swell ----------
@@ -1650,4 +1654,28 @@ fn a_scene_is_a_full_preset() {
     r.core.set_bpm(77.0);
     r.core.load_scene(1);
     assert_eq!(r.core.cfg.efeitos.bpm, 77.0, "cena antiga não mexe no resto");
+}
+
+#[test]
+fn v030_pads_e_drumpads_novos_entram_uma_vez() {
+    // config de antes da v0.30 (6 pads, 8 DrumPads) ganha os 4 pads novos e os DrumPads 9 e 10
+    let mut c: Config = serde_json::from_str(
+        r#"{"pads_v13":true,"pads_v20":true,"pads_v21":true,"my_pads":[
+            {"name":"Vênus","path":"livre:0","key":0},{"name":"Terra","path":"livre:1","key":0},
+            {"name":"Marte","path":"livre:2","key":0}],"efeitos":{"drum_count":8}}"#,
+    )
+    .unwrap();
+    c.normalize();
+    let names: Vec<&str> = c.my_pads.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(names, ["Vênus", "Terra", "Marte", "Urano", "Mercúrio", "Lua", "Plutão"]);
+    assert_eq!(c.efeitos.drum_count, crate::efeitos::BUILTIN_DRUMS);
+    // não repete na próxima vez
+    c.normalize();
+    assert_eq!(c.my_pads.len(), 7);
+    // os 2 DrumPads novos têm som de verdade (transição de ~10 s cabe inteira)
+    let kit = crate::efeitos::DrumKit::build(48_000);
+    assert_eq!(kit.hits.len(), crate::efeitos::BUILTIN_DRUMS);
+    assert!(kit.hits[8].0.len() > 48_000 * 9, "Choir Rise inteiro");
+    assert!(kit.hits[9].0.len() > 48_000 * 7, "Prayer inteiro");
+    assert_eq!(crate::efeitos::drum_default_name(8), "Choir Rise");
 }

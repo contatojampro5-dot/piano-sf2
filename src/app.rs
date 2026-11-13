@@ -1565,8 +1565,8 @@ fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     let mut test_hit: Option<usize> = None;
     let n = e.drum_count.clamp(4, crate::efeitos::MAX_DRUMS);
     st.drum_sel = st.drum_sel.min(n - 1);
-    // 2 linhas até 8 pads; mais que isso, linhas de 4
-    let (cols, rows) = if n <= 8 { (n.div_ceil(2), 2usize) } else { (4, n.div_ceil(4)) };
+    // 2 linhas até 10 pads; mais que isso, linhas de 4
+    let (cols, rows) = if n <= 10 { (n.div_ceil(2), 2usize) } else { (4, n.div_ceil(4)) };
     let before = st.drum_edit;
     let mut editing = st.drum_edit;
     fx_card(ui, avail, "DrumPads", DRUM_COLOR, Some((&mut editing, "Editar os pads: nome, cor, som e quantos pads")), |ui| {
@@ -1600,7 +1600,7 @@ fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                 .powf(1.6);
             glowing |= glow > 0.0;
             let own = core.drum_file_name(i);
-            let silent = own.is_none() && i >= crate::efeitos::DRUMS;
+            let silent = own.is_none() && i >= crate::efeitos::BUILTIN_DRUMS;
             let sub = match &own {
                 Some(f) => Some(format!("♪ {f}")),
                 None if silent => Some("sem som · ⚙ para escolher".to_string()),
@@ -1639,7 +1639,7 @@ fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                     drum_dialog = Some(i);
                     ui.close();
                 }
-                let reset_label = if i < crate::efeitos::DRUMS { "Voltar ao som do programa" } else { "Tirar o som" };
+                let reset_label = if i < crate::efeitos::BUILTIN_DRUMS { "Voltar ao som do programa" } else { "Tirar o som" };
                 if own.is_some() && ui.button(reset_label).clicked() {
                     drum_reset = Some(i);
                     ui.close();
@@ -1735,13 +1735,13 @@ fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                         let own = core.drum_file_name(s);
                         ui.label(match &own {
                             Some(f) => RichText::new(format!("♪ {f}")).color(th().text),
-                            None if s < crate::efeitos::DRUMS => RichText::new("Som do programa").color(th().text),
+                            None if s < crate::efeitos::BUILTIN_DRUMS => RichText::new("Som do programa").color(th().text),
                             None => RichText::new("Ainda sem som").color(th().dim),
                         });
                         if ui.add_sized([w, 32.0], egui::Button::new("♪ Escolher um som meu (WAV/MP3)...")).clicked() {
                             drum_dialog = Some(s);
                         }
-                        let reset_label = if s < crate::efeitos::DRUMS { "↺ Voltar ao som do programa" } else { "Tirar o som" };
+                        let reset_label = if s < crate::efeitos::BUILTIN_DRUMS { "↺ Voltar ao som do programa" } else { "Tirar o som" };
                         if own.is_some() && ui.add_sized([w, 30.0], egui::Button::new(reset_label)).clicked() {
                             drum_reset = Some(s);
                         }
