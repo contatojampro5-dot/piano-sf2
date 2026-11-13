@@ -23,6 +23,8 @@ pub(crate) struct Channel {
 
     reverb_send: u8,
     chorus_send: u8,
+    // piano-sf2: CC74 (Cutoff da camada) — 127 = filtro do SF2 normal, menos = mais fechado.
+    cutoff_cc: u8,
 
     rpn: i16,
     pitch_bend_range: i16,
@@ -47,6 +49,7 @@ impl Channel {
             hold_pedal: false,
             reverb_send: 0,
             chorus_send: 0,
+            cutoff_cc: 127,
             rpn: 0,
             pitch_bend_range: 0,
             coarse_tune: 0,
@@ -143,6 +146,17 @@ impl Channel {
 
     pub(crate) fn set_hold_pedal(&mut self, value: i32) {
         self.hold_pedal = value >= 64;
+    }
+
+    // piano-sf2: Cutoff por camada (CC74). Não volta no reset: quem manda é a mesa do programa.
+    pub(crate) fn set_cutoff(&mut self, value: i32) {
+        self.cutoff_cc = value.clamp(0, 127) as u8;
+    }
+
+    /// piano-sf2: quanto o corte do filtro é multiplicado (1 = normal … 1/128 = 7 oitavas abaixo).
+    pub(crate) fn get_cutoff_factor(&self) -> f32 {
+        let v = self.cutoff_cc as f32 / 127_f32;
+        (2_f32).powf((v - 1_f32) * 7_f32)
     }
 
     pub(crate) fn set_reverb_send(&mut self, value: i32) {

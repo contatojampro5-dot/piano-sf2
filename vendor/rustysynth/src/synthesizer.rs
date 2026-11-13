@@ -155,6 +155,7 @@ impl Synthesizer {
                 0x0B => channel_info.set_expression_coarse(data2), // Expression Coarse
                 0x2B => channel_info.set_expression_fine(data2), // Expression Fine
                 0x40 => channel_info.set_hold_pedal(data2), // Hold Pedal
+                0x4A => channel_info.set_cutoff(data2), // piano-sf2: Cutoff (brilho) da camada
                 0x5B => channel_info.set_reverb_send(data2), // Reverb Send
                 0x5D => channel_info.set_chorus_send(data2), // Chorus Send
                 0x63 => channel_info.set_nrpn_coarse(data2), // NRPN Coarse

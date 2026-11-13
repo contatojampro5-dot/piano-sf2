@@ -27,6 +27,8 @@ pub struct Layer {
     pub volume: f32,
     /// Reverb 0..1 (botão giratório).
     pub reverb: f32,
+    /// v0.29: Cutoff 0..1 (1 = aberto, o som normal do SF2; menos = mais abafado).
+    pub cutoff: f32,
     pub preset: Option<PresetRef>,
 }
 
@@ -37,6 +39,7 @@ impl Default for Layer {
             solo: false,
             volume: 0.8,
             reverb: 0.25,
+            cutoff: 1.0,
             preset: None,
         }
     }
@@ -67,6 +70,7 @@ impl Mix {
         for l in &mut self.layers {
             l.volume = l.volume.clamp(0.0, 1.0);
             l.reverb = l.reverb.clamp(0.0, 1.0);
+            l.cutoff = l.cutoff.clamp(0.0, 1.0);
         }
     }
 
@@ -109,6 +113,8 @@ pub struct SceneExtra {
 pub enum Target {
     Volume(usize),
     Reverb(usize),
+    /// v0.29: Cutoff (brilho) da camada.
+    Cutoff(usize),
     Toggle(usize),
     Solo(usize),
     Master,
@@ -162,6 +168,7 @@ impl Target {
             self,
             Target::Volume(_)
                 | Target::Reverb(_)
+                | Target::Cutoff(_)
                 | Target::Master
                 | Target::PadVolume
                 | Target::PadKnob
@@ -186,6 +193,7 @@ impl Target {
         match self {
             Target::Volume(i) => format!("Volume da camada {}", i + 1),
             Target::Reverb(i) => format!("Reverb da camada {}", i + 1),
+            Target::Cutoff(i) => format!("Cutoff da camada {}", i + 1),
             Target::Toggle(i) => format!("Liga/desliga camada {}", i + 1),
             Target::Solo(i) => format!("Solo da camada {}", i + 1),
             Target::Master => "Volume geral".into(),
@@ -825,7 +833,7 @@ impl Config {
             *v = v.clamp(0.0, 1.0);
         }
         self.vivo.files.retain(|(n, _, _)| *n < 3);
-        self.tab = self.tab.min(2);
+        self.tab = self.tab.min(3);
         self.look.frost = self.look.frost.clamp(0.0, 1.0);
         self.look.glow = self.look.glow.clamp(0.0, 1.0);
         self.look.scale = self.look.scale.clamp(0.75, 1.5);
@@ -833,7 +841,7 @@ impl Config {
             .retain(|f| f.bank < crate::pads::PAD_BANKS && f.key < crate::pads::PAD_KEYS);
         // Nada pode apontar para camada que não existe mais (eram 8, agora são 6).
         self.mappings.retain(|m| match m.target {
-            Target::Volume(i) | Target::Reverb(i) | Target::Toggle(i) | Target::Solo(i) => {
+            Target::Volume(i) | Target::Reverb(i) | Target::Cutoff(i) | Target::Toggle(i) | Target::Solo(i) => {
                 i < LAYERS
             }
             Target::Scene(n) => n < MAX_SCENES,

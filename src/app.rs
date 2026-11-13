@@ -3030,26 +3030,37 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) -
         if step != 0 {
             core.step_preset(i, step);
         }
-        // Knob (reverb)
-        let (resp, newv) = knob(
-            ui,
-            if compact { 34.0 } else { 44.0 },
-            layer.reverb,
-            color,
-            core.learn.active,
-        );
-        let resp = resp.on_hover_text(format!("Reverb {:.0}%", layer.reverb * 100.0));
-        learnable(ui, core, &resp, Target::Reverb(i));
-        if let Some(v) = newv {
-            core.set_reverb(i, v);
-        }
-        if !compact {
-            ui.label(
-                RichText::new(format!("Reverb {:.0}%", layer.reverb * 100.0))
-                    .size(12.0)
-                    .color(th().dim),
-            );
-        }
+        // Knobs: Reverb e (v0.29) Cutoff lado a lado
+        let ks = if compact { 34.0 } else { 44.0 };
+        let half = (ui.available_width() - 6.0) / 2.0;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            ui.allocate_ui_with_layout(Vec2::new(half, ks + 22.0), Layout::top_down(Align::Center), |ui| {
+                let (resp, newv) = knob(ui, ks, layer.reverb, color, core.learn.active);
+                let resp = resp.on_hover_text(format!("Reverb {:.0}%", layer.reverb * 100.0));
+                learnable(ui, core, &resp, Target::Reverb(i));
+                if let Some(v) = newv {
+                    core.set_reverb(i, v);
+                }
+                if !compact {
+                    ui.label(RichText::new(format!("Reverb {:.0}%", layer.reverb * 100.0)).size(12.0).color(th().dim));
+                }
+            });
+            ui.allocate_ui_with_layout(Vec2::new(half, ks + 22.0), Layout::top_down(Align::Center), |ui| {
+                let (resp, newv) = knob(ui, ks, layer.cutoff, color, core.learn.active);
+                let resp = resp.on_hover_text(format!(
+                    "Cutoff {:.0}% — gire para a esquerda para abafar o som (filtro), à direita volta ao normal",
+                    layer.cutoff * 100.0
+                ));
+                learnable(ui, core, &resp, Target::Cutoff(i));
+                if let Some(v) = newv {
+                    core.set_cutoff(i, v);
+                }
+                if !compact {
+                    ui.label(RichText::new(format!("Cutoff {:.0}%", layer.cutoff * 100.0)).size(12.0).color(th().dim));
+                }
+            });
+        });
     } else {
         ui.add_space(if compact { 2.0 } else { 6.0 });
     }
@@ -4495,3 +4506,121 @@ fn settings_window(
         st.settings = false;
     }
 }
+// ---------- v0.29: luz neon suave nos painéis (como nos DrumPads, bem mais leve) ----------
+
+/// Duas cores para o degradê da luz: a do painel e uma vizinha (gira um pouco o tom).
+fn accent_pair(c: Color32) -> (Color32, Color32) {
+    let mut h = egui::ecolor::Hsva::from(c);
+    h.h = (h.h + 0.10).fract();
+    h.s = h.s.max(0.55);
+    h.v = h.v.max(0.85);
+    (c, Color32::from(h))
+}
+
+/// Vidro + luz: ao passar o mouse o painel acende de leve na cor dele, a luz segue o cursor
+/// e escorre pela borda. `strength` 1 = suave (painéis grandes); mais = mais forte (pads).
+fn lit_glass(ui: &Ui, rect: Rect, radius: u8, hi: bool, glow: Option<Color32>, colors: (Color32, Color32), strength: f32) {
+    theme::glass(ui.painter(), rect, radius, hi, glow);
+    let inside = ui.rect_contains_pointer(rect);
+    let id = egui::Id::unique(("luz_painel", rect.min.x as i32, rect.min.y as i32, rect.width() as i32));
+    let hover = ui.ctx().animate_bool_with_time(id, inside, 0.25);
+    let mouse = if inside { ui.ctx().pointer_hover_pos() } else { None };
+    panel_light(ui.painter(), rect, radius as f32, colors, hover, mouse, strength);
+    if hover > 0.0 && hover < 1.0 {
+        ui.ctx().request_repaint();
+    }
+}
+
+fn panel_light(p: &egui::Painter, rect: Rect, r: f32, colors: (Color32, Color32), hover: f32, mouse: Option<Pos2>, strength: f32) {
+    let hover = hover.clamp(0.0, 1.0);
+    if hover < 0.01 {
+        return;
+    }
+    let (ca, cb) = colors;
+    let white = th().light;
+    let k = hover * strength;
+    let size = rect.width().min(rect.height());
+    let diag = |v: Pos2| (((v.x - rect.left()) / rect.width()) + ((v.y - rect.top()) / rect.height())) * 0.5;
+    let px = |rgb: [f32; 3], a: f32| -> Color32 {
+        let a = a.clamp(0.0, 1.0);
+        let alpha = if white { a } else { a * 0.35 };
+        Color32::from_rgba_premultiplied(rgb[0].min(255.0) as u8, rgb[1].min(255.0) as u8, rgb[2].min(255.0) as u8, (alpha * 255.0) as u8)
+    };
+    let near_of = |v: Pos2| mouse.map(|m| (1.0 - v.distance(m) / (size * 1.1)).clamp(0.0, 1.0)).unwrap_or(0.0);
+    let tint = |c: Color32, w: f32| px([c.r() as f32 * w, c.g() as f32 * w, c.b() as f32 * w], w);
+
+    // halo de fora (degradê liso)
+    let h = 10.0;
+    let inner = rounded_outline(rect, r, 8);
+    let outer = rounded_outline(rect.expand(h), r + h, 8);
+    let n = inner.len();
+    let mut mesh = egui::Mesh::default();
+    for i in 0..n {
+        let near = near_of(inner[i]);
+        let w = k * (0.10 + 0.22 * near * near);
+        mesh.colored_vertex(inner[i], tint(mix_color(ca, cb, diag(inner[i])), w));
+        mesh.colored_vertex(outer[i], Color32::TRANSPARENT);
+    }
+    for i in 0..n {
+        let (a, b) = ((2 * i) as u32, (2 * ((i + 1) % n)) as u32);
+        mesh.add_triangle(a, b, b + 1);
+        mesh.add_triangle(a, b + 1, a + 1);
+    }
+    p.add(Shape::mesh(mesh));
+
+    // dentro: luz entrando pelas bordas + holofote no mouse (uma malha só, sem anéis)
+    let outline = rounded_outline(rect.shrink(0.5), r, 8);
+    let center = rect.center();
+    const RINGS: [f32; 15] = [0.0, 0.15, 0.3, 0.45, 0.58, 0.68, 0.76, 0.83, 0.88, 0.92, 0.95, 0.97, 0.985, 0.995, 1.0];
+    let spot_c = mouse.map(|m| {
+        let c = mix_color(ca, cb, diag(m));
+        if white { c } else { mix_color(c, Color32::WHITE, 0.2) }
+    });
+    let mut mesh = egui::Mesh::default();
+    for &s in &RINGS {
+        for &q in &outline {
+            let v = center + (q - center) * s;
+            let near = near_of(v);
+            let mut acc = [0.0f32; 3];
+            let mut sum = 0.0f32;
+            let mut add = |c: Color32, w: f32| {
+                acc[0] += c.r() as f32 * w;
+                acc[1] += c.g() as f32 * w;
+                acc[2] += c.b() as f32 * w;
+                sum += w;
+            };
+            let e = ((s - 0.80) / 0.20).clamp(0.0, 1.0).powf(2.0);
+            add(mix_color(ca, cb, diag(v)), e * k * (0.12 + 0.40 * near * near));
+            if let (Some(m), Some(c)) = (mouse, spot_c) {
+                let d = v.distance(m) / (size * 0.55);
+                add(c, (-d * d).exp() * 0.16 * k);
+            }
+            mesh.colored_vertex(v, px(acc, sum));
+        }
+    }
+    let m = outline.len();
+    for ri in 0..RINGS.len() - 1 {
+        for i in 0..m {
+            let a = (ri * m + i) as u32;
+            let b = (ri * m + (i + 1) % m) as u32;
+            mesh.add_triangle(a, b, b + m as u32);
+            mesh.add_triangle(a, b + m as u32, a + m as u32);
+        }
+    }
+    p.add(Shape::mesh(mesh));
+
+    // borda: acende na cor do painel, mais forte perto do mouse
+    let pts = rounded_outline(rect.shrink(0.6), r, 8);
+    let n = pts.len();
+    for i in 0..n {
+        let (a, b) = (pts[i], pts[(i + 1) % n]);
+        let near = near_of(a).powf(1.4);
+        let c = mix_color(ca, cb, diag(a));
+        let alpha = (k * (0.22 + 0.55 * near)).clamp(0.0, 1.0);
+        p.line_segment(
+            [a, b],
+            Stroke::new(1.0 + 1.0 * near * k, Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), (alpha * 255.0) as u8)),
+        );
+    }
+}
+

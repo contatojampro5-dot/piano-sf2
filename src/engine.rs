@@ -65,6 +65,11 @@ pub enum Cmd {
         layer: usize,
         value: f32,
     },
+    /// v0.29: Cutoff (brilho) da camada: 1 = aberto (normal) … 0 = bem fechado. Vai como CC74.
+    SetCutoff {
+        layer: usize,
+        value: f32,
+    },
     SetMaster(f32),
     SetTranspose(i32),
     /// v0.15: quantos semitons o pitch bend alcança (1..12).
@@ -163,6 +168,7 @@ pub struct Engine {
     presets: [Option<(i32, i32)>; LAYERS],
     volumes: [f32; LAYERS],
     reverbs: [f32; LAYERS],
+    cutoffs: [f32; LAYERS],
     left: Vec<f32>,
     right: Vec<f32>,
     peak_decay: f32,
@@ -234,6 +240,7 @@ impl Engine {
             presets: [None; LAYERS],
             volumes: [0.8; LAYERS],
             reverbs: [0.25; LAYERS],
+            cutoffs: [1.0; LAYERS],
             left: vec![0.0; 8192],
             right: vec![0.0; 8192],
             peak_decay: 0.0,
@@ -308,6 +315,7 @@ impl Engine {
             (self.reverbs[i].clamp(0.0, 1.0) * 127.0) as i32,
         );
         s.process_midi_message(ch, 0xB0, 0x5D, 0);
+        s.process_midi_message(ch, 0xB0, 0x4A, (self.cutoffs[i].clamp(0.0, 1.0) * 127.0).round() as i32);
         s.process_midi_message(ch, 0xB0, 0x0B, if self.audible[i] { 127 } else { 0 });
         Self::send_pitch_range(s, ch, self.pitch_range);
     }
@@ -515,6 +523,12 @@ impl Engine {
                     let v = (value.clamp(0.0, 1.0) * 16383.0) as i32;
                     s.process_midi_message(layer as i32, 0xB0, 0x07, v >> 7);
                     s.process_midi_message(layer as i32, 0xB0, 0x27, v & 0x7F);
+                }
+            }
+            Cmd::SetCutoff { layer, value } if layer < LAYERS => {
+                self.cutoffs[layer] = value;
+                if let Some(s) = self.synth.as_mut() {
+                    s.process_midi_message(layer as i32, 0xB0, 0x4A, (value.clamp(0.0, 1.0) * 127.0).round() as i32);
                 }
             }
             Cmd::SetReverb { layer, value } if layer < LAYERS => {

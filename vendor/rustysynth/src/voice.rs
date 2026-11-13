@@ -217,10 +217,16 @@ impl Voice {
             return false;
         }
 
-        if self.dynamic_cutoff {
-            let cents = self.mod_lfo_to_cutoff as f32 * self.mod_lfo.get_value()
-                + self.mod_env_to_cutoff as f32 * self.mod_env.get_value();
-            let factor = SoundFontMath::cents_to_multiplying_factor(cents);
+        // piano-sf2: o Cutoff da camada (CC74) multiplica o corte; também atualiza enquanto ele volta ao normal.
+        let ch_factor = channel_info.get_cutoff_factor();
+        if self.dynamic_cutoff || ch_factor < 0.999 || (self.smoothed_cutoff - self.cutoff).abs() > 1_f32 {
+            let cents = if self.dynamic_cutoff {
+                self.mod_lfo_to_cutoff as f32 * self.mod_lfo.get_value()
+                    + self.mod_env_to_cutoff as f32 * self.mod_env.get_value()
+            } else {
+                0_f32
+            };
+            let factor = SoundFontMath::cents_to_multiplying_factor(cents) * ch_factor;
             let new_cutoff = factor * self.cutoff;
 
             // The cutoff change is limited within x0.5 and x2 to reduce pop noise.

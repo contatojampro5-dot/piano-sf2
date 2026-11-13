@@ -775,6 +775,10 @@ impl Core {
                 layer: i,
                 value: l.reverb,
             });
+            self.send(Cmd::SetCutoff {
+                layer: i,
+                value: l.cutoff,
+            });
             self.send(Cmd::SetAudible {
                 layer: i,
                 on: mix.audible(i) && l.preset.is_some(),
@@ -1385,6 +1389,14 @@ impl Core {
         self.dirty = true;
     }
 
+    /// v0.29: Cutoff (brilho) da camada.
+    pub fn set_cutoff(&mut self, i: usize, v: f32) {
+        let v = v.clamp(0.0, 1.0);
+        self.cfg.mix.layers[i].cutoff = v;
+        self.send(Cmd::SetCutoff { layer: i, value: v });
+        self.dirty = true;
+    }
+
     pub fn set_reverb(&mut self, i: usize, v: f32) {
         let v = v.clamp(0.0, 1.0);
         self.cfg.mix.layers[i].reverb = v;
@@ -1758,6 +1770,7 @@ impl Core {
         let cur = match t {
             Target::Volume(i) => self.cfg.mix.layers[i].volume,
             Target::Reverb(i) => self.cfg.mix.layers[i].reverb,
+            Target::Cutoff(i) => self.cfg.mix.layers[i].cutoff,
             Target::Master => self.cfg.master,
             Target::PadVolume => self.cfg.pad_volume,
             _ => return,
@@ -1769,6 +1782,7 @@ impl Core {
         match t {
             Target::Volume(i) => self.set_volume(i, v),
             Target::Reverb(i) => self.set_reverb(i, v),
+            Target::Cutoff(i) => self.set_cutoff(i, v),
             Target::Master => self.set_master(v),
             Target::PadVolume => self.set_pad_volume(v),
             _ => {}
