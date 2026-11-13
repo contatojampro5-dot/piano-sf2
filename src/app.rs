@@ -1032,7 +1032,7 @@ fn top_bar(
 
 fn status_dot(ui: &mut Ui, what: &str, name: Option<&str>, active: bool) -> egui::Response {
     let color = match (name.is_some(), active) {
-        (true, true) => Color32::WHITE,
+        (true, true) => if th().light { th().text } else { Color32::WHITE },
         (true, false) => GREEN,
         _ => RED,
     };
@@ -2568,7 +2568,7 @@ fn edit_banner(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             ui.horizontal(|ui| {
                 ui.label(
                     RichText::new("EDITANDO — clique na bolinha vermelha para tirar.")
-                        .color(Color32::WHITE)
+                        .color(th().text)
                         .strong(),
                 );
                 let hidden: Vec<(&str, &str)> = EDITABLE
@@ -3003,7 +3003,7 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2, details: bool) {
         ui,
         Vec2::new(inner.width(), fader_h),
         core.cfg.master,
-        Color32::WHITE,
+        if th().light { th().text } else { Color32::WHITE },
         core.learn.active,
     );
     learnable(ui, core, &resp, Target::Master);
@@ -3240,8 +3240,18 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
             );
         }
     }
-    // corpo preto (um tiquinho de cor quando acende: "transparente")
-    let body = mix_color(Color32::from_rgb(0x05, 0x06, 0x0a), mix_color(ca, cb, 0.5), 0.10 * light);
+    // v0.26: no tema Branco o pad é um cartão branco que flutua (sombra macia embaixo)
+    let white = th().light;
+    if white {
+        for k in 0..6 {
+            let d = 1.5 + k as f32 * 1.8;
+            let a = (1.0 - k as f32 / 6.0).powi(2) * 0.07;
+            p.rect_filled(rect.translate(Vec2::new(0.0, 3.0 + k as f32 * 0.7)).expand(d * 0.5), (r + d) as u8, Color32::from_black_alpha((a * 255.0) as u8));
+        }
+    }
+    // corpo preto (um tiquinho de cor quando acende: "transparente"); no Branco, branco
+    let base_body = if white { Color32::from_rgb(0xff, 0xff, 0xff) } else { Color32::from_rgb(0x05, 0x06, 0x0a) };
+    let body = mix_color(base_body, mix_color(ca, cb, 0.5), if white { 0.06 } else { 0.10 } * light);
     p.rect_filled(rect, r as u8, body);
     let clip = p.with_clip_rect(rect.shrink(1.0));
     if light > 0.01 {
@@ -3290,19 +3300,25 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
         // posição na diagonal (canto de cima à esquerda = cor A, de baixo à direita = cor B)
         let t = (((a.x - rect.left()) / rect.width()) + ((a.y - rect.top()) / rect.height())) * 0.5;
         let neon = mix_color(ca, cb, t);
-        let idle = Color32::from_rgb(0x26, 0x2b, 0x36);
+        let idle = if white { Color32::from_rgb(0xdc, 0xdf, 0xe5) } else { Color32::from_rgb(0x26, 0x2b, 0x36) };
         // perto do mouse a borda brilha mais (a luz "escorre" pela borda)
         let near = spot
             .map(|m| (1.0 - (a.distance(m) / (rect.width() * 0.6))).clamp(0.0, 1.0))
             .unwrap_or(0.0);
-        let c = mix_color(mix_color(idle, neon, 0.25 + 0.75 * light), Color32::WHITE, near * near * 0.55);
+        let hot = if white { neon } else { Color32::WHITE };
+        let c = mix_color(mix_color(idle, neon, if white { 0.10 } else { 0.25 } + 0.75 * light), hot, near * near * 0.55);
         p.line_segment([a, b], Stroke::new(1.2 + 1.0 * light + 1.2 * near, c));
     }
     // nome pequeno no canto de cima (como no sampler)
     let pad_in = (rect.width() * 0.10).clamp(8.0, 13.0);
     let font = (rect.width() * 0.105).clamp(10.0, 13.0);
     let name = crate::efeitos::DRUM_NAMES[i % crate::efeitos::DRUMS];
-    let txt = mix_color(Color32::from_rgb(0x8a, 0x92, 0xa3), Color32::WHITE, light);
+    let txt = if white {
+        mix_color(Color32::from_rgb(0x6b, 0x72, 0x80), Color32::from_rgb(0x1d, 0x20, 0x27), light)
+    } else {
+        mix_color(Color32::from_rgb(0x8a, 0x92, 0xa3), Color32::WHITE, light)
+    };
+    let own_c = if white { mix_color(ca, Color32::BLACK, 0.25) } else { mix_color(ca, Color32::WHITE, 0.3) };
     match own {
         Some(file) => {
             let short: String = file.chars().take(14).collect();
@@ -3312,7 +3328,7 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
                 Align2::LEFT_BOTTOM,
                 format!("♪ {short}"),
                 FontId::proportional(font - 1.0),
-                mix_color(ca, Color32::WHITE, 0.3),
+                own_c,
             );
         }
         None => {
@@ -3746,7 +3762,7 @@ fn fader(
     }
     // trilho de vidro
     let track = Rect::from_min_max(Pos2::new(cx - 3.0, top), Pos2::new(cx + 3.0, bottom));
-    p.rect_filled(track, 3, Color32::from_black_alpha(110));
+    p.rect_filled(track, 3, Color32::from_black_alpha(if th().light { 28 } else { 110 }));
     p.rect_stroke(track, 3, Stroke::new(1.0, th().edge), StrokeKind::Outside);
     let y = bottom - travel * v;
     let fill = Rect::from_min_max(Pos2::new(cx - 3.0, y), Pos2::new(cx + 3.0, bottom));
@@ -3856,7 +3872,7 @@ fn knob(
     };
     p.add(Shape::line(
         arc(0.0, 1.0),
-        Stroke::new(3.0, Color32::from_black_alpha(110)),
+        Stroke::new(3.0, Color32::from_black_alpha(if th().light { 30 } else { 110 })),
     ));
     if v > 0.005 {
         p.add(Shape::line(arc(0.0, v), Stroke::new(3.0, color)));
@@ -3867,7 +3883,7 @@ fn knob(
             Pos2::new(c.x + a.cos() * (r * 0.25), c.y + a.sin() * (r * 0.25)),
             Pos2::new(c.x + a.cos() * (r - 6.0), c.y + a.sin() * (r - 6.0)),
         ],
-        Stroke::new(2.5, Color32::WHITE),
+        Stroke::new(2.5, if th().light { th().text } else { Color32::WHITE }),
     );
     (resp, new)
 }

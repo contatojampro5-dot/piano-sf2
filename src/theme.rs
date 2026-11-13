@@ -13,32 +13,46 @@ pub struct Palette {
     top: [u8; 3],
     bottom: [u8; 3],
     orbs: [[u8; 3]; 3],
+    /// v0.26: tema claro (painéis brancos que flutuam, texto escuro).
+    light: bool,
 }
 
-pub const PALETTES: [Palette; 4] = [
+pub const PALETTES: [Palette; 5] = [
     Palette {
         name: "Celestial",
         top: [0x07, 0x0b, 0x1f],
         bottom: [0x1a, 0x12, 0x3d],
         orbs: [[0x3a, 0x5b, 0xff], [0xa1, 0x5c, 0xff], [0x39, 0xd5, 0xff]],
+        light: false,
     },
     Palette {
         name: "Aurora",
         top: [0x03, 0x12, 0x16],
         bottom: [0x0a, 0x22, 0x2e],
         orbs: [[0x2b, 0xe3, 0xa1], [0x2b, 0xb7, 0xe3], [0x7a, 0x5c, 0xff]],
+        light: false,
     },
     Palette {
         name: "Pôr do sol",
         top: [0x16, 0x0b, 0x1f],
         bottom: [0x2a, 0x12, 0x2e],
         orbs: [[0xff, 0x7a, 0x59], [0xff, 0x4f, 0xa0], [0xff, 0xc1, 0x5a]],
+        light: false,
     },
     Palette {
         name: "Grafite",
         top: [0x0c, 0x0d, 0x10],
         bottom: [0x16, 0x17, 0x1b],
         orbs: [[0x4a, 0x52, 0x66], [0x3a, 0x40, 0x50], [0x5a, 0x62, 0x78]],
+        light: false,
+    },
+    // v0.26: "Branco" — estúdio claro, como nas referências do Theo (celular branco com cartões flutuando)
+    Palette {
+        name: "Branco",
+        top: [0xf6, 0xf7, 0xf9],
+        bottom: [0xdc, 0xdf, 0xe5],
+        orbs: [[0xff, 0xff, 0xff], [0xff, 0xe6, 0xc2], [0xd6, 0xe2, 0xf6]],
+        light: true,
     },
 ];
 
@@ -64,6 +78,8 @@ pub struct Theme {
     pub ink: Color32,
     pub frost: f32,
     pub glow: f32,
+    /// v0.26: tema claro ("Branco").
+    pub light: bool,
 }
 
 fn rgb(c: [u8; 3]) -> Color32 {
@@ -79,6 +95,26 @@ impl Theme {
     pub fn build(palette: usize, frost: f32, glow: f32) -> Self {
         let p = &PALETTES[palette % PALETTES.len()];
         let f = frost.clamp(0.0, 1.0);
+        if p.light {
+            // v0.26: estúdio claro — cartões brancos quase opacos, texto grafite, bordas bem suaves
+            return Self {
+                top: rgb(p.top),
+                bottom: rgb(p.bottom),
+                orbs: [rgb(p.orbs[0]), rgb(p.orbs[1]), rgb(p.orbs[2])],
+                glass: white(0.72 + 0.2 * f),
+                glass_hi: Color32::from_rgba_unmultiplied(0xff, 0xff, 0xff, 250),
+                edge: Color32::from_black_alpha(18),
+                shine: white(0.95),
+                bar: white(0.70 + 0.2 * f),
+                window: Color32::from_rgba_unmultiplied(0xfb, 0xfb, 0xfc, 248),
+                text: Color32::from_rgb(0x1d, 0x20, 0x27),
+                dim: Color32::from_rgba_unmultiplied(0x4a, 0x50, 0x5e, 190),
+                ink: Color32::from_rgb(0x0b, 0x0e, 0x18),
+                frost: f,
+                glow: glow.clamp(0.0, 1.0),
+                light: true,
+            };
+        }
         let bottom = rgb(p.bottom);
         let window = {
             let b = p.bottom;
@@ -109,6 +145,7 @@ impl Theme {
             ink: Color32::from_rgb(0x0b, 0x0e, 0x18),
             frost: f,
             glow: glow.clamp(0.0, 1.0),
+            light: false,
         }
     }
 }
@@ -179,7 +216,7 @@ pub fn paint_background(ctx: &egui::Context, time: f64, motion: bool, stars: boo
         );
     }
 
-    if stars {
+    if stars && !t.light {
         // Posições fixas (sem aleatório a cada quadro): parecem estrelas de verdade.
         let mut seed: u32 = 0x9e37_79b9;
         let mut rnd = || {
@@ -229,6 +266,18 @@ pub fn glass(
     glow: Option<Color32>,
 ) {
     let t = th();
+    if t.light {
+        // v0.26: no branco, o painel "flutua": sombra macia embaixo (como os cartões das referências)
+        for k in 0..8 {
+            let d = 2.0 + k as f32 * 2.2;
+            let a = (1.0 - k as f32 / 8.0).powi(2) * 0.055;
+            painter.rect_filled(
+                rect.translate(Vec2::new(0.0, 4.0 + k as f32 * 0.9)).expand(d * 0.5),
+                (radius as f32 + d) as u8,
+                Color32::from_black_alpha((a * 255.0) as u8),
+            );
+        }
+    }
     if let Some(g) = glow {
         if t.glow > 0.01 {
             // Aura só do lado de fora: anéis que vão sumindo.
@@ -303,7 +352,8 @@ pub fn apply_style(ctx: &egui::Context, scale: f32) {
         let v = &mut s.visuals;
         v.panel_fill = Color32::TRANSPARENT;
         v.window_fill = t.window;
-        v.extreme_bg_color = Color32::from_black_alpha(90);
+        v.extreme_bg_color = Color32::from_black_alpha(if t.light { 14 } else { 90 });
+        v.dark_mode = !t.light;
         v.faint_bg_color = t.glass;
         v.override_text_color = Some(t.text);
         v.window_corner_radius = CornerRadius::same(18);
@@ -312,13 +362,13 @@ pub fn apply_style(ctx: &egui::Context, scale: f32) {
             offset: [0, 10],
             blur: 40,
             spread: 0,
-            color: Color32::from_black_alpha(120),
+            color: Color32::from_black_alpha(if t.light { 45 } else { 120 }),
         };
         v.popup_shadow = Shadow {
             offset: [0, 6],
             blur: 24,
             spread: 0,
-            color: Color32::from_black_alpha(110),
+            color: Color32::from_black_alpha(if t.light { 40 } else { 110 }),
         };
         v.menu_corner_radius = CornerRadius::same(14);
         v.selection.bg_fill = Color32::from_rgba_unmultiplied(0x0a, 0x84, 0xff, 170);
