@@ -70,6 +70,9 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 - v0.28: `efeitos::MAX_DRUMS = 16` (`DRUMS = 8` = os de fábrica; `build_with` completa com pads mudos),
   `cfg.efeitos.drum_count/drum_names/drum_colors`, `core.drum_name`, editor em `drum_page` (`UiState.drum_edit/drum_sel`).
   Fonte "pad" = `assets/fonts/Poppins-SemiBold.ttf` (OFL, embutida).
+- v0.29: `lit_glass`/`panel_light`/`accent_pair` (app.rs, fim) = luz neon suave dos painéis; `noah_logo`. Cutoff por camada:
+  `Layer.cutoff`, `Target::Cutoff`, `Cmd::SetCutoff` → CC74, tratado no rustysynth (`Channel.cutoff_cc`, `voice.rs` multiplica o corte).
+  Aprender = item do menu ⚙ (o chip "Aprendendo... ✖" só aparece ligado). `cfg.tab` vai até 3 (aba DrumPads).
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

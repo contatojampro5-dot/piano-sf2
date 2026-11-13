@@ -274,7 +274,7 @@ pub struct Mapping {
 
 /// O que dá para tirar/colocar da tela no modo Editar: (id, nome mostrado).
 /// Camadas são "layer0".."layer5". Ajustes, Editar, GERAL e Pânico nunca saem (para sempre dar para voltar).
-pub const EDITABLE: [(&str, &str); 16] = [
+pub const EDITABLE: [(&str, &str); 15] = [
     ("layer0", "Camada 1"),
     ("layer1", "Camada 2"),
     ("layer2", "Camada 3"),
@@ -287,7 +287,6 @@ pub const EDITABLE: [(&str, &str); 16] = [
     ("kb_button", "Botão Teclado"),
     ("bt_button", "Botão Bluetooth"),
     ("wizard_button", "Botão Configurar mesinha"),
-    ("learn_button", "Botão Aprender"),
     ("scale_help", "Ajuda de escala (pads)"),
     ("sons_button", "Botão Sons grátis"),
     (

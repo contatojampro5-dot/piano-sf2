@@ -194,6 +194,14 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.29 — luz neon em tudo + Cutoff nos timbres
+- **Luz neon suave** ao passar o mouse (bem mais leve que a dos DrumPads), cada um na sua cor: blocos da aba Efeitos,
+  pads da aba Pads, camadas e colunas da aba Sons SF2. A luz segue o mouse e escorre pela borda.
+- O nome **NoahPad** acende com brilho neon quando o mouse passa em cima.
+- **Cutoff** em cada camada dos timbres SF2, ao lado do Reverb (esquerda = abafado, direita = normal); dá para ligar
+  na mesinha pelo Aprender.
+- **Aprender** saiu da barra de cima e foi para o menu ⚙ (enquanto aprende, aparece "Aprendendo... ✖" para sair).
+
 ### v0.28 — editor dos DrumPads
 - **⚙ na aba DrumPads** (ou botão direito → "Editar este pad"): trocar o **nome**, a **cor**, pôr um **som seu** (WAV/MP3),
   voltar ao som do programa, testar, e **adicionar pads** (até 16; os novos começam sem som) ou tirar o último.

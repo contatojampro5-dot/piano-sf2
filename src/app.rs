@@ -803,13 +803,8 @@ fn top_bar(
 ) {
     ui.horizontal(|ui| {
         // v0.22: o nome agora é NoahPad — "Noah" forte e "Pad" na cor dos pads, grudados, como um logo
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
-            ui.label(RichText::new("Noah").size(20.0).strong().color(th().text));
-            ui.label(RichText::new("Pad").size(20.0).strong().color(PAD_COLOR));
-        })
-        .response
-        .on_hover_text("NoahPad — o pad do Noah");
+        // v0.29: acende com luz neon ao passar o mouse
+        noah_logo(ui).on_hover_text("NoahPad — o pad do Noah");
         ui.add_space(10.0);
 
         // Arquivo SF2
@@ -868,6 +863,17 @@ fn top_bar(
                     st.editing = true;
                     ui.close();
                 }
+                // v0.29: Aprender saiu da barra de cima e veio para cá
+                let learn_label = if core.learn.active { "Parar de aprender" } else { "Aprender (ligar mesinha/teclado)" };
+                if ui
+                    .button(learn_label)
+                    .on_hover_text("Ligar um controle da mesinha ou do teclado a um controle da tela")
+                    .clicked()
+                {
+                    core.learn.active = !core.learn.active;
+                    core.learn.target = None;
+                    ui.close();
+                }
                 ui.separator();
                 if ui.button("Configurar mesinha (automático)").clicked() {
                     core.wizard_start();
@@ -889,30 +895,17 @@ fn top_bar(
                     st.editing = false;
                 }
             }
-            let learn_txt = if core.learn.active {
-                "Aprendendo..."
-            } else {
-                "Aprender"
-            };
-            let learn_btn =
-                egui::Button::new(RichText::new(learn_txt).color(if core.learn.active {
-                    th().ink
-                } else {
-                    th().text
-                }))
-                .fill(if core.learn.active {
-                    ORANGE
-                } else {
-                    th().glass_hi
-                });
-            if !core.cfg.is_hidden("learn_button")
-                && ui
-                    .add(learn_btn)
-                    .on_hover_text("Ligar um controle da mesinha a um controle da tela")
+            // v0.29: o Aprender mora no menu ⚙; aqui só aparece o aviso enquanto está aprendendo (clique = sair)
+            if core.learn.active {
+                let chip = egui::Button::new(RichText::new("Aprendendo...  ✖").color(th().ink)).fill(ORANGE);
+                if ui
+                    .add(chip)
+                    .on_hover_text("Clique num controle da tela e mexa no botão da mesinha/teclado. Clique aqui para sair.")
                     .clicked()
-            {
-                core.learn.active = !core.learn.active;
-                core.learn.target = None;
+                {
+                    core.learn.active = false;
+                    core.learn.target = None;
+                }
             }
             ui.add_space(14.0);
 
@@ -1184,7 +1177,13 @@ fn fx_card(
     add: impl FnOnce(&mut Ui),
 ) {
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    theme::glass(ui.painter(), rect, 18, false, None);
+    // v0.29: luz neon suave na cor de cada bloco (os DrumPads já têm a luz deles)
+    if title == "DrumPads" {
+        theme::glass(ui.painter(), rect, 18, false, None);
+    } else {
+        let lc = if color == th().text { Color32::from_rgb(0x7a, 0xa2, 0xff) } else { color };
+        lit_glass(ui, rect, 18, false, None, accent_pair(lc), 1.0);
+    }
     ui.painter().rect_filled(
         Rect::from_min_size(rect.min + Vec2::new(16.0, 0.0), Vec2::new(rect.width() - 32.0, 3.0)),
         2,
@@ -2173,7 +2172,7 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         // Coluna da direita: volume, anterior/próximo, parar
         let h = (rows as f32 * cell + (rows as f32 - 1.0) * gap).max(250.0);
         let (rect, _) = ui.allocate_exact_size(Vec2::new(side_w, h), Sense::hover());
-        crate::theme::glass(ui.painter(), rect, 18, false, None);
+        lit_glass(ui, rect, 18, false, None, accent_pair(PAD_COLOR), 1.0);
         let inner = rect.shrink2(Vec2::new(12.0, 10.0));
         let mut child = ui.new_child(
             egui::UiBuilder::new()
@@ -2247,6 +2246,11 @@ fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: 
         .ctx()
         .animate_bool_with_time(resp.id.with("on"), active, 0.35);
     theme::glass(p, rect, 20, hover > 0.5, (on > 0.01).then_some(PAD_COLOR));
+    // v0.29: luz neon nos pads (como nos DrumPads, mais leve)
+    panel_light(p, rect, 20.0, accent_pair(PAD_COLOR), hover, resp.hover_pos(), 1.8);
+    if hover > 0.0 && hover < 1.0 {
+        ui.ctx().request_repaint();
+    }
     if on > 0.01 {
         p.rect_filled(rect, 20, PAD_COLOR.gamma_multiply(0.85 * on));
     }
@@ -2796,7 +2800,6 @@ fn edit_banner(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                         ("kb_button", "Botão Teclado"),
                         ("bt_button", "Botão Bluetooth"),
                         ("wizard_button", "Botão Configurar mesinha"),
-                        ("learn_button", "Botão Aprender"),
                         ("sons_button", "Botão Sons grátis"),
                         ("pad_styles", "Estilos de pad do programa"),
                     ];
@@ -2820,13 +2823,7 @@ fn pad_strip(ui: &mut Ui, core: &mut Core, size: Vec2, details: bool) -> Rect {
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter_at(rect);
     let _ = painter;
-    crate::theme::glass(
-        ui.painter(),
-        rect,
-        18,
-        playing,
-        playing.then_some(PAD_COLOR),
-    );
+    lit_glass(ui, rect, 18, playing, playing.then_some(PAD_COLOR), accent_pair(PAD_COLOR), 1.0);
     let inner = rect.shrink2(Vec2::new(8.0, 8.0));
     let mut child = ui.new_child(
         egui::UiBuilder::new()
@@ -2953,7 +2950,7 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) -
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter_at(rect);
     let _ = painter;
-    crate::theme::glass(ui.painter(), rect, 18, layer.on, audible.then_some(color));
+    lit_glass(ui, rect, 18, layer.on, audible.then_some(color), accent_pair(color), 1.0);
     let inner = rect.shrink2(Vec2::new(8.0, if compact { 6.0 } else { 8.0 }));
     let mut child = ui.new_child(
         egui::UiBuilder::new()
@@ -3144,7 +3141,7 @@ fn master_strip(ui: &mut Ui, core: &mut Core, size: Vec2, details: bool) {
     let details = details || core.learn.active || core.pitch.abs() > 0.01 || core.modulation > 0.0;
     let compact = compact_height(size.y);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    crate::theme::glass(ui.painter(), rect, 18, false, None);
+    lit_glass(ui, rect, 18, false, None, accent_pair(Color32::from_rgb(0x7a, 0xa2, 0xff)), 1.0);
     let inner = rect.shrink2(Vec2::new(10.0, 8.0));
     let mut child = ui.new_child(
         egui::UiBuilder::new()
@@ -3645,7 +3642,7 @@ fn details_button(ui: &mut Ui, open: bool, size: Vec2, hint: &str) -> egui::Resp
 fn scale_panel(ui: &mut Ui, core: &mut Core, st: &mut UiState, size: Vec2) {
     use crate::teoria;
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    theme::glass(ui.painter(), rect, 18, false, None);
+    lit_glass(ui, rect, 18, false, None, accent_pair(PAD_COLOR), 1.0);
     let inner = rect.shrink2(Vec2::new(16.0, 10.0));
     let mut child = ui.new_child(
         egui::UiBuilder::new()
@@ -4624,3 +4621,77 @@ fn panel_light(p: &egui::Painter, rect: Rect, r: f32, colors: (Color32, Color32)
     }
 }
 
+
+/// v0.29: o nome NoahPad acende com luz neon ao passar o mouse (brilho macio atrás que segue o cursor
+/// e um halo em volta das letras).
+fn noah_logo(ui: &mut Ui) -> egui::Response {
+    let font = FontId::proportional(20.0);
+    let probe_a = ui.painter().layout_no_wrap("Noah".to_string(), font.clone(), th().text);
+    let probe_b = ui.painter().layout_no_wrap("Pad".to_string(), font.clone(), PAD_COLOR);
+    let size = Vec2::new(probe_a.size().x + probe_b.size().x, probe_a.size().y.max(probe_b.size().y));
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
+    let hover = ui.ctx().animate_bool_with_time(resp.id.with("luz"), resp.hovered(), 0.3);
+    if hover > 0.0 && hover < 1.0 {
+        ui.ctx().request_repaint();
+    }
+    let p = ui.painter();
+    let white = th().light;
+    let (pa, pb) = accent_pair(PAD_COLOR);
+    if hover > 0.01 {
+        // brilho macio (elipse em degradê) atrás do nome; o miolo segue o mouse
+        let m = resp.hover_pos().unwrap_or(rect.center());
+        let blob = |center: Pos2, radii: Vec2, c: Color32, a: f32| {
+            let mut mesh = egui::Mesh::default();
+            let col = |w: f32| {
+                let w = (w * a).clamp(0.0, 1.0);
+                let alpha = if white { w } else { w * 0.35 };
+                Color32::from_rgba_premultiplied(
+                    (c.r() as f32 * w) as u8,
+                    (c.g() as f32 * w) as u8,
+                    (c.b() as f32 * w) as u8,
+                    (alpha * 255.0) as u8,
+                )
+            };
+            const R: [(f32, f32); 5] = [(0.0, 1.0), (0.3, 0.8), (0.55, 0.5), (0.8, 0.18), (1.0, 0.0)];
+            let seg = 40;
+            for (s, w) in R {
+                for k in 0..seg {
+                    let t = k as f32 / seg as f32 * std::f32::consts::TAU;
+                    mesh.colored_vertex(center + Vec2::new(t.cos() * radii.x, t.sin() * radii.y) * s, col(w));
+                }
+            }
+            for ri in 0..R.len() - 1 {
+                for k in 0..seg {
+                    let a0 = (ri * seg + k) as u32;
+                    let b0 = (ri * seg + (k + 1) % seg) as u32;
+                    mesh.add_triangle(a0, b0, b0 + seg as u32);
+                    mesh.add_triangle(a0, b0 + seg as u32, a0 + seg as u32);
+                }
+            }
+            p.add(Shape::mesh(mesh));
+        };
+        blob(rect.center(), Vec2::new(rect.width() * 0.85, rect.height() * 1.25), mix_color(pa, pb, 0.5), 0.55 * hover);
+        let cx = m.x.clamp(rect.left(), rect.right());
+        blob(Pos2::new(cx, rect.center().y), Vec2::new(rect.height() * 1.6, rect.height() * 1.0), pb, 0.7 * hover);
+    }
+    // letras: "Noah" clareia, "Pad" vira neon; um halo fininho em volta quando acende
+    let noah_c = if white { th().text } else { mix_color(th().text, Color32::WHITE, hover) };
+    let pad_c = mix_color(PAD_COLOR, if white { pa } else { mix_color(pb, Color32::WHITE, 0.35) }, hover);
+    let ga = p.layout_no_wrap("Noah".to_string(), font.clone(), noah_c);
+    let gb = p.layout_no_wrap("Pad".to_string(), font.clone(), pad_c);
+    let pos_a = Pos2::new(rect.left(), rect.center().y - ga.size().y / 2.0);
+    let pos_b = Pos2::new(rect.left() + ga.size().x, rect.center().y - gb.size().y / 2.0);
+    if hover > 0.01 {
+        for k in 0..8 {
+            let t = k as f32 / 8.0 * std::f32::consts::TAU;
+            let off = Vec2::new(t.cos(), t.sin()) * 1.4;
+            let halo_b = p.layout_no_wrap("Pad".to_string(), font.clone(), pad_c.gamma_multiply(0.22 * hover));
+            p.galley(pos_b + off, halo_b, pad_c);
+            let halo_a = p.layout_no_wrap("Noah".to_string(), font.clone(), pa.gamma_multiply(0.12 * hover));
+            p.galley(pos_a + off, halo_a, pa);
+        }
+    }
+    p.galley(pos_a, ga, noah_c);
+    p.galley(pos_b, gb, pad_c);
+    resp
+}
