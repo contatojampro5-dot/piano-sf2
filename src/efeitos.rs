@@ -227,9 +227,16 @@ impl Arp {
 // ---------------------------------------------------------------------------------------------
 
 pub const DRUMS: usize = 8;
+/// v0.28: dá para ter até 16 DrumPads (do 9º em diante, cada um toca o som que o Theo escolher).
+pub const MAX_DRUMS: usize = 16;
 pub const DRUM_NAMES: [&str; DRUMS] = [
     "Kick", "Snare", "Clap", "Hi-hat", "Crash", "808", "Riser", "Impact",
 ];
+
+/// v0.28: nome do programa para um DrumPad (os 8 de fábrica ou "Pad 9", "Pad 10"...).
+pub fn drum_default_name(i: usize) -> String {
+    DRUM_NAMES.get(i).map(|s| s.to_string()).unwrap_or_else(|| format!("Pad {}", i + 1))
+}
 
 /// Os 8 sons, prontos (estéreo), na taxa de amostragem da placa.
 pub struct DrumKit {
@@ -501,6 +508,8 @@ impl DrumKit {
     /// (arquivo sumiu, formato estranho...): esses pads ficam com o som do programa.
     pub fn build_with(rate: u32, files: &[(usize, String)]) -> (Self, Vec<(usize, String)>) {
         let mut kit = Self::build(rate);
+        // v0.28: pads 9..16 começam mudos (até o Theo pôr um som)
+        kit.hits.resize(MAX_DRUMS, (Vec::new(), Vec::new()));
         let mut errors = Vec::new();
         for (pad, path) in files {
             if *pad >= kit.hits.len() {

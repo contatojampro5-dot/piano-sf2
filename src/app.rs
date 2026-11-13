@@ -80,6 +80,9 @@ struct UiState {
     fx_details: [bool; 5],
     /// v0.19: janelas de arquivo (só com o `core` destravado): som de um DrumPad, coral do Voice FX.
     drum_file_dialog: Option<usize>,
+    /// v0.28: editor dos DrumPads aberto e qual pad está sendo editado.
+    drum_edit: bool,
+    drum_sel: usize,
     voicefx_file_dialog: bool,
     /// v0.21: lista de pads aberta (a bolinha de planeta na aba Pads).
     pad_list_open: bool,
@@ -185,6 +188,8 @@ impl PianoApp {
                 pad_details: false,
                 fx_details: [false; 5],
                 drum_file_dialog: None,
+                drum_edit: false,
+                drum_sel: 0,
                 voicefx_file_dialog: false,
                 pad_list_open: false,
                 pad_mix_mode: false,
@@ -430,17 +435,14 @@ impl eframe::App for PianoApp {
 }
 
 fn setup_style(ctx: &egui::Context) {
-    // v0.27: fonte dos nomes dos DrumPads — Segoe UI Semibold do Windows (ou Bahnschrift); sem elas, a padrão
+    // v0.28: fonte dos nomes dos DrumPads = Poppins SemiBold (embutida, licença OFL: assets/fonts/OFL-Poppins.txt)
     let mut fonts = egui::FontDefinitions::default();
     let base = fonts.families.get(&egui::FontFamily::Proportional).cloned().unwrap_or_default();
-    let mut fam = base.clone();
-    for path in [r"C:\Windows\Fonts\seguisb.ttf", r"C:\Windows\Fonts\bahnschrift.ttf"] {
-        if let Ok(bytes) = std::fs::read(path) {
-            fonts.font_data.insert("pad".into(), std::sync::Arc::new(egui::FontData::from_owned(bytes)));
-            fam = std::iter::once("pad".to_string()).chain(base).collect();
-            break;
-        }
-    }
+    fonts.font_data.insert(
+        "pad".into(),
+        std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../assets/fonts/Poppins-SemiBold.ttf"))),
+    );
+    let fam: Vec<String> = std::iter::once("pad".to_string()).chain(base).collect();
     fonts.families.insert(egui::FontFamily::Name("pad".into()), fam);
     ctx.set_fonts(fonts);
     ctx.set_visuals(egui::Visuals::dark());
@@ -1129,20 +1131,27 @@ fn tabs_bar(ui: &mut Ui, core: &mut Core) {
                 if active { th().text } else { th().dim },
             );
             if i == 3 {
-                // ícone de grade 4×2 (a fonte não tem um de bateria)
+                // v0.28: ícone de tamborzinho com duas baquetas (a fonte não tem um de bateria)
                 let c = if active { th().text } else { th().dim };
-                let (s, g) = (4.0, 1.8);
-                let x0 = label_rect.left() + 2.0;
-                let y0 = label_rect.center().y - s - g / 2.0;
-                for r in 0..2 {
-                    for k in 0..4 {
-                        p.rect_filled(
-                            Rect::from_min_size(Pos2::new(x0 + k as f32 * (s + g), y0 + r as f32 * (s + g)), Vec2::splat(s)),
-                            1,
-                            c,
-                        );
-                    }
-                }
+                let st = Stroke::new(1.5, c);
+                let cx = label_rect.left() + 10.0;
+                let cy = label_rect.center().y + 2.0;
+                let (rx, ry, h) = (8.0f32, 3.0f32, 7.0f32);
+                let ell = |y: f32, from: f32, to: f32| -> Vec<Pos2> {
+                    (0..=16)
+                        .map(|k| {
+                            let a = from + (to - from) * k as f32 / 16.0;
+                            Pos2::new(cx + rx * a.cos(), y + ry * a.sin())
+                        })
+                        .collect()
+                };
+                let tau = std::f32::consts::TAU;
+                p.add(Shape::line(ell(cy - h / 2.0, 0.0, tau), st));
+                p.add(Shape::line(ell(cy + h / 2.0, 0.0, tau / 2.0), st));
+                p.line_segment([Pos2::new(cx - rx, cy - h / 2.0), Pos2::new(cx - rx, cy + h / 2.0)], st);
+                p.line_segment([Pos2::new(cx + rx, cy - h / 2.0), Pos2::new(cx + rx, cy + h / 2.0)], st);
+                p.line_segment([Pos2::new(cx - 9.0, cy - 12.0), Pos2::new(cx - 1.0, cy - 5.0)], st);
+                p.line_segment([Pos2::new(cx + 9.0, cy - 12.0), Pos2::new(cx + 1.0, cy - 5.0)], st);
             }
             if *live {
                 p.circle_filled(
@@ -1270,10 +1279,10 @@ fn fx_bar(ui: &mut Ui, core: &mut Core, w: f32, value: &mut f32, color: Color32,
 fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     let avail = ui.available_size();
     let gap = 12.0;
-    // v0.27: os DrumPads foram para a aba deles; aqui ficam 3 cartões em cima e 2 embaixo, maiores
-    let row_h = ((avail.y - gap) / 2.0).max(240.0);
-    let w1 = ((avail.x - 2.0 * gap) / 3.0).max(180.0);
-    let w2 = ((avail.x - gap) / 2.0).max(220.0);
+    // v0.28: os 5 blocos lado a lado, compridos (de cima a baixo)
+    let row_h = avail.y.max(240.0);
+    let w1 = ((avail.x - 4.0 * gap) / 5.0).max(150.0);
+    let w2 = w1;
     let mut e = core.cfg.efeitos.clone();
     let learning = core.learn.active;
     let [mut d_tempo, mut d_pulse, mut d_arp, mut d_voice, mut d_filt] = st.fx_details;
@@ -1405,10 +1414,6 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             }
         });
 
-    });
-    ui.add_space(gap);
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = gap;
         // ---- Voice FX ----
         fx_card(ui, Vec2::new(w2, row_h), "🎤 Voice FX", VOICE_COLOR, Some((&mut d_voice, "Oitava do coral")), |ui| {
             let w = ui.available_width();
@@ -1539,29 +1544,47 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     }
 }
 
-// ---------- v0.27: aba DrumPads (pads grandes em 2 linhas de 4, volume em pé) ----------
+// ---------- v0.27: aba DrumPads (pads grandes, volume em pé) · v0.28: editor (nome, cor, som, quantos pads) ----------
+
+/// Cores de um DrumPad: a escolhida no editor ou a do programa.
+fn drum_colors_of(e: &crate::model::Efeitos, i: usize) -> (Color32, Color32) {
+    let k = e
+        .drum_colors
+        .get(i)
+        .map(|c| *c as usize)
+        .filter(|c| *c < DRUM_ACCENTS.len())
+        .unwrap_or(i % DRUM_ACCENTS.len());
+    DRUM_ACCENTS[k]
+}
 
 fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     core.ensure_drum_kit();
     let avail = ui.available_size();
-    let mut drum_volume = core.cfg.efeitos.drum_volume;
+    let mut e = core.cfg.efeitos.clone();
     let mut drum_reset: Option<usize> = None;
     let mut drum_dialog: Option<usize> = None;
-    let n = crate::efeitos::DRUMS;
-    let (cols, rows) = (n / 2, 2usize);
-    fx_card(ui, avail, "DrumPads", DRUM_COLOR, None, |ui| {
+    let mut test_hit: Option<usize> = None;
+    let n = e.drum_count.clamp(4, crate::efeitos::MAX_DRUMS);
+    st.drum_sel = st.drum_sel.min(n - 1);
+    // 2 linhas até 8 pads; mais que isso, linhas de 4
+    let (cols, rows) = if n <= 8 { (n.div_ceil(2), 2usize) } else { (4, n.div_ceil(4)) };
+    let before = st.drum_edit;
+    let mut editing = st.drum_edit;
+    fx_card(ui, avail, "DrumPads", DRUM_COLOR, Some((&mut editing, "Editar os pads: nome, cor, som e quantos pads")), |ui| {
         let (area, _) = ui.allocate_exact_size(ui.available_size() - Vec2::new(0.0, 4.0), Sense::hover());
+        let edit_w = if st.drum_edit { 300.0f32.min(area.width() * 0.4) } else { 0.0 };
         let gap = 18.0;
         let margin = 16.0; // o brilho neon passa um pouco da borda do pad
         let fader_w = 58.0;
         let fader_gap = 34.0;
         let label_h = 22.0;
-        let pad = ((area.width() - 2.0 * margin - fader_w - fader_gap - (cols as f32 - 1.0) * gap) / cols as f32)
+        let room_w = area.width() - edit_w - if edit_w > 0.0 { 20.0 } else { 0.0 };
+        let pad = ((room_w - 2.0 * margin - fader_w - fader_gap - (cols as f32 - 1.0) * gap) / cols as f32)
             .min((area.height() - 2.0 * margin - (rows as f32 - 1.0) * gap) / rows as f32)
-            .clamp(56.0, 230.0);
+            .clamp(48.0, 230.0);
         let grid = Vec2::new(cols as f32 * pad + (cols as f32 - 1.0) * gap, rows as f32 * pad + (rows as f32 - 1.0) * gap);
         let total_w = grid.x + fader_gap + fader_w;
-        let origin = Pos2::new(area.center().x - total_w / 2.0, area.center().y - grid.y / 2.0);
+        let origin = Pos2::new(area.left() + room_w / 2.0 - total_w / 2.0, area.center().y - grid.y / 2.0);
         let grid_rect = Rect::from_min_size(origin, grid);
         // mouse por perto: o pad embaixo acende forte e os vizinhos de leve
         let mouse = ui.ctx().pointer_hover_pos().filter(|m| grid_rect.expand(gap).contains(*m));
@@ -1578,25 +1601,38 @@ fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                 .powf(1.6);
             glowing |= glow > 0.0;
             let own = core.drum_file_name(i);
+            let silent = own.is_none() && i >= crate::efeitos::DRUMS;
+            let sub = match &own {
+                Some(f) => Some(format!("♪ {f}")),
+                None if silent => Some("sem som · ⚙ para escolher".to_string()),
+                None => None,
+            };
             let pressed = resp.is_pointer_button_down_on();
             let hover = ui.ctx().animate_bool_with_time(resp.id.with("luz"), resp.hovered(), 0.18);
             let light = (0.75 * hover).max(glow);
             glowing |= hover > 0.0 && hover < 1.0;
             let near_mouse = mouse.filter(|m| rect.distance_to_pos(*m) < pad * 0.6);
-            drum_tile(
-                ui.painter(),
-                if pressed { rect.shrink(3.0) } else { rect },
-                DRUM_ACCENTS[i % DRUM_ACCENTS.len()],
-                light,
-                near_mouse,
-                i,
-                own.as_deref(),
-            );
+            let name = core.drum_name(i);
+            let shown = if pressed { rect.shrink(3.0) } else { rect };
+            drum_tile(ui.painter(), shown, drum_colors_of(&e, i), light, near_mouse, &name, sub.as_deref());
+            if st.drum_edit && st.drum_sel == i {
+                // pad escolhido no editor: anel claro em volta
+                ui.painter().rect_stroke(
+                    shown.expand(5.0),
+                    (pad * 0.14 + 5.0).clamp(14.0, 26.0) as u8,
+                    Stroke::new(2.0, th().text),
+                    StrokeKind::Outside,
+                );
+            }
             let resp = resp.on_hover_text(match &own {
-                Some(nm) => format!("{} · seu som: {nm}\nBotão direito: trocar ou voltar ao som do programa", crate::efeitos::DRUM_NAMES[i]),
-                None => format!("{}\nBotão direito: usar um som seu (WAV/MP3)", crate::efeitos::DRUM_NAMES[i]),
+                Some(nm) => format!("{name} · seu som: {nm}\nBotão direito: trocar ou voltar ao som do programa"),
+                None if silent => format!("{name} — ainda sem som\nBotão direito (ou ⚙): escolher um som seu (WAV/MP3)"),
+                None => format!("{name}\nBotão direito: usar um som seu (WAV/MP3)"),
             });
             if !learnable(ui, core, &resp, Target::Drum(i)) && resp.clicked() {
+                if st.drum_edit {
+                    st.drum_sel = i;
+                }
                 core.drum_hit(i, 110);
             }
             resp.context_menu(|ui| {
@@ -1604,8 +1640,14 @@ fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                     drum_dialog = Some(i);
                     ui.close();
                 }
-                if own.is_some() && ui.button("Voltar ao som do programa").clicked() {
+                let reset_label = if i < crate::efeitos::DRUMS { "Voltar ao som do programa" } else { "Tirar o som" };
+                if own.is_some() && ui.button(reset_label).clicked() {
                     drum_reset = Some(i);
+                    ui.close();
+                }
+                if ui.button("✏ Editar este pad").clicked() {
+                    st.drum_edit = true;
+                    st.drum_sel = i;
                     ui.close();
                 }
             });
@@ -1626,28 +1668,127 @@ fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         ui.painter().text(
             Pos2::new(fader_rect.center().x, grid_rect.bottom()),
             Align2::CENTER_BOTTOM,
-            format!("{:.0}%", drum_volume * 100.0),
+            format!("{:.0}%", e.drum_volume * 100.0),
             FontId::monospace(14.0),
             th().text,
         );
         let learning = core.learn.active;
         let (resp, newv) = ui
             .scope_builder(egui::UiBuilder::new().max_rect(fader_rect), |ui| {
-                fader(ui, fader_rect.size(), drum_volume, DRUM_COLOR, learning)
+                fader(ui, fader_rect.size(), e.drum_volume, DRUM_COLOR, learning)
             })
             .inner;
         learnable(ui, core, &resp, Target::DrumVolume);
         if let Some(v) = newv {
-            drum_volume = v;
+            e.drum_volume = v;
+        }
+
+        // ---- editor (⚙): nome, cor, som e quantos pads ----
+        if st.drum_edit && edit_w > 0.0 {
+            let panel = Rect::from_min_max(Pos2::new(area.right() - edit_w, area.top() + 4.0), Pos2::new(area.right(), area.bottom()));
+            ui.painter().rect_filled(panel, 14, th().glass_hi);
+            ui.painter().rect_stroke(panel, 14, Stroke::new(1.0, th().edge), StrokeKind::Inside);
+            let s = st.drum_sel;
+            ui.scope_builder(
+                egui::UiBuilder::new().max_rect(panel.shrink(14.0)).layout(Layout::top_down(Align::Min)),
+                |ui| {
+                    egui::ScrollArea::vertical().id_salt("drum_editor").auto_shrink([false, false]).show(ui, |ui| {
+                        let w = ui.available_width();
+                        ui.label(RichText::new(format!("Editando o pad {}", s + 1)).strong().size(16.0));
+                        ui.label(RichText::new("Clique num pad para escolher outro").size(12.0).color(th().dim));
+                        ui.add_space(10.0);
+
+                        ui.label(RichText::new("Nome").size(13.0).color(th().dim));
+                        if e.drum_names.len() <= s {
+                            e.drum_names.resize(s + 1, String::new());
+                        }
+                        ui.add(
+                            egui::TextEdit::singleline(&mut e.drum_names[s])
+                                .hint_text(crate::efeitos::drum_default_name(s))
+                                .char_limit(16)
+                                .desired_width(w),
+                        );
+                        ui.add_space(10.0);
+
+                        ui.label(RichText::new("Cor").size(13.0).color(th().dim));
+                        let cur = drum_colors_of(&e, s);
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing = Vec2::splat(8.0);
+                            for (k, (a, b)) in DRUM_ACCENTS.iter().enumerate() {
+                                let (r, resp) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::click());
+                                let p = ui.painter();
+                                p.circle_filled(r.center(), 12.0, *a);
+                                p.circle_filled(r.center() + Vec2::new(4.0, 4.0), 7.0, *b);
+                                if cur == (*a, *b) {
+                                    p.circle_stroke(r.center(), 14.0, Stroke::new(2.0, th().text));
+                                }
+                                if resp.on_hover_text("Usar esta cor").clicked() {
+                                    if e.drum_colors.len() <= s {
+                                        e.drum_colors.resize(s + 1, 255);
+                                    }
+                                    e.drum_colors[s] = k as u8;
+                                }
+                            }
+                        });
+                        ui.add_space(10.0);
+
+                        ui.label(RichText::new("Som").size(13.0).color(th().dim));
+                        let own = core.drum_file_name(s);
+                        ui.label(match &own {
+                            Some(f) => RichText::new(format!("♪ {f}")).color(th().text),
+                            None if s < crate::efeitos::DRUMS => RichText::new("Som do programa").color(th().text),
+                            None => RichText::new("Ainda sem som").color(th().dim),
+                        });
+                        if ui.add_sized([w, 32.0], egui::Button::new("♪ Escolher um som meu (WAV/MP3)...")).clicked() {
+                            drum_dialog = Some(s);
+                        }
+                        let reset_label = if s < crate::efeitos::DRUMS { "↺ Voltar ao som do programa" } else { "Tirar o som" };
+                        if own.is_some() && ui.add_sized([w, 30.0], egui::Button::new(reset_label)).clicked() {
+                            drum_reset = Some(s);
+                        }
+                        if ui.add_sized([w, 30.0], egui::Button::new("▶ Testar")).clicked() {
+                            test_hit = Some(s);
+                        }
+                        ui.add_space(14.0);
+                        ui.separator();
+
+                        ui.label(RichText::new(format!("Quantidade de pads: {n}")).size(13.0).color(th().dim));
+                        ui.horizontal(|ui| {
+                            let half = (w - 8.0) / 2.0;
+                            let add = ui
+                                .add_enabled(
+                                    n < crate::efeitos::MAX_DRUMS,
+                                    egui::Button::new("+ Adicionar pad").min_size(Vec2::new(half, 30.0)),
+                                )
+                                .on_hover_text("Até 16 pads. Os novos começam sem som: escolha um som seu.");
+                            if add.clicked() {
+                                e.drum_count = n + 1;
+                                st.drum_sel = n;
+                            }
+                            let del = ui.add_enabled(n > 4, egui::Button::new("− Tirar o último").min_size(Vec2::new(half, 30.0)));
+                            if del.clicked() {
+                                e.drum_count = n - 1;
+                            }
+                        });
+                        ui.add_space(14.0);
+                        if ui.add_sized([w, 34.0], egui::Button::new(RichText::new("✔ Pronto").strong())).clicked() {
+                            st.drum_edit = false;
+                        }
+                    });
+                },
+            );
         }
         if glowing {
             ui.ctx().request_repaint_after(Duration::from_millis(16));
         }
     });
-    if drum_volume != core.cfg.efeitos.drum_volume {
-        let mut e = core.cfg.efeitos.clone();
-        e.drum_volume = drum_volume;
-        core.set_efeitos(e);
+    // o ⚙ do cartão abre/fecha o editor
+    if editing != before {
+        st.drum_edit = editing;
+    }
+    core.set_efeitos(e);
+    if let Some(i) = test_hit {
+        core.drum_hit(i, 110);
     }
     if let Some(i) = drum_reset {
         core.set_drum_file(i, None);
@@ -3277,7 +3418,7 @@ fn rounded_outline(rect: Rect, r: f32, per_corner: usize) -> Vec<Pos2> {
 /// `light` (0..1) = o quanto está aceso (mouse em cima ou batida): acende como luz RGB neon —
 /// borda em degradê de duas cores, luz entrando pelas bordas e subindo de baixo, centro escuro e transparente.
 /// `spot` = onde o mouse está (v0.25.1: uma luz mais forte segue o mouse por dentro do pad).
-fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f32, spot: Option<Pos2>, i: usize, own: Option<&str>) {
+fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f32, spot: Option<Pos2>, name: &str, sub: Option<&str>) {
     let (ca, cb) = colors;
     let r = (rect.width() * 0.14).clamp(10.0, 20.0);
     let light = light.clamp(0.0, 1.0);
@@ -3309,7 +3450,7 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
         for k in 0..n {
             let c = mix_color(ca, cb, diag(inner[k]));
             let near = spot.map(|m| (1.0 - inner[k].distance(m) / fall).clamp(0.0, 1.0)).unwrap_or(0.0);
-            let w = light * 0.30 + 0.35 * near * near * reach;
+            let w = light * 0.42 + 0.49 * near * near * reach; // v0.28: +40%
             mesh.colored_vertex(inner[k], glow_px([c.r() as f32 * w, c.g() as f32 * w, c.b() as f32 * w], w));
             mesh.colored_vertex(outer[k], Color32::TRANSPARENT);
         }
@@ -3362,7 +3503,7 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
                 };
                 // luz entrando pelas bordas (mais forte do lado do mouse, inclusive nas laterais)
                 let e = ((s - 0.55) / 0.45).clamp(0.0, 1.0).powf(2.2);
-                add(mix_color(ca, cb, diag(v)), e * (light * 0.50 + 0.9 * near * near * reach));
+                add(mix_color(ca, cb, diag(v)), e * (light * 0.70 + 1.26 * near * near * reach));
                 // fita de LED subindo de baixo
                 let dl = v.distance(led) / (rect.width() * 0.75);
                 add(mix_color(ca, cb, 0.5), (-dl * dl).exp() * light * 0.42);
@@ -3405,38 +3546,33 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
             .map(|m| (1.0 - (a.distance(m) / fall)).clamp(0.0, 1.0).powf(1.6) * reach)
             .unwrap_or(0.0);
         let hot = if white { neon } else { Color32::WHITE };
-        let c = mix_color(mix_color(idle, neon, (if white { 0.10 } else { 0.25 } + 0.75 * light + 0.6 * near).min(1.0)), hot, near * near * 0.45);
-        p.line_segment([a, b], Stroke::new(1.2 + 1.0 * light + 1.2 * near, c));
+        let c = mix_color(mix_color(idle, neon, (if white { 0.10 } else { 0.25 } + 1.0 * light + 0.85 * near).min(1.0)), hot, near * near * 0.45);
+        p.line_segment([a, b], Stroke::new(1.2 + 1.4 * light + 1.7 * near, c));
     }
-    // nome pequeno no canto de cima (como no sampler)
+    // nome no canto de cima (como no sampler)
     let pad_in = (rect.width() * 0.09).clamp(8.0, 18.0);
-    let font = (rect.width() * 0.075).clamp(10.0, 17.0);
-    let name = crate::efeitos::DRUM_NAMES[i % crate::efeitos::DRUMS];
+    let font = (rect.width() * 0.08).clamp(10.0, 18.0);
     let txt = if white {
         mix_color(Color32::from_rgb(0x6b, 0x72, 0x80), Color32::from_rgb(0x1d, 0x20, 0x27), light)
     } else {
         mix_color(Color32::from_rgb(0x8a, 0x92, 0xa3), Color32::WHITE, light)
     };
-    let own_c = if white { mix_color(ca, Color32::BLACK, 0.25) } else { mix_color(ca, Color32::WHITE, 0.3) };
-    match own {
-        Some(file) => {
-            let short: String = file.chars().take(14).collect();
-            pad_label(p, rect.min + Vec2::new(pad_in, pad_in), &name.to_uppercase(), font, txt);
-            p.text(
-                Pos2::new(rect.left() + pad_in, rect.bottom() - pad_in),
-                Align2::LEFT_BOTTOM,
-                format!("♪ {short}"),
-                FontId::proportional(font - 1.0),
-                own_c,
-            );
-        }
-        None => {
-            pad_label(p, rect.min + Vec2::new(pad_in, pad_in), &name.to_uppercase(), font, txt);
-        }
+    pad_label(p, rect.min + Vec2::new(pad_in, pad_in), &name.to_uppercase(), font, txt);
+    // embaixo: o som próprio ("♪ arquivo") ou um aviso de pad sem som
+    if let Some(sub) = sub {
+        let short: String = sub.chars().take(18).collect();
+        let c = if white { mix_color(ca, Color32::BLACK, 0.25) } else { mix_color(ca, Color32::WHITE, 0.3) };
+        p.text(
+            Pos2::new(rect.left() + pad_in, rect.bottom() - pad_in),
+            Align2::LEFT_BOTTOM,
+            short,
+            FontId::proportional((font - 2.0).max(10.0)),
+            c,
+        );
     }
 }
 
-/// v0.27: nome do DrumPad com a fonte "pad" (Segoe UI Semibold) e letras um pouco espaçadas.
+/// v0.27: nome do DrumPad com a fonte "pad" (v0.28: Poppins SemiBold) e letras um pouco espaçadas.
 fn pad_label(p: &egui::Painter, pos: Pos2, text: &str, size: f32, color: Color32) {
     let mut job = egui::text::LayoutJob::default();
     job.append(

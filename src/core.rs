@@ -139,7 +139,7 @@ pub struct Core {
     drum_kit_files: Vec<(usize, String)>,
     voicefx_src: Option<Arc<GrainSource>>,
     /// Quando cada DrumPad foi tocado (a tela acende o botão por um instante).
-    pub drum_flash: [Option<Instant>; crate::efeitos::DRUMS],
+    pub drum_flash: [Option<Instant>; crate::efeitos::MAX_DRUMS],
 }
 
 pub type SharedCore = Arc<Mutex<Core>>;
@@ -262,7 +262,7 @@ impl Core {
             drum_kit: None,
             drum_kit_files: Vec::new(),
             voicefx_src: None,
-            drum_flash: [None; crate::efeitos::DRUMS],
+            drum_flash: [None; crate::efeitos::MAX_DRUMS],
         }
     }
 
@@ -543,7 +543,7 @@ impl Core {
                 // o arquivo sumiu ou não abre: o pad volta ao som do programa (e avisa)
                 let names: Vec<String> = errors
                     .iter()
-                    .map(|(p, e)| format!("{}: {e}", crate::efeitos::DRUM_NAMES[*p]))
+                    .map(|(p, e)| format!("{}: {e}", self.drum_name(*p)))
                     .collect();
                 self.cfg
                     .efeitos
@@ -558,7 +558,7 @@ impl Core {
 
     /// v0.19: usar um som do Theo num DrumPad (None = volta ao som do programa).
     pub fn set_drum_file(&mut self, pad: usize, path: Option<String>) {
-        if pad >= crate::efeitos::DRUMS {
+        if pad >= crate::efeitos::MAX_DRUMS {
             return;
         }
         if let Some(p) = &path {
@@ -578,11 +578,19 @@ impl Core {
         self.notify(match &path {
             Some(p) => format!(
                 "{} agora toca o seu som: {}",
-                crate::efeitos::DRUM_NAMES[pad],
+                self.drum_name(pad),
                 pads::name_from_file(p)
             ),
-            None => format!("{} voltou ao som do programa", crate::efeitos::DRUM_NAMES[pad]),
+            None => format!("{} voltou ao som do programa", self.drum_name(pad)),
         });
+    }
+
+    /// v0.28: nome do DrumPad (o que o Theo escolheu ou o do programa).
+    pub fn drum_name(&self, pad: usize) -> String {
+        match self.cfg.efeitos.drum_names.get(pad).map(|s| s.trim()) {
+            Some(s) if !s.is_empty() => s.to_string(),
+            _ => crate::efeitos::drum_default_name(pad),
+        }
     }
 
     /// Nome do som próprio de um DrumPad (para a tela), se tiver.
@@ -596,7 +604,7 @@ impl Core {
     }
 
     pub fn drum_hit(&mut self, pad: usize, vel: u8) {
-        if pad >= crate::efeitos::DRUMS {
+        if pad >= crate::efeitos::MAX_DRUMS {
             return;
         }
         self.ensure_drum_kit();

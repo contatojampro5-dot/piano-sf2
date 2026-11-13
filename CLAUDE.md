@@ -67,6 +67,9 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 - v0.27: aba 3 = `drum_page` (DrumPads 2×4 + `fader` em pé; tab 2 = `efeitos_page` em 3+2 cartões). `drum_tile` recebe o
   mouse mesmo fora do pad (vizinho acende de leve: `reach`/`fall`). Fonte `FontFamily::Name("pad")` = seguisb.ttf do
   Windows (carregada em `setup_style`, cai na padrão se faltar), desenhada por `pad_label`.
+- v0.28: `efeitos::MAX_DRUMS = 16` (`DRUMS = 8` = os de fábrica; `build_with` completa com pads mudos),
+  `cfg.efeitos.drum_count/drum_names/drum_colors`, `core.drum_name`, editor em `drum_page` (`UiState.drum_edit/drum_sel`).
+  Fonte "pad" = `assets/fonts/Poppins-SemiBold.ttf` (OFL, embutida).
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

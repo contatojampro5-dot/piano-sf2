@@ -194,6 +194,12 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.28 — editor dos DrumPads
+- **⚙ na aba DrumPads** (ou botão direito → "Editar este pad"): trocar o **nome**, a **cor**, pôr um **som seu** (WAV/MP3),
+  voltar ao som do programa, testar, e **adicionar pads** (até 16; os novos começam sem som) ou tirar o último.
+- Luz da borda dos pads **40% mais forte**; nomes com a fonte **Poppins SemiBold** (embutida, licença OFL).
+- Aba Efeitos de volta com os **5 blocos compridos lado a lado**; ícone de tamborzinho na aba DrumPads.
+
 ### v0.27 — aba própria dos DrumPads
 - Nova aba **DrumPads** (4ª aba): pads grandes em 2 linhas de 4, centralizados, com **volume em pé** (de baixo para cima),
   igual aos da aba Sons SF2.

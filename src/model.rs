@@ -212,10 +212,7 @@ impl Target {
             Target::PulseToggle => "Pulse Pad (liga/desliga)".into(),
             Target::ArpToggle => "Arpeggiator (liga/desliga)".into(),
             Target::VoiceFxToggle => "Voice FX (liga/desliga)".into(),
-            Target::Drum(i) => format!(
-                "DrumPad {}",
-                crate::efeitos::DRUM_NAMES[i % crate::efeitos::DRUMS]
-            ),
+            Target::Drum(i) => format!("DrumPad {}", crate::efeitos::drum_default_name(i)),
             Target::DrumVolume => "Volume dos DrumPads".into(),
             Target::VoiceFxVolume => "Volume do Voice FX".into(),
             Target::Filter => "Filter Sweep (Cutoff)".into(),
@@ -589,6 +586,12 @@ pub struct Efeitos {
     pub pulse_on: bool,
     pub arp_on: bool,
     pub voicefx_on: bool,
+    /// v0.28: quantos DrumPads aparecem (4..16; os 8 primeiros têm som do programa, os outros esperam um som seu).
+    pub drum_count: usize,
+    /// v0.28: nome escolhido para cada DrumPad ("" = nome do programa).
+    pub drum_names: Vec<String>,
+    /// v0.28: cor de cada DrumPad (índice das cores neon; 255 = a do programa).
+    pub drum_colors: Vec<u8>,
 }
 
 /// v0.21: número da voz "Minha" (o arquivo do Theo) no Voice FX.
@@ -619,6 +622,9 @@ impl Default for Efeitos {
             pulse_on: false,
             arp_on: false,
             voicefx_on: false,
+            drum_count: crate::efeitos::DRUMS,
+            drum_names: Vec::new(),
+            drum_colors: Vec::new(),
         }
     }
 }
@@ -648,7 +654,10 @@ impl Efeitos {
         if self.voicefx_voice > VOICE_MINE || (self.voicefx_voice == VOICE_MINE && self.voicefx_file.is_none()) {
             self.voicefx_voice = 0;
         }
-        self.drum_files.retain(|(i, _)| *i < crate::efeitos::DRUMS);
+        self.drum_files.retain(|(i, _)| *i < crate::efeitos::MAX_DRUMS);
+        self.drum_count = if self.drum_count == 0 { crate::efeitos::DRUMS } else { self.drum_count.clamp(4, crate::efeitos::MAX_DRUMS) };
+        self.drum_names.truncate(crate::efeitos::MAX_DRUMS);
+        self.drum_colors.truncate(crate::efeitos::MAX_DRUMS);
         self.drum_files.sort_by_key(|(i, _)| *i);
         self.drum_files.dedup_by_key(|(i, _)| *i);
     }
