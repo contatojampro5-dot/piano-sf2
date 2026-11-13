@@ -731,10 +731,10 @@ pub struct TextureVoice {
 }
 
 pub const TEXTURE_VOICES: [TextureVoice; 6] = [
-    TextureVoice { name: "Urano", hint: "coral angelical, longo", root: Some(1), looped: true, restart: false },
-    TextureVoice { name: "Mercúrio", hint: "coral celestial, cheio", root: Some(11), looped: true, restart: false },
-    TextureVoice { name: "Lua", hint: "brilho de sinos, \"céu\"", root: Some(6), looped: true, restart: false },
-    TextureVoice { name: "Plutão", hint: "vozes que respiram", root: Some(7), looped: true, restart: false },
+    TextureVoice { name: "Órion", hint: "coral angelical, longo", root: Some(1), looped: true, restart: false },
+    TextureVoice { name: "Lyra", hint: "coral celestial, cheio", root: Some(11), looped: true, restart: false },
+    TextureVoice { name: "Cassiopeia", hint: "brilho de sinos, \"céu\"", root: Some(6), looped: true, restart: false },
+    TextureVoice { name: "Andrômeda", hint: "vozes que respiram", root: Some(7), looped: true, restart: false },
     TextureVoice { name: "Choir Rise", hint: "coral gospel subindo (toca uma vez)", root: None, looped: false, restart: true },
     TextureVoice { name: "Prayer", hint: "trecho em Dó maior, 120 BPM", root: Some(0), looped: true, restart: true },
 ];

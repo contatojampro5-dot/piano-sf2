@@ -194,6 +194,11 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.32 — constelações no Voice FX, tons iguais aos Pads
+- As texturas do Voice FX ganharam nomes de **constelação**: Órion (ex-Urano), Lyra (ex-Mercúrio), Cassiopeia (ex-Lua),
+  Andrômeda (ex-Plutão); Choir Rise e Prayer ficam iguais. A bolinha do Voice FX mostra uma constelação.
+- O **Tom** das texturas virou botões iguais aos da aba Pads (4 × 3, nome em português, sustenidos mais escuros, luz neon).
+
 ### v0.31 — texturas no Voice FX, no tom escolhido
 - Urano, Mercúrio, Lua, Plutão, Choir Rise e Prayer saíram dos Pads e viraram **vozes do Voice FX** ("texturas"):
   tocam no **Tom** escolhido (C … B) enquanto você toca, entram suave e saem devagar quando você solta.

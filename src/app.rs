@@ -1479,7 +1479,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             };
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
-                if planet_ball(ui, open)
+                if constellation_ball(ui, open)
                     .on_hover_text(if open { "Fechar a lista de vozes" } else { "Escolher outra voz" })
                     .clicked()
                 {
@@ -1518,25 +1518,30 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             // tom das texturas (igual aos tons dos pads): o som toca no tom da música
             if e.voicefx_voice >= pads::TEXTURE_BASE {
                 ui.add_space(8.0);
-                ui.label(RichText::new("Tom").size(12.0).color(th().dim))
-                    .on_hover_text("Escolha o tom da música: a textura toca nesse tom");
-                let kw = ((w - 5.0 * 4.0) / 6.0).max(26.0);
-                for row in 0..2 {
+                ui.label(
+                    RichText::new(format!("Tom  ·  {} ({})", pads::KEY_NAMES[e.voicefx_key], pads::KEY_NAMES_PT[e.voicefx_key]))
+                        .size(12.0)
+                        .color(th().dim),
+                )
+                .on_hover_text("Escolha o tom da música: a textura toca nesse tom");
+                ui.add_space(2.0);
+                // v0.32: tons iguais aos da aba Pads (vidro, nome em português, sustenidos mais escuros, luz)
+                let gap = 6.0;
+                let kw = ((w - 3.0 * gap) / 4.0).max(30.0);
+                let kh = kw.clamp(40.0, 58.0);
+                for row in 0..3 {
                     ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 4.0;
-                        for k in row * 6..row * 6 + 6 {
-                            let sel = e.voicefx_key == k;
-                            let b = egui::Button::new(
-                                RichText::new(pads::KEY_NAMES[k]).size(13.0).strong().color(if sel { th().ink } else { th().text }),
-                            )
-                            .fill(if sel { VOICE_COLOR } else { th().glass_hi })
-                            .corner_radius(8)
-                            .min_size(Vec2::new(kw, 28.0));
-                            if ui.add(b).clicked() {
+                        ui.spacing_mut().item_spacing.x = gap;
+                        for k in row * 4..row * 4 + 4 {
+                            if key_tile(ui, k, e.voicefx_key == k, Vec2::new(kw, kh), VOICE_COLOR)
+                                .on_hover_text(format!("Textura em {} ({})", pads::KEY_NAMES[k], pads::KEY_NAMES_PT[k]))
+                                .clicked()
+                            {
                                 e.voicefx_key = k;
                             }
                         }
                     });
+                    ui.add_space(gap - ui.spacing().item_spacing.y);
                 }
             }
             ui.add_space(6.0);
@@ -3741,6 +3746,66 @@ fn planet_ball(ui: &mut Ui, open: bool) -> egui::Response {
         })
         .collect();
     p.add(egui::Shape::line(pts, Stroke::new(1.8, fg)));
+    resp
+}
+
+/// v0.32: bolinha do Voice FX com uma constelação desenhada (estrelas ligadas por linhas).
+fn constellation_ball(ui: &mut Ui, open: bool) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(40.0), Sense::click());
+    let p = ui.painter();
+    let c = rect.center();
+    let bg = if open {
+        VOICE_COLOR
+    } else if resp.hovered() {
+        th().glass_hi.gamma_multiply(1.3)
+    } else {
+        th().glass_hi
+    };
+    p.circle_filled(c, 19.0, bg);
+    let fg = if open { th().ink } else { VOICE_COLOR };
+    let stars = [(-11.0, 6.0), (-5.0, -3.0), (2.0, 1.0), (7.0, -8.0), (11.0, 4.0)].map(|(x, y)| c + Vec2::new(x, y));
+    for w in stars.windows(2) {
+        p.line_segment([w[0], w[1]], Stroke::new(1.2, fg.gamma_multiply(0.75)));
+    }
+    for (i, s) in stars.iter().enumerate() {
+        p.circle_filled(*s, if i == 3 { 2.8 } else { 2.0 }, fg);
+    }
+    resp
+}
+
+/// v0.32: um tom no estilo dos botões da aba Pads (vidro, nome grande + nome em português).
+fn key_tile(ui: &mut Ui, key: usize, sel: bool, size: Vec2, color: Color32) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    let p = ui.painter();
+    let r = 12u8;
+    if pads::KEY_NAMES[key].contains('#') && !sel {
+        p.rect_filled(rect, r, Color32::from_black_alpha(70));
+    }
+    let hover = ui.ctx().animate_bool_with_time(resp.id.with("h"), resp.hovered(), 0.15);
+    let on = ui.ctx().animate_bool_with_time(resp.id.with("on"), sel, 0.25);
+    theme::glass(p, rect, r, hover > 0.5, (on > 0.01).then_some(color));
+    panel_light(p, rect, r as f32, accent_pair(color), hover, resp.hover_pos(), 1.8);
+    if (hover > 0.0 && hover < 1.0) || (on > 0.0 && on < 1.0) {
+        ui.ctx().request_repaint();
+    }
+    if on > 0.01 {
+        p.rect_filled(rect, r, color.gamma_multiply(0.85 * on));
+    }
+    let h = rect.height();
+    p.text(
+        rect.center() - Vec2::new(0.0, h * 0.12),
+        Align2::CENTER_CENTER,
+        pads::KEY_NAMES[key],
+        FontId::proportional((h * 0.36).clamp(14.0, 24.0)),
+        if sel { th().ink } else { th().text },
+    );
+    p.text(
+        rect.center() + Vec2::new(0.0, h * 0.24),
+        Align2::CENTER_CENTER,
+        pads::KEY_NAMES_PT[key],
+        FontId::proportional((h * 0.2).clamp(10.0, 13.0)),
+        if sel { th().ink } else { th().dim },
+    );
     resp
 }
 

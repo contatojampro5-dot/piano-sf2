@@ -412,7 +412,7 @@ impl Core {
     /// Voz do Voice FX: a escolhida na barra "Voz" (do programa) ou a do Theo ("Minha").
     fn load_voicefx_source(&mut self) -> bool {
         let voice = self.cfg.efeitos.voicefx_voice;
-        // v0.31: texturas (Urano, Mercúrio, Lua, Plutão, Choir Rise, Prayer) tocam no tom escolhido
+        // v0.31: texturas (Órion, Lyra, Cassiopeia, Andrômeda, Choir Rise, Prayer) tocam no tom escolhido
         if voice >= pads::TEXTURE_BASE {
             return match pads::load_texture_voice(voice - pads::TEXTURE_BASE) {
                 Ok(t) => {

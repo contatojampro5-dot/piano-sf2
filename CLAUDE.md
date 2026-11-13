@@ -78,6 +78,8 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 - v0.31: `efeitos::VoiceTexture` + `VoiceFx.tex/tex_key` (porta abre com nota apertada, `mix_texture` no tom escolhido),
   `pads::TEXTURE_VOICES` (voz 6..11 = `TEXTURE_BASE..`), `pads::load_texture_voice`, `Cmd::VoiceFxTexture/VoiceFxKey`,
   `cfg.efeitos.voicefx_key`, `core.voicefx_tex`; `FREE_PADS` voltou a 3 e `cfg.pads_v31` tira livre:3..6 dos pads.
+- v0.32: texturas com nomes de constelação (Órion, Lyra, Cassiopeia, Andrômeda); `constellation_ball` e `key_tile`
+  (tom no estilo dos botões dos Pads) no Voice FX.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.
