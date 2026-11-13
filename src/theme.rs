@@ -15,15 +15,18 @@ pub struct Palette {
     orbs: [[u8; 3]; 3],
     /// v0.26: tema claro (painéis brancos que flutuam, texto escuro).
     light: bool,
+    /// v0.26.1: cartões firmes desta cor (em vez de vidro transparente) e sem estrelas.
+    cards: Option<[u8; 3]>,
 }
 
-pub const PALETTES: [Palette; 5] = [
+pub const PALETTES: [Palette; 6] = [
     Palette {
         name: "Celestial",
         top: [0x07, 0x0b, 0x1f],
         bottom: [0x1a, 0x12, 0x3d],
         orbs: [[0x3a, 0x5b, 0xff], [0xa1, 0x5c, 0xff], [0x39, 0xd5, 0xff]],
         light: false,
+        cards: None,
     },
     Palette {
         name: "Aurora",
@@ -31,6 +34,7 @@ pub const PALETTES: [Palette; 5] = [
         bottom: [0x0a, 0x22, 0x2e],
         orbs: [[0x2b, 0xe3, 0xa1], [0x2b, 0xb7, 0xe3], [0x7a, 0x5c, 0xff]],
         light: false,
+        cards: None,
     },
     Palette {
         name: "Pôr do sol",
@@ -38,6 +42,7 @@ pub const PALETTES: [Palette; 5] = [
         bottom: [0x2a, 0x12, 0x2e],
         orbs: [[0xff, 0x7a, 0x59], [0xff, 0x4f, 0xa0], [0xff, 0xc1, 0x5a]],
         light: false,
+        cards: None,
     },
     Palette {
         name: "Grafite",
@@ -45,6 +50,7 @@ pub const PALETTES: [Palette; 5] = [
         bottom: [0x16, 0x17, 0x1b],
         orbs: [[0x4a, 0x52, 0x66], [0x3a, 0x40, 0x50], [0x5a, 0x62, 0x78]],
         light: false,
+        cards: None,
     },
     // v0.26: "Branco" — estúdio claro, como nas referências do Theo (celular branco com cartões flutuando)
     Palette {
@@ -53,6 +59,16 @@ pub const PALETTES: [Palette; 5] = [
         bottom: [0xdc, 0xdf, 0xe5],
         orbs: [[0xff, 0xff, 0xff], [0xff, 0xe6, 0xc2], [0xd6, 0xe2, 0xf6]],
         light: true,
+        cards: None,
+    },
+    // v0.26.1: "Verde" — estilo Spotify: quase preto, degradê verde no alto, cartões cinza-escuro firmes
+    Palette {
+        name: "Verde",
+        top: [0x0f, 0x3d, 0x22],
+        bottom: [0x12, 0x12, 0x12],
+        orbs: [[0x1d, 0xb9, 0x54], [0x0f, 0x6b, 0x35], [0x1e, 0xd7, 0x60]],
+        light: false,
+        cards: Some([0x18, 0x18, 0x18]),
     },
 ];
 
@@ -80,6 +96,8 @@ pub struct Theme {
     pub glow: f32,
     /// v0.26: tema claro ("Branco").
     pub light: bool,
+    /// v0.26.1: estrelas no fundo (o "Verde" e o "Branco" não têm).
+    pub stars: bool,
 }
 
 fn rgb(c: [u8; 3]) -> Color32 {
@@ -113,6 +131,31 @@ impl Theme {
                 frost: f,
                 glow: glow.clamp(0.0, 1.0),
                 light: true,
+                stars: false,
+            };
+        }
+        if let Some(c) = p.cards {
+            // v0.26.1: estilo Spotify — cartões cinza-escuro firmes, texto branco, cinza claro de apoio
+            let card = |add: u8, a: f32| {
+                Color32::from_rgba_unmultiplied(c[0] + add, c[1] + add, c[2] + add, (a.clamp(0.0, 1.0) * 255.0) as u8)
+            };
+            return Self {
+                top: rgb(p.top),
+                bottom: rgb(p.bottom),
+                orbs: [rgb(p.orbs[0]), rgb(p.orbs[1]), rgb(p.orbs[2])],
+                glass: card(0, 0.70 + 0.25 * f),
+                glass_hi: card(0x10, 0.85 + 0.15 * f),
+                edge: white(0.06),
+                shine: white(0.05),
+                bar: Color32::from_rgba_unmultiplied(0, 0, 0, (150.0 + 90.0 * f) as u8),
+                window: card(0x0a, 0.97),
+                text: Color32::from_rgb(0xff, 0xff, 0xff),
+                dim: Color32::from_rgb(0xb3, 0xb3, 0xb3),
+                ink: Color32::from_rgb(0x00, 0x00, 0x00),
+                frost: f,
+                glow: glow.clamp(0.0, 1.0),
+                light: false,
+                stars: false,
             };
         }
         let bottom = rgb(p.bottom);
@@ -146,6 +189,7 @@ impl Theme {
             frost: f,
             glow: glow.clamp(0.0, 1.0),
             light: false,
+            stars: true,
         }
     }
 }
@@ -216,7 +260,7 @@ pub fn paint_background(ctx: &egui::Context, time: f64, motion: bool, stars: boo
         );
     }
 
-    if stars && !t.light {
+    if stars && t.stars {
         // Posições fixas (sem aleatório a cada quadro): parecem estrelas de verdade.
         let mut seed: u32 = 0x9e37_79b9;
         let mut rnd = || {

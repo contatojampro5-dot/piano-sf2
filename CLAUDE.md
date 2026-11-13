@@ -61,6 +61,9 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 - v0.24: `PadVoice.layer` + `Cmd::PadLayer2`/`PadMix` (`cfg.pad_bank2`, `cfg.pad_mix`, equal power); `core.last_freeze` +
   `freeze::saved_path()` (ultimo-freeze.wav; nos testes, um por thread) e `freeze_recall`; `Scene.extra: SceneExtra` (preset completo);
   `cfg.efeitos.pulse_on/arp_on/voicefx_on` restaurados em `Core::new` e protegidos em `set_efeitos`.
+- v0.25.1/v0.26: `drum_tile` (app.rs) — luz feita com `egui::Mesh` de cor por ponto (degradê liso; nada de círculos empilhados),
+  holofote no mouse, grade fixa 2×4. Temas: `Palette.light` ("Branco": cartões brancos + sombra em `glass()`, `th().light`) e
+  `Palette.cards` ("Verde", estilo Spotify: cartões firmes, `th().stars = false`).
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

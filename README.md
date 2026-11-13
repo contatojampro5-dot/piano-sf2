@@ -194,6 +194,16 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.26.1 — luz desfocada nos DrumPads + tema Verde
+- A luz dos DrumPads agora é um **degradê liso** (sem os anéis/círculos aparecendo), tanto a que segue o mouse quanto a
+  que sobe de baixo e entra pelas bordas. Perto da borda, a luz **escorre para as laterais** também.
+- DrumPads sempre em **2 linhas de 4**.
+- Novo fundo **"Verde"** (estilo Spotify): quase preto com degradê verde no alto, cartões cinza-escuro firmes, sem estrelas.
+
+### v0.26 — tema Branco
+- Novo fundo **"Branco"** (⚙ → Ajustes → Aparência): estúdio claro com degradê suave, cartões brancos que **flutuam**
+  com sombra macia, texto grafite. DrumPads brancos que acendem com a luz neon ao passar o mouse ou bater.
+
 ### v0.25.1 — DrumPads refeitos (preto + luz RGB neon)
 - Parado: pad **preto**, borda fininha discreta e só o nome pequeno no canto (sem números, sem bolinha), como no sampler.
 - **Passando o mouse**: acende como **luz RGB neon** — borda em degradê de duas cores (ex.: laranja → rosa), luz entrando pelas

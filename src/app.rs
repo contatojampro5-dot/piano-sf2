@@ -1499,7 +1499,8 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         // margem de 10 px em volta: o brilho neon passa um pouco da borda do pad e não pode ser cortado
         let room_w = w - vol_w - 18.0 - 20.0;
         let room_h = ui.available_height() - 4.0 - 20.0;
-        let (cols, rows, pad) = [(n, 1usize), (n / 2, 2)]
+        // v0.26.1: sempre 2 linhas de 4 (pedido do Theo)
+        let (cols, rows, pad) = [(n / 2, 2usize)]
             .iter()
             .map(|&(c, r)| {
                 let s = ((room_w - (c as f32 - 1.0) * gap) / c as f32).min((room_h - (r as f32 - 1.0) * gap) / r as f32);
@@ -3197,10 +3198,6 @@ fn mix_color(a: Color32, b: Color32, t: f32) -> Color32 {
     Color32::from_rgb(l(a.r(), b.r()), l(a.g(), b.g()), l(a.b(), b.b()))
 }
 
-fn with_alpha(c: Color32, a: f32) -> Color32 {
-    Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), (a.clamp(0.0, 1.0) * 255.0) as u8)
-}
-
 /// Pontos em volta de um retângulo de cantos redondos (sentido horário, começando no canto de cima à esquerda).
 fn rounded_outline(rect: Rect, r: f32, per_corner: usize) -> Vec<Pos2> {
     let r = r.min(rect.width() / 2.0).min(rect.height() / 2.0);
@@ -3228,20 +3225,42 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
     let (ca, cb) = colors;
     let r = (rect.width() * 0.14).clamp(10.0, 20.0);
     let light = light.clamp(0.0, 1.0);
-    // brilho de fora (halo), só quando acende
+    let white = th().light;
+    let diag = |v: Pos2| (((v.x - rect.left()) / rect.width()) + ((v.y - rect.top()) / rect.height())) * 0.5;
+    // v0.26.1: cor de luz pronta para a malha (no escuro soma luz; no Branco tinge o cartão)
+    let glow_px = |rgb: [f32; 3], a: f32| -> Color32 {
+        let a = a.clamp(0.0, 1.0);
+        let alpha = if white { a } else { a * 0.35 };
+        Color32::from_rgba_premultiplied(
+            rgb[0].min(255.0) as u8,
+            rgb[1].min(255.0) as u8,
+            rgb[2].min(255.0) as u8,
+            (alpha * 255.0) as u8,
+        )
+    };
+    let spot = spot.filter(|m| rect.contains(*m));
+    // brilho de fora (halo), só quando acende — uma faixa com degradê liso (sem anéis)
     if light > 0.01 {
-        for k in 1..=7 {
-            let f = 1.0 - k as f32 / 8.0;
-            p.rect_stroke(
-                rect.expand(k as f32 * 1.7),
-                (r + k as f32 * 1.7) as u8,
-                Stroke::new(1.8, with_alpha(mix_color(ca, cb, 0.5), light * 0.22 * f * f)),
-                StrokeKind::Outside,
-            );
+        let h = (rect.width() * 0.16).clamp(8.0, 16.0);
+        let inner = rounded_outline(rect, r, 8);
+        let outer = rounded_outline(rect.expand(h), r + h, 8);
+        let n = inner.len();
+        let mut mesh = egui::Mesh::default();
+        for k in 0..n {
+            let c = mix_color(ca, cb, diag(inner[k]));
+            let near = spot.map(|m| (1.0 - inner[k].distance(m) / (rect.width() * 1.1)).clamp(0.0, 1.0)).unwrap_or(0.0);
+            let w = light * (0.30 + 0.35 * near * near);
+            mesh.colored_vertex(inner[k], glow_px([c.r() as f32 * w, c.g() as f32 * w, c.b() as f32 * w], w));
+            mesh.colored_vertex(outer[k], Color32::TRANSPARENT);
         }
+        for k in 0..n {
+            let (a, b) = ((2 * k) as u32, (2 * ((k + 1) % n)) as u32);
+            mesh.add_triangle(a, b, b + 1);
+            mesh.add_triangle(a, b + 1, a + 1);
+        }
+        p.add(Shape::mesh(mesh));
     }
     // v0.26: no tema Branco o pad é um cartão branco que flutua (sombra macia embaixo)
-    let white = th().light;
     if white {
         for k in 0..6 {
             let d = 1.5 + k as f32 * 1.8;
@@ -3253,39 +3272,59 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
     let base_body = if white { Color32::from_rgb(0xff, 0xff, 0xff) } else { Color32::from_rgb(0x05, 0x06, 0x0a) };
     let body = mix_color(base_body, mix_color(ca, cb, 0.5), if white { 0.06 } else { 0.10 } * light);
     p.rect_filled(rect, r as u8, body);
-    let clip = p.with_clip_rect(rect.shrink(1.0));
-    if light > 0.01 {
-        // luz que sobe de baixo (como uma fita de LED atrás do pad)
-        let base = Pos2::new(rect.center().x, rect.bottom() + rect.height() * 0.35);
-        for k in 0..10 {
-            let f = k as f32 / 10.0;
-            clip.circle_filled(
-                base,
-                rect.width() * (0.95 - 0.07 * k as f32),
-                with_alpha(mix_color(ca, cb, 0.3 + 0.4 * f), light * 0.045),
-            );
+    // v0.26.1: toda a luz de dentro numa malha só, com cor em cada ponto — o degradê fica liso
+    // (sem os "circulozinhos") e respeita os cantos redondos.
+    let spot_on = (light / 0.75).min(1.0);
+    if light > 0.01 || spot.is_some() {
+        let outline = rounded_outline(rect.shrink(0.5), r, 8);
+        let n = outline.len();
+        let center = rect.center();
+        let led = Pos2::new(rect.center().x, rect.bottom() + rect.height() * 0.30);
+        let spot_c = spot.map(|m| {
+            let c = mix_color(ca, cb, diag(m));
+            if white { c } else { mix_color(c, Color32::WHITE, 0.25) }
+        });
+        const RINGS: [f32; 17] = [
+            0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.58, 0.66, 0.73, 0.79, 0.84, 0.88, 0.92, 0.95, 0.97, 0.985, 1.0,
+        ];
+        let mut mesh = egui::Mesh::default();
+        for &s in &RINGS {
+            for &q in &outline {
+                let v = center + (q - center) * s;
+                let near = spot.map(|m| (1.0 - v.distance(m) / (rect.width() * 1.1)).clamp(0.0, 1.0)).unwrap_or(0.0);
+                let mut acc = [0.0f32; 3];
+                let mut sum = 0.0f32;
+                let mut add = |c: Color32, w: f32| {
+                    acc[0] += c.r() as f32 * w;
+                    acc[1] += c.g() as f32 * w;
+                    acc[2] += c.b() as f32 * w;
+                    sum += w;
+                };
+                // luz entrando pelas bordas (mais forte do lado do mouse, inclusive nas laterais)
+                let e = ((s - 0.55) / 0.45).clamp(0.0, 1.0).powf(2.2);
+                add(mix_color(ca, cb, diag(v)), e * light * (0.50 + 0.9 * near * near));
+                // fita de LED subindo de baixo
+                let dl = v.distance(led) / (rect.width() * 0.75);
+                add(mix_color(ca, cb, 0.5), (-dl * dl).exp() * light * 0.42);
+                // holofote que segue o mouse
+                if let (Some(m), Some(c)) = (spot, spot_c) {
+                    let d = v.distance(m) / (rect.width() * 0.42);
+                    add(c, (-d * d).exp() * 0.55 * spot_on);
+                }
+                mesh.colored_vertex(v, glow_px(acc, sum));
+            }
         }
-        // luz entrando pelas bordas (o centro fica escuro)
-        let steps = 9;
-        for k in 0..steps {
-            let f = 1.0 - k as f32 / steps as f32;
-            let inset = k as f32 * (rect.width() * 0.022).max(1.4);
-            clip.rect_stroke(
-                rect.shrink(inset),
-                (r - inset * 0.6).max(2.0) as u8,
-                Stroke::new(2.0, with_alpha(mix_color(ca, cb, k as f32 / steps as f32), light * 0.30 * f * f)),
-                StrokeKind::Inside,
-            );
+        for ri in 0..RINGS.len() - 1 {
+            for k in 0..n {
+                let a = (ri * n + k) as u32;
+                let b = (ri * n + (k + 1) % n) as u32;
+                let c = a + n as u32;
+                let d = b + n as u32;
+                mesh.add_triangle(a, b, d);
+                mesh.add_triangle(a, d, c);
+            }
         }
-    }
-    // v0.25.1: holofote que segue o mouse (luz mais forte onde o cursor passa)
-    if let Some(m) = spot.filter(|m| rect.contains(*m)) {
-        let tx = ((m.x - rect.left()) / rect.width() + (m.y - rect.top()) / rect.height()) * 0.5;
-        let c = mix_color(ca, cb, tx);
-        for k in 0..9 {
-            let f = k as f32 / 9.0;
-            clip.circle_filled(m, rect.width() * (0.55 - 0.055 * k as f32), with_alpha(mix_color(c, Color32::WHITE, f * 0.5), 0.05 + 0.03 * f));
-        }
+        p.add(Shape::mesh(mesh));
     }
     // reflexo leve de vidro em cima
     p.line_segment(
@@ -3303,10 +3342,10 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
         let idle = if white { Color32::from_rgb(0xdc, 0xdf, 0xe5) } else { Color32::from_rgb(0x26, 0x2b, 0x36) };
         // perto do mouse a borda brilha mais (a luz "escorre" pela borda)
         let near = spot
-            .map(|m| (1.0 - (a.distance(m) / (rect.width() * 0.6))).clamp(0.0, 1.0))
+            .map(|m| (1.0 - (a.distance(m) / (rect.width() * 1.1))).clamp(0.0, 1.0).powf(1.6))
             .unwrap_or(0.0);
         let hot = if white { neon } else { Color32::WHITE };
-        let c = mix_color(mix_color(idle, neon, if white { 0.10 } else { 0.25 } + 0.75 * light), hot, near * near * 0.55);
+        let c = mix_color(mix_color(idle, neon, (if white { 0.10 } else { 0.25 } + 0.75 * light + 0.6 * near).min(1.0)), hot, near * near * 0.45);
         p.line_segment([a, b], Stroke::new(1.2 + 1.0 * light + 1.2 * near, c));
     }
     // nome pequeno no canto de cima (como no sampler)
