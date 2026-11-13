@@ -231,7 +231,7 @@ pub const DRUMS: usize = 8;
 pub const MAX_DRUMS: usize = 16;
 /// v0.30: DrumPads extras que já vêm com som (Pixabay, trazidos pelo Theo): 9º e 10º pad.
 pub const EXTRA_DRUM_NAMES: [&str; 2] = ["Choir Rise", "Prayer"];
-static EXTRA_DRUM_SAMPLES: [&[u8]; 2] = [
+pub static EXTRA_DRUM_SAMPLES: [&[u8]; 2] = [
     include_bytes!("../assets/sons-livres/drums/08.ogg"),
     include_bytes!("../assets/sons-livres/drums/09.ogg"),
 ];
@@ -682,8 +682,32 @@ impl ChoirVoice {
 }
 
 /// Coral do Voice FX (no motor).
+/// v0.31: "textura" do Voice FX (coral/brilho gravado, com acordes): não segue nota por nota — toca no TOM
+/// escolhido enquanto você toca (entra suave quando aperta, sai devagar quando solta tudo).
+pub struct VoiceTexture {
+    pub l: Vec<f32>,
+    pub r: Vec<f32>,
+    pub rate: u32,
+    /// Tom em que o som foi gravado (0 = C … 11 = B).
+    pub root: u8,
+    /// Repete em loop (texturas) ou toca uma vez (transição).
+    pub looped: bool,
+    /// Volta ao começo a cada vez que você começa a tocar de novo (transição, trecho musical).
+    pub restart: bool,
+}
+
+const TEX_ATTACK_S: f32 = 0.35;
+const TEX_RELEASE_S: f32 = 2.5;
+
 pub struct VoiceFx {
     pub src: Option<Arc<GrainSource>>,
+    pub tex: Option<Arc<VoiceTexture>>,
+    /// Tom em que a textura toca (0 = C … 11 = B).
+    pub tex_key: u8,
+    held: u128,
+    tex_sustained: bool,
+    tex_pos: f64,
+    tex_env: f32,
     voices: [ChoirVoice; CHOIR_VOICES],
     window: Box<[f32; CWINDOW]>,
     pub on: bool,
@@ -710,6 +734,12 @@ impl VoiceFx {
         Self {
             src: None,
             voices: [ChoirVoice::default(); CHOIR_VOICES],
+            tex: None,
+            tex_key: 0,
+            held: 0,
+            tex_sustained: false,
+            tex_pos: 0.0,
+            tex_env: 0.0,
             window,
             on: false,
             level: 0.7,
@@ -720,6 +750,14 @@ impl VoiceFx {
     }
 
     pub fn note_on(&mut self, key: u8, vel: u8, sr: u32) {
+        if let Some(t) = self.tex.as_ref() {
+            // textura: só abre a "porta" (o tom é o escolhido, não a nota)
+            if self.held == 0 && !self.tex_sustained && self.tex_env < 0.02 && (t.restart || self.tex_pos >= t.l.len() as f64) {
+                self.tex_pos = 0.0;
+            }
+            self.held |= 1u128 << (key & 127);
+            return;
+        }
         let Some(src) = self.src.as_ref() else { return };
         let note = (key as i32 + 12 * self.octave as i32).clamp(0, 127);
         let ratio = 2f64.powf((note - src.root as i32) as f64 / 12.0) * src.rate as f64 / sr as f64;
@@ -751,6 +789,12 @@ impl VoiceFx {
     }
 
     pub fn note_off(&mut self, key: u8) {
+        if self.held & (1u128 << (key & 127)) != 0 {
+            self.held &= !(1u128 << (key & 127));
+            if self.sustain {
+                self.tex_sustained = true;
+            }
+        }
         for v in &mut self.voices {
             if v.active && v.key == key && !v.releasing {
                 if self.sustain {
@@ -765,6 +809,9 @@ impl VoiceFx {
     pub fn set_sustain(&mut self, down: bool) {
         self.sustain = down;
         if !down {
+            self.tex_sustained = false;
+        }
+        if !down {
             for v in &mut self.voices {
                 if v.sustained {
                     v.sustained = false;
@@ -776,6 +823,8 @@ impl VoiceFx {
 
     /// Solta tudo (pânico / desligou o Voice FX).
     pub fn all_off(&mut self) {
+        self.held = 0;
+        self.tex_sustained = false;
         for v in &mut self.voices {
             if v.active {
                 v.releasing = true;
@@ -785,11 +834,60 @@ impl VoiceFx {
     }
 
     pub fn active_voices(&self) -> usize {
-        self.voices.iter().filter(|v| v.active).count()
+        let tex = (self.tex.is_some() && (self.tex_env > 0.0 || self.held != 0)) as usize;
+        self.voices.iter().filter(|v| v.active).count() + tex
+    }
+
+    /// v0.31: soma a textura (no tom escolhido) em `l`/`r`.
+    fn mix_texture(&mut self, l: &mut [f32], r: &mut [f32], sr: u32, gain: f32) {
+        let Some(t) = self.tex.clone() else { return };
+        let n = t.l.len();
+        if n < 4 {
+            return;
+        }
+        let mut shift = (self.tex_key as i32 - t.root as i32).rem_euclid(12);
+        if shift > 6 {
+            shift -= 12;
+        }
+        let step = 2f64.powf(shift as f64 / 12.0) * t.rate as f64 / sr as f64;
+        let up = 1.0 / (TEX_ATTACK_S * sr as f32);
+        let down = 1.0 / (TEX_RELEASE_S * sr as f32);
+        let gate = self.held != 0 || self.tex_sustained;
+        let g = 0.8 * gain;
+        for i in 0..l.len() {
+            if gate {
+                self.tex_env = (self.tex_env + up).min(1.0);
+            } else {
+                self.tex_env = (self.tex_env - down).max(0.0);
+                if self.tex_env <= 0.0 {
+                    break;
+                }
+            }
+            let mut p = self.tex_pos;
+            if p >= (n - 1) as f64 {
+                if t.looped {
+                    p %= (n - 1) as f64;
+                } else {
+                    // transição acabou: fica quieta até começar a tocar de novo
+                    self.tex_pos = n as f64;
+                    break;
+                }
+            }
+            let k = p as usize;
+            let f = (p - k as f64) as f32;
+            let a = self.tex_env * self.tex_env * g;
+            l[i] += (t.l[k] * (1.0 - f) + t.l[k + 1] * f) * a;
+            r[i] += (t.r[k] * (1.0 - f) + t.r[k + 1] * f) * a;
+            self.tex_pos = p + step;
+        }
     }
 
     /// Soma o coral em `l`/`r` com volume `gain`.
     pub fn mix(&mut self, l: &mut [f32], r: &mut [f32], sr: u32, gain: f32) {
+        if self.tex.is_some() {
+            self.mix_texture(l, r, sr, gain);
+            return;
+        }
         let Some(src) = self.src.as_ref() else { return };
         let d = &src.data;
         let src_len = d.len() as f64;

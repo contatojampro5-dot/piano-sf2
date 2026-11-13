@@ -194,6 +194,13 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.31 — texturas no Voice FX, no tom escolhido
+- Urano, Mercúrio, Lua, Plutão, Choir Rise e Prayer saíram dos Pads e viraram **vozes do Voice FX** ("texturas"):
+  tocam no **Tom** escolhido (C … B) enquanto você toca, entram suave e saem devagar quando você solta.
+- Vozes do Voice FX numa **bolinha** (igual aos planetas dos pads): clica, a lista abre ("Vozes · seguem cada nota" e
+  "Texturas · tocam no tom escolhido"); a voz escolhida mostra o tom.
+- Choir Rise e Prayer continuam também nos DrumPads. Blocos de Efeitos e DrumPads um pouco mais longe das abas.
+
 ### v0.30 — sons novos (Pixabay) nos Pads e DrumPads
 - 4 pads novos nos "Meus pads" (agora com **12 vagas**): **Urano** (Angelic Choir, C#), **Mercúrio** (Heavenly Choir, B),
   **Lua** (Celestial Chime, F#) e **Plutão** (Vocal Chords, G). Tom achado pelo som; entram sozinhos uma vez.

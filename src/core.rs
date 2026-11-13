@@ -138,6 +138,8 @@ pub struct Core {
     /// Arquivos com que o kit atual foi montado (mudou → monta de novo).
     drum_kit_files: Vec<(usize, String)>,
     voicefx_src: Option<Arc<GrainSource>>,
+    /// v0.31: textura do Voice FX carregada (quando a voz escolhida é uma textura).
+    voicefx_tex: Option<Arc<crate::efeitos::VoiceTexture>>,
     /// Quando cada DrumPad foi tocado (a tela acende o botão por um instante).
     pub drum_flash: [Option<Instant>; crate::efeitos::MAX_DRUMS],
 }
@@ -262,6 +264,7 @@ impl Core {
             drum_kit: None,
             drum_kit_files: Vec::new(),
             voicefx_src: None,
+            voicefx_tex: None,
             drum_flash: [None; crate::efeitos::MAX_DRUMS],
         }
     }
@@ -292,6 +295,8 @@ impl Core {
         if let Some(s) = &self.voicefx_src {
             self.send(Cmd::VoiceFxSource(s.clone()));
         }
+        self.send(Cmd::VoiceFxKey(e.voicefx_key as u8));
+        self.send(Cmd::VoiceFxTexture(self.voicefx_tex.clone()));
         self.send(Cmd::VoiceFx {
             on: self.voicefx_on,
             level: e.voicefx_volume,
@@ -407,6 +412,24 @@ impl Core {
     /// Voz do Voice FX: a escolhida na barra "Voz" (do programa) ou a do Theo ("Minha").
     fn load_voicefx_source(&mut self) -> bool {
         let voice = self.cfg.efeitos.voicefx_voice;
+        // v0.31: texturas (Urano, Mercúrio, Lua, Plutão, Choir Rise, Prayer) tocam no tom escolhido
+        if voice >= pads::TEXTURE_BASE {
+            return match pads::load_texture_voice(voice - pads::TEXTURE_BASE) {
+                Ok(t) => {
+                    self.voicefx_tex = Some(t.clone());
+                    self.send(Cmd::VoiceFxKey(self.cfg.efeitos.voicefx_key as u8));
+                    self.send(Cmd::VoiceFxTexture(Some(t)));
+                    true
+                }
+                Err(e) => {
+                    self.notify(format!("Voice FX: {e}"));
+                    false
+                }
+            };
+        }
+        if self.voicefx_tex.take().is_some() {
+            self.send(Cmd::VoiceFxTexture(None));
+        }
         let custom = self
             .cfg
             .efeitos
@@ -444,7 +467,7 @@ impl Core {
             self.notify("Para usar \"Minha\", escolha antes o seu coral no ⚙ do Voice FX");
             return;
         }
-        if voice > VOICE_MINE || voice == self.cfg.efeitos.voicefx_voice {
+        if voice >= pads::TEXTURE_BASE + pads::TEXTURE_VOICES.len() || voice == self.cfg.efeitos.voicefx_voice {
             return;
         }
         self.cfg.efeitos.voicefx_voice = voice;
@@ -452,6 +475,12 @@ impl Core {
         if self.load_voicefx_source() {
             let name = if voice == VOICE_MINE {
                 "a sua".to_string()
+            } else if voice >= pads::TEXTURE_BASE {
+                format!(
+                    "{} (no tom de {})",
+                    pads::TEXTURE_VOICES[voice - pads::TEXTURE_BASE].name,
+                    pads::KEY_NAMES[self.cfg.efeitos.voicefx_key]
+                )
             } else {
                 pads::VOICE_NAMES[voice].to_string()
             };
@@ -460,7 +489,7 @@ impl Core {
     }
 
     pub fn toggle_voicefx(&mut self) {
-        if !self.voicefx_on && self.voicefx_src.is_none() && !self.load_voicefx_source() {
+        if !self.voicefx_on && self.voicefx_src.is_none() && self.voicefx_tex.is_none() && !self.load_voicefx_source() {
             return;
         }
         self.voicefx_on = !self.voicefx_on;
@@ -516,6 +545,16 @@ impl Core {
     }
 
     /// Nota em que o coral do Theo está (0 = C ... 11 = B).
+    /// v0.31: tom em que as texturas do Voice FX tocam (o tom da música).
+    pub fn set_voicefx_tone(&mut self, key: usize) {
+        let key = key % 12;
+        if self.cfg.efeitos.voicefx_key != key {
+            self.cfg.efeitos.voicefx_key = key;
+            self.dirty = true;
+            self.send(Cmd::VoiceFxKey(key as u8));
+        }
+    }
+
     pub fn set_voicefx_key(&mut self, key: usize) {
         let Some((_, root)) = &mut self.cfg.efeitos.voicefx_file else {
             return;
@@ -1571,12 +1610,17 @@ impl Core {
         self.pulse_on = self.cfg.efeitos.pulse_on;
         self.arp_on = self.cfg.efeitos.arp_on;
         let want_voice = self.cfg.efeitos.voicefx_on;
-        if want_voice && (voice_changed || self.voicefx_src.is_none()) {
+        let loaded = |c: &Self| c.voicefx_src.is_some() || c.voicefx_tex.is_some();
+        if want_voice && (voice_changed || !loaded(self)) {
             self.load_voicefx_source();
         } else if voice_changed {
             self.voicefx_src = None; // carrega a voz certa quando ligar
+            if self.voicefx_tex.take().is_some() {
+                self.send(Cmd::VoiceFxTexture(None));
+            }
         }
-        self.voicefx_on = want_voice && self.voicefx_src.is_some();
+        self.send(Cmd::VoiceFxKey(self.cfg.efeitos.voicefx_key as u8));
+        self.voicefx_on = want_voice && loaded(self);
         self.cfg.efeitos.voicefx_on = self.voicefx_on;
     }
 

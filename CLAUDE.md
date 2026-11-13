@@ -75,6 +75,9 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   Aprender = item do menu ⚙ (o chip "Aprendendo... ✖" só aparece ligado). `cfg.tab` vai até 3 (aba DrumPads).
 - v0.30: `FREE_PADS` 3..6 (livre:3..6, Pixabay) + `MY_SLOTS = 12`; DrumPads 9/10 embutidos (`EXTRA_DRUM_NAMES`,
   `BUILTIN_DRUMS = 10`), `DRUM_FILE_MAX_S = 12`; migração única `cfg.pads_v30`. Sons da Pixabay: **não publicar soltos**.
+- v0.31: `efeitos::VoiceTexture` + `VoiceFx.tex/tex_key` (porta abre com nota apertada, `mix_texture` no tom escolhido),
+  `pads::TEXTURE_VOICES` (voz 6..11 = `TEXTURE_BASE..`), `pads::load_texture_voice`, `Cmd::VoiceFxTexture/VoiceFxKey`,
+  `cfg.efeitos.voicefx_key`, `core.voicefx_tex`; `FREE_PADS` voltou a 3 e `cfg.pads_v31` tira livre:3..6 dos pads.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

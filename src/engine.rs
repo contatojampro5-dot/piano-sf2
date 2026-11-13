@@ -93,6 +93,10 @@ pub enum Cmd {
     DrumVolume(f32),
     /// v0.17: textura do coral do Voice FX.
     VoiceFxSource(Arc<crate::granular::GrainSource>),
+    /// v0.31: textura do Voice FX (None = volta às vozes nota por nota). Criada fora daqui.
+    VoiceFxTexture(Option<Arc<crate::efeitos::VoiceTexture>>),
+    /// v0.31: tom das texturas (0 = C … 11 = B).
+    VoiceFxKey(u8),
     VoiceFx {
         on: bool,
         level: f32,
@@ -464,6 +468,19 @@ impl Engine {
             Cmd::Drum { pad, vel } => self.drums.hit(pad, vel),
             Cmd::DrumVolume(v) => self.drum_vol = v.clamp(0.0, 1.0),
             Cmd::VoiceFxSource(src) => self.voicefx.src = Some(src),
+            Cmd::VoiceFxTexture(t) => {
+                // só troca (e solta as vozes) se for outra textura de verdade
+                let same = match (&self.voicefx.tex, &t) {
+                    (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                    (None, None) => true,
+                    _ => false,
+                };
+                if !same {
+                    self.voicefx.all_off();
+                    self.voicefx.tex = t;
+                }
+            }
+            Cmd::VoiceFxKey(k) => self.voicefx.tex_key = k % 12,
             Cmd::VoiceFx { on, level, octave } => {
                 if !on && self.voicefx.on {
                     self.voicefx.all_off();

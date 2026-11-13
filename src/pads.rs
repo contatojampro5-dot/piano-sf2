@@ -322,7 +322,7 @@ pub struct FreePad {
     bytes: &'static [u8],
 }
 
-pub const FREE_PADS: [FreePad; 7] = [
+pub const FREE_PADS: [FreePad; 3] = [
     FreePad {
         name: "Vênus",
         key: 0,
@@ -337,27 +337,6 @@ pub const FREE_PADS: [FreePad; 7] = [
         name: "Marte",
         key: 0,
         bytes: include_bytes!("../assets/sons-livres/pads/02.ogg"),
-    },
-    // v0.30: sons da Pixabay que o Theo trouxe (ver assets/sons-livres/pixabay/LEIA.txt)
-    FreePad {
-        name: "Urano",
-        key: 1, // C# (achado pelo som)
-        bytes: include_bytes!("../assets/sons-livres/pads/03.ogg"),
-    },
-    FreePad {
-        name: "Mercúrio",
-        key: 11, // B
-        bytes: include_bytes!("../assets/sons-livres/pads/04.ogg"),
-    },
-    FreePad {
-        name: "Lua",
-        key: 6, // F#
-        bytes: include_bytes!("../assets/sons-livres/pads/05.ogg"),
-    },
-    FreePad {
-        name: "Plutão",
-        key: 7, // G
-        bytes: include_bytes!("../assets/sons-livres/pads/06.ogg"),
     },
 ];
 
@@ -378,10 +357,6 @@ pub fn planet_name(path: &str) -> Option<(&'static str, &'static str)> {
         "livre:0" => Some(("Vênus", "Coral Celeste")),
         "livre:1" => Some(("Terra", "Cordas Suaves")),
         "livre:2" => Some(("Marte", "Atmosfera")),
-        "livre:3" => Some(("Urano", "Urano")),
-        "livre:4" => Some(("Mercúrio", "Mercúrio")),
-        "livre:5" => Some(("Lua", "Lua")),
-        "livre:6" => Some(("Plutão", "Plutão")),
         _ => None,
     }
 }
@@ -742,4 +717,62 @@ impl PadVoice {
             }
         }
     }
+}
+
+/// v0.31: texturas do Voice FX (sons da Pixabay que o Theo trouxe — ver assets/sons-livres/pixabay/LEIA.txt).
+/// Não seguem nota por nota: tocam no TOM escolhido no Voice FX enquanto você toca.
+pub struct TextureVoice {
+    pub name: &'static str,
+    pub hint: &'static str,
+    /// Tom em que foi gravado (achado pelo som); `None` = descobre ao abrir.
+    pub root: Option<usize>,
+    pub looped: bool,
+    pub restart: bool,
+}
+
+pub const TEXTURE_VOICES: [TextureVoice; 6] = [
+    TextureVoice { name: "Urano", hint: "coral angelical, longo", root: Some(1), looped: true, restart: false },
+    TextureVoice { name: "Mercúrio", hint: "coral celestial, cheio", root: Some(11), looped: true, restart: false },
+    TextureVoice { name: "Lua", hint: "brilho de sinos, \"céu\"", root: Some(6), looped: true, restart: false },
+    TextureVoice { name: "Plutão", hint: "vozes que respiram", root: Some(7), looped: true, restart: false },
+    TextureVoice { name: "Choir Rise", hint: "coral gospel subindo (toca uma vez)", root: None, looped: false, restart: true },
+    TextureVoice { name: "Prayer", hint: "trecho em Dó maior, 120 BPM", root: Some(0), looped: true, restart: true },
+];
+
+static TEXTURE_BYTES: [&[u8]; 4] = [
+    include_bytes!("../assets/sons-livres/pads/03.ogg"),
+    include_bytes!("../assets/sons-livres/pads/04.ogg"),
+    include_bytes!("../assets/sons-livres/pads/05.ogg"),
+    include_bytes!("../assets/sons-livres/pads/06.ogg"),
+];
+
+/// Primeiro número de voz do Voice FX que é textura (0..4 vozes, 5 = "Minha", 6.. = texturas).
+pub const TEXTURE_BASE: usize = 6;
+
+/// Abre a textura `n` (0..6) pronta para o motor.
+pub fn load_texture_voice(n: usize) -> Result<Arc<crate::efeitos::VoiceTexture>, String> {
+    let tv = TEXTURE_VOICES.get(n).ok_or("textura não existe")?;
+    let bytes: &'static [u8] = match n {
+        0..=3 => TEXTURE_BYTES[n],
+        _ => crate::efeitos::EXTRA_DRUM_SAMPLES[n - 4],
+    };
+    let clip = decode(Box::new(Cursor::new(bytes)), Some("ogg"), false)?;
+    let root = tv.root.unwrap_or_else(|| detect_key(&clip));
+    let mut data = clip.data;
+    if tv.looped {
+        // textura: emenda longa (2 s); trecho musical (Prayer): emenda curtinha, para não sair do tempo
+        let fade = if tv.restart { clip.rate as usize / 50 } else { clip.rate as usize * 2 };
+        smooth_loop(&mut data, fade);
+    }
+    normalize_level(&mut data);
+    let l = data.chunks(2).map(|c| c[0] as f32 / 32768.0).collect();
+    let r = data.chunks(2).map(|c| *c.get(1).unwrap_or(&c[0]) as f32 / 32768.0).collect();
+    Ok(Arc::new(crate::efeitos::VoiceTexture {
+        l,
+        r,
+        rate: clip.rate,
+        root: root as u8,
+        looped: tv.looped,
+        restart: tv.restart,
+    }))
 }

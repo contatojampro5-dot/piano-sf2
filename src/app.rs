@@ -83,6 +83,8 @@ struct UiState {
     /// v0.28: editor dos DrumPads aberto e qual pad está sendo editado.
     drum_edit: bool,
     drum_sel: usize,
+    /// v0.31: lista de vozes do Voice FX aberta (bolinha).
+    voice_list_open: bool,
     voicefx_file_dialog: bool,
     /// v0.21: lista de pads aberta (a bolinha de planeta na aba Pads).
     pad_list_open: bool,
@@ -190,6 +192,7 @@ impl PianoApp {
                 drum_file_dialog: None,
                 drum_edit: false,
                 drum_sel: 0,
+                voice_list_open: false,
                 voicefx_file_dialog: false,
                 pad_list_open: false,
                 pad_mix_mode: false,
@@ -1276,6 +1279,7 @@ fn fx_bar(ui: &mut Ui, core: &mut Core, w: f32, value: &mut f32, color: Color32,
 }
 
 fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
+    ui.add_space(12.0); // v0.31: um pouco mais longe das abas
     let avail = ui.available_size();
     let gap = 12.0;
     // v0.28: os 5 blocos lado a lado, compridos (de cima a baixo)
@@ -1291,6 +1295,9 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     let mut voice_key: Option<usize> = None;
     let mut st_voice_dialog = false;
     let mut voice_sel: Option<usize> = None;
+    // v0.31: abrir/fechar a lista de vozes do Voice FX (aplicado no fim)
+    let mut voice_list_toggle = false;
+    let mut voice_list_close = false;
 
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
@@ -1419,14 +1426,118 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             if fx_toggle(ui, core, w, core.voicefx_on, "VOICE", VOICE_COLOR, Target::VoiceFxToggle, "Um coral (\"aah\") acompanha cada nota que você tocar") {
                 core.toggle_voicefx();
             }
-            // v0.21: escolher a voz que canta (troca na hora, mesmo ligado)
-            ui.add_space(6.0);
-            let mut voices: Vec<(&str, usize)> = pads::VOICE_NAMES.iter().enumerate().map(|(i, n)| (*n, i)).collect();
+            // v0.31: vozes numa bolinha (igual aos planetas dos pads): clica e a lista abre
+            ui.add_space(8.0);
+            let open = st.voice_list_open;
+            let mut note_voices: Vec<(String, usize, &str)> =
+                pads::VOICE_NAMES.iter().enumerate().map(|(i, n)| (n.to_string(), i, pads::VOICE_HINTS[i])).collect();
             if e.voicefx_file.is_some() {
-                voices.push(("Minha", VOICE_MINE));
+                note_voices.push(("Minha".to_string(), VOICE_MINE, "o seu coral (arquivo)"));
             }
-            if let Some(v) = fx_choice(ui, "Voz", &voices, e.voicefx_voice, VOICE_COLOR) {
-                voice_sel = Some(v);
+            let textures: Vec<(String, usize, &str)> = pads::TEXTURE_VOICES
+                .iter()
+                .enumerate()
+                .map(|(i, t)| (t.name.to_string(), pads::TEXTURE_BASE + i, t.hint))
+                .collect();
+            let mut ball_click = false;
+            let cur = e.voicefx_voice;
+            let mut chip = |ui: &mut Ui, name: &str, v: usize, hint: &str| {
+                let sel = cur == v;
+                if !open && !sel {
+                    return;
+                }
+                let label = if sel && v >= pads::TEXTURE_BASE {
+                    format!("{name}  ·  {}", pads::KEY_NAMES[e.voicefx_key])
+                } else {
+                    name.to_string()
+                };
+                let text = RichText::new(label)
+                    .size(if sel && !open { 15.0 } else { 13.0 })
+                    .strong()
+                    .color(if sel { th().ink } else { th().text });
+                let tip = if v >= pads::TEXTURE_BASE {
+                    format!("{name} — {hint}\nToca no tom escolhido abaixo enquanto você toca")
+                } else {
+                    format!("{name} — {hint}\nCanta cada nota que você tocar")
+                };
+                let r = ui
+                    .add(
+                        egui::Button::new(text)
+                            .fill(if sel { VOICE_COLOR } else { th().glass_hi })
+                            .corner_radius(16)
+                            .min_size(Vec2::new(0.0, 30.0)),
+                    )
+                    .on_hover_text(tip);
+                if r.clicked() {
+                    if open && !sel {
+                        voice_sel = Some(v);
+                        voice_list_close = true;
+                    } else {
+                        voice_list_toggle = true;
+                    }
+                }
+            };
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+                if planet_ball(ui, open)
+                    .on_hover_text(if open { "Fechar a lista de vozes" } else { "Escolher outra voz" })
+                    .clicked()
+                {
+                    ball_click = true;
+                }
+                if open {
+                    ui.label(RichText::new("Vozes · seguem cada nota").size(12.0).color(th().dim));
+                }
+                for (n, v, h) in &note_voices {
+                    if !open && cur != *v {
+                        continue;
+                    }
+                    chip(ui, n, *v, h);
+                }
+                if !open {
+                    for (n, v, h) in &textures {
+                        if cur == *v {
+                            chip(ui, n, *v, h);
+                        }
+                    }
+                }
+            });
+            if open {
+                ui.add_space(4.0);
+                ui.label(RichText::new("Texturas · tocam no tom escolhido").size(12.0).color(th().dim));
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+                    for (n, v, h) in &textures {
+                        chip(ui, n, *v, h);
+                    }
+                });
+            }
+            if ball_click {
+                voice_list_toggle = true;
+            }
+            // tom das texturas (igual aos tons dos pads): o som toca no tom da música
+            if e.voicefx_voice >= pads::TEXTURE_BASE {
+                ui.add_space(8.0);
+                ui.label(RichText::new("Tom").size(12.0).color(th().dim))
+                    .on_hover_text("Escolha o tom da música: a textura toca nesse tom");
+                let kw = ((w - 5.0 * 4.0) / 6.0).max(26.0);
+                for row in 0..2 {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
+                        for k in row * 6..row * 6 + 6 {
+                            let sel = e.voicefx_key == k;
+                            let b = egui::Button::new(
+                                RichText::new(pads::KEY_NAMES[k]).size(13.0).strong().color(if sel { th().ink } else { th().text }),
+                            )
+                            .fill(if sel { VOICE_COLOR } else { th().glass_hi })
+                            .corner_radius(8)
+                            .min_size(Vec2::new(kw, 28.0));
+                            if ui.add(b).clicked() {
+                                e.voicefx_key = k;
+                            }
+                        }
+                    });
+                }
             }
             ui.add_space(6.0);
             ui.label(RichText::new(format!("Volume {:.0}%", e.voicefx_volume * 100.0)).size(12.0).color(th().dim));
@@ -1527,6 +1638,12 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     });
     st.fx_details = [d_tempo, d_pulse, d_arp, d_voice, d_filt];
 
+    if voice_list_toggle {
+        st.voice_list_open = !st.voice_list_open;
+    }
+    if voice_list_close {
+        st.voice_list_open = false;
+    }
     core.set_efeitos(e);
     // v0.19: ações que mexem nos arquivos depois de guardar os ajustes (senão a cópia `e` desfazia)
     if voice_reset {
@@ -1558,6 +1675,7 @@ fn drum_colors_of(e: &crate::model::Efeitos, i: usize) -> (Color32, Color32) {
 
 fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     core.ensure_drum_kit();
+    ui.add_space(12.0); // v0.31: um pouco mais longe das abas
     let avail = ui.available_size();
     let mut e = core.cfg.efeitos.clone();
     let mut drum_reset: Option<usize> = None;

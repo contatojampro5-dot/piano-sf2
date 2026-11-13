@@ -486,6 +486,9 @@ pub struct Config {
     /// v0.30: já colocou os pads e DrumPads novos (Pixabay) que o Theo trouxe?
     #[serde(default)]
     pub pads_v30: bool,
+    /// v0.31: os 4 sons da Pixabay saíram dos "Meus pads" (viraram vozes do Voice FX)?
+    #[serde(default)]
+    pub pads_v31: bool,
     /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
     #[serde(default)]
     pub mappings_version: u32,
@@ -602,6 +605,8 @@ pub struct Efeitos {
     pub drum_names: Vec<String>,
     /// v0.28: cor de cada DrumPad (índice das cores neon; 255 = a do programa).
     pub drum_colors: Vec<u8>,
+    /// v0.31: tom em que as texturas do Voice FX tocam (0 = C … 11 = B).
+    pub voicefx_key: usize,
 }
 
 /// v0.21: número da voz "Minha" (o arquivo do Theo) no Voice FX.
@@ -635,6 +640,7 @@ impl Default for Efeitos {
             drum_count: crate::efeitos::BUILTIN_DRUMS,
             drum_names: Vec::new(),
             drum_colors: Vec::new(),
+            voicefx_key: 0,
         }
     }
 }
@@ -661,7 +667,9 @@ impl Efeitos {
         self.filtro = self.filtro.clamp(0.0, 1.0);
         self.filtro_res = self.filtro_res.clamp(0.0, 1.0);
         self.swell_secs = self.swell_secs.clamp(0.5, 16.0);
-        if self.voicefx_voice > VOICE_MINE || (self.voicefx_voice == VOICE_MINE && self.voicefx_file.is_none()) {
+        self.voicefx_key %= 12;
+        let max_voice = crate::pads::TEXTURE_BASE + crate::pads::TEXTURE_VOICES.len() - 1;
+        if self.voicefx_voice > max_voice || (self.voicefx_voice == VOICE_MINE && self.voicefx_file.is_none()) {
             self.voicefx_voice = 0;
         }
         self.drum_files.retain(|(i, _)| *i < crate::efeitos::MAX_DRUMS);
@@ -724,6 +732,7 @@ impl Default for Config {
             pads_v20: false,
             pads_v21: false,
             pads_v30: false,
+            pads_v31: false,
         }
     }
 }
@@ -824,6 +833,11 @@ impl Config {
                 }
             }
             self.efeitos.drum_count = self.efeitos.drum_count.max(crate::efeitos::BUILTIN_DRUMS);
+        }
+        if !self.pads_v31 {
+            // v0.31: Urano, Mercúrio, Lua e Plutão agora moram no Voice FX (livre:3..6 não existe mais nos pads)
+            self.pads_v31 = true;
+            self.my_pads.retain(|m| !matches!(m.path.as_str(), "livre:3" | "livre:4" | "livre:5" | "livre:6"));
         }
         self.my_pads.truncate(crate::pads::MY_SLOTS);
         // v0.24: o segundo pad tem que ser um dos "Meus pads" e diferente do principal

@@ -1,4 +1,5 @@
 Sons baixados da Pixabay (Pixabay Content License) e trazidos pelo Theo em 13/11/2026.
+v0.31: pads/03..06 e drums/08..09 são as TEXTURAS do Voice FX (pads::TEXTURE_VOICES); 08..09 também são DrumPads 9 e 10.
 Podem ser usados dentro do programa; NÃO publicar estes arquivos soltos (redistribuição avulsa não é permitida).
 pads/03.ogg  Urano    = freesound_community "angelic choir" (6793)
 pads/04.ogg  Mercúrio = dragon-studio "heavenly choir" (515273)
