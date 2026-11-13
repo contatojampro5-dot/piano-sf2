@@ -1532,12 +1532,16 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                             let (rect, resp) = ui.allocate_exact_size(Vec2::splat(pad), Sense::click());
                             let own = core.drum_file_name(i);
                             let pressed = resp.is_pointer_button_down_on();
+                            // v0.25.1: passou o mouse = acende suave (RGB neon); bateu = acende forte e apaga
+                            let hover = ui.ctx().animate_bool_with_time(resp.id.with("luz"), resp.hovered(), 0.18);
+                            let light = (0.75 * hover).max(glow);
+                            glowing |= hover > 0.0 && hover < 1.0;
                             drum_tile(
                                 ui.painter(),
                                 if pressed { rect.shrink(2.0) } else { rect },
                                 DRUM_ACCENTS[i % DRUM_ACCENTS.len()],
-                                glow,
-                                resp.hovered(),
+                                light,
+                                resp.hover_pos(),
                                 i,
                                 own.as_deref(),
                             );
@@ -3174,16 +3178,17 @@ fn hold_button(ui: &mut Ui, core: &mut Core, size: Vec2, label: &str, target: Ta
     resp.on_hover_text(target.label());
 }
 
-/// v0.25: cor neon de cada DrumPad (Kick, Snare, Clap, Hi-hat, Crash, 808, Riser, Impact).
-const DRUM_ACCENTS: [Color32; 8] = [
-    Color32::from_rgb(0xff, 0x8a, 0x3d),
-    Color32::from_rgb(0x2e, 0xe6, 0xd6),
-    Color32::from_rgb(0xff, 0x4f, 0xa3),
-    Color32::from_rgb(0xff, 0xd2, 0x3f),
-    Color32::from_rgb(0x4d, 0xa3, 0xff),
-    Color32::from_rgb(0xa0, 0x66, 0xff),
-    Color32::from_rgb(0x3d, 0xff, 0x9a),
-    Color32::from_rgb(0xff, 0x4b, 0x4b),
+/// v0.25.1: as duas cores da luz RGB de cada DrumPad (a borda passa de uma para a outra).
+/// Kick, Snare, Clap, Hi-hat, Crash, 808, Riser, Impact.
+const DRUM_ACCENTS: [(Color32, Color32); 8] = [
+    (Color32::from_rgb(0xff, 0x8a, 0x2a), Color32::from_rgb(0xff, 0x3d, 0x8b)),
+    (Color32::from_rgb(0x2e, 0xe6, 0xd6), Color32::from_rgb(0x3d, 0x7b, 0xff)),
+    (Color32::from_rgb(0xff, 0x4f, 0xa3), Color32::from_rgb(0xa0, 0x5a, 0xff)),
+    (Color32::from_rgb(0xff, 0xd2, 0x3f), Color32::from_rgb(0xff, 0x7a, 0x2a)),
+    (Color32::from_rgb(0x4d, 0xa3, 0xff), Color32::from_rgb(0x2e, 0xe6, 0xd6)),
+    (Color32::from_rgb(0xa0, 0x66, 0xff), Color32::from_rgb(0xff, 0x4f, 0xc8)),
+    (Color32::from_rgb(0x3d, 0xff, 0x9a), Color32::from_rgb(0x2e, 0xc8, 0xe6)),
+    (Color32::from_rgb(0xff, 0x4b, 0x4b), Color32::from_rgb(0xff, 0x9a, 0x2a)),
 ];
 
 fn mix_color(a: Color32, b: Color32, t: f32) -> Color32 {
@@ -3192,98 +3197,126 @@ fn mix_color(a: Color32, b: Color32, t: f32) -> Color32 {
     Color32::from_rgb(l(a.r(), b.r()), l(a.g(), b.g()), l(a.b(), b.b()))
 }
 
-/// v0.25: um DrumPad no estilo das referências do Theo: vidro escuro, borda neon na cor do pad,
-/// reflexo de vidro em cima, nome pequeno embaixo à esquerda e número no canto. `glow` (0..1) = brilho do toque.
-fn drum_tile(p: &egui::Painter, rect: Rect, accent: Color32, glow: f32, hovered: bool, i: usize, own: Option<&str>) {
-    let r: u8 = (rect.width() * 0.16).clamp(10.0, 22.0) as u8;
-    let base = Color32::from_rgb(0x10, 0x14, 0x1d);
-    // halo neon por fora (fraquinho parado, forte no toque)
-    let halo = 0.10 + 0.9 * glow + if hovered { 0.08 } else { 0.0 };
-    for k in 1..=6 {
-        let a = (halo * 70.0 * (1.0 - k as f32 / 7.0)) as u8;
-        if a > 0 {
+fn with_alpha(c: Color32, a: f32) -> Color32 {
+    Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), (a.clamp(0.0, 1.0) * 255.0) as u8)
+}
+
+/// Pontos em volta de um retângulo de cantos redondos (sentido horário, começando no canto de cima à esquerda).
+fn rounded_outline(rect: Rect, r: f32, per_corner: usize) -> Vec<Pos2> {
+    let r = r.min(rect.width() / 2.0).min(rect.height() / 2.0);
+    let corners = [
+        (Pos2::new(rect.left() + r, rect.top() + r), std::f32::consts::PI),
+        (Pos2::new(rect.right() - r, rect.top() + r), -std::f32::consts::FRAC_PI_2),
+        (Pos2::new(rect.right() - r, rect.bottom() - r), 0.0),
+        (Pos2::new(rect.left() + r, rect.bottom() - r), std::f32::consts::FRAC_PI_2),
+    ];
+    let mut pts = Vec::with_capacity(4 * (per_corner + 1));
+    for (c, a0) in corners {
+        for k in 0..=per_corner {
+            let a = a0 + k as f32 / per_corner as f32 * std::f32::consts::FRAC_PI_2;
+            pts.push(c + Vec2::new(a.cos() * r, a.sin() * r));
+        }
+    }
+    pts
+}
+
+/// v0.25.1: DrumPad como nas referências do Theo. Parado: preto, borda fininha discreta, nome pequeno no canto.
+/// `light` (0..1) = o quanto está aceso (mouse em cima ou batida): acende como luz RGB neon —
+/// borda em degradê de duas cores, luz entrando pelas bordas e subindo de baixo, centro escuro e transparente.
+/// `spot` = onde o mouse está (v0.25.1: uma luz mais forte segue o mouse por dentro do pad).
+fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f32, spot: Option<Pos2>, i: usize, own: Option<&str>) {
+    let (ca, cb) = colors;
+    let r = (rect.width() * 0.14).clamp(10.0, 20.0);
+    let light = light.clamp(0.0, 1.0);
+    // brilho de fora (halo), só quando acende
+    if light > 0.01 {
+        for k in 1..=7 {
+            let f = 1.0 - k as f32 / 8.0;
             p.rect_stroke(
-                rect.expand(k as f32 * 1.6),
-                r + k as u8,
-                Stroke::new(1.6, Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), a)),
+                rect.expand(k as f32 * 1.7),
+                (r + k as f32 * 1.7) as u8,
+                Stroke::new(1.8, with_alpha(mix_color(ca, cb, 0.5), light * 0.22 * f * f)),
                 StrokeKind::Outside,
             );
         }
     }
-    // corpo: vidro escuro com um tom da cor; no toque, enche de cor
-    let body = mix_color(mix_color(base, accent, 0.06), accent, 0.55 * glow);
-    p.rect_filled(rect, r, body);
-    // "luz" de dentro, mais forte embaixo (como os quadrados azuis)
-    let inner = rect.shrink(rect.width() * 0.12);
-    let inner = Rect::from_min_max(Pos2::new(inner.left(), rect.center().y), Pos2::new(inner.right(), rect.bottom() - 4.0));
-    p.rect_filled(
-        inner,
-        r,
-        Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), (14.0 + 70.0 * glow) as u8),
-    );
-    // reflexo de vidro em cima (as teclas polidas do vidro líquido)
-    let sheen = Rect::from_min_max(rect.min + Vec2::new(3.0, 3.0), Pos2::new(rect.right() - 3.0, rect.top() + rect.height() * 0.42));
-    p.rect_filled(
-        sheen,
-        CornerRadius { nw: r.saturating_sub(2), ne: r.saturating_sub(2), sw: 6, se: 6 },
-        Color32::from_white_alpha((12.0 + 14.0 * glow) as u8),
-    );
+    // corpo preto (um tiquinho de cor quando acende: "transparente")
+    let body = mix_color(Color32::from_rgb(0x05, 0x06, 0x0a), mix_color(ca, cb, 0.5), 0.10 * light);
+    p.rect_filled(rect, r as u8, body);
+    let clip = p.with_clip_rect(rect.shrink(1.0));
+    if light > 0.01 {
+        // luz que sobe de baixo (como uma fita de LED atrás do pad)
+        let base = Pos2::new(rect.center().x, rect.bottom() + rect.height() * 0.35);
+        for k in 0..10 {
+            let f = k as f32 / 10.0;
+            clip.circle_filled(
+                base,
+                rect.width() * (0.95 - 0.07 * k as f32),
+                with_alpha(mix_color(ca, cb, 0.3 + 0.4 * f), light * 0.045),
+            );
+        }
+        // luz entrando pelas bordas (o centro fica escuro)
+        let steps = 9;
+        for k in 0..steps {
+            let f = 1.0 - k as f32 / steps as f32;
+            let inset = k as f32 * (rect.width() * 0.022).max(1.4);
+            clip.rect_stroke(
+                rect.shrink(inset),
+                (r - inset * 0.6).max(2.0) as u8,
+                Stroke::new(2.0, with_alpha(mix_color(ca, cb, k as f32 / steps as f32), light * 0.30 * f * f)),
+                StrokeKind::Inside,
+            );
+        }
+    }
+    // v0.25.1: holofote que segue o mouse (luz mais forte onde o cursor passa)
+    if let Some(m) = spot.filter(|m| rect.contains(*m)) {
+        let tx = ((m.x - rect.left()) / rect.width() + (m.y - rect.top()) / rect.height()) * 0.5;
+        let c = mix_color(ca, cb, tx);
+        for k in 0..9 {
+            let f = k as f32 / 9.0;
+            clip.circle_filled(m, rect.width() * (0.55 - 0.055 * k as f32), with_alpha(mix_color(c, Color32::WHITE, f * 0.5), 0.05 + 0.03 * f));
+        }
+    }
+    // reflexo leve de vidro em cima
     p.line_segment(
-        [Pos2::new(rect.left() + r as f32, rect.top() + 1.5), Pos2::new(rect.right() - r as f32, rect.top() + 1.5)],
-        Stroke::new(1.0, Color32::from_white_alpha(60)),
+        [Pos2::new(rect.left() + r, rect.top() + 1.2), Pos2::new(rect.right() - r, rect.top() + 1.2)],
+        Stroke::new(1.0, Color32::from_white_alpha((18.0 + 50.0 * light) as u8)),
     );
-    // borda neon
-    let edge = Color32::from_rgba_unmultiplied(
-        accent.r(),
-        accent.g(),
-        accent.b(),
-        (110.0 + 145.0 * glow + if hovered { 40.0 } else { 0.0 }).min(255.0) as u8,
-    );
-    p.rect_stroke(rect, r, Stroke::new(1.6 + 0.8 * glow, edge), StrokeKind::Inside);
-    // número no canto e nome embaixo à esquerda (pequenos, como no sampler)
-    let pad_in = (rect.width() * 0.1).clamp(7.0, 14.0);
-    let small = (rect.width() * 0.10).clamp(9.0, 12.0);
-    let big = (rect.width() * 0.13).clamp(11.0, 16.0);
-    p.text(
-        rect.min + Vec2::new(pad_in, pad_in),
-        Align2::LEFT_TOP,
-        format!("{:02}", i + 1),
-        FontId::monospace(small),
-        Color32::from_white_alpha((120.0 + 120.0 * glow) as u8),
-    );
-    // bolinha de "aceso" no canto, na cor do pad
-    p.circle_filled(
-        Pos2::new(rect.right() - pad_in - 3.0, rect.top() + pad_in + 4.0),
-        3.0,
-        Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), (90.0 + 165.0 * glow) as u8),
-    );
+    // borda: parada = cinza fininho; acesa = degradê RGB das duas cores
+    let pts = rounded_outline(rect.shrink(0.8), r, 8);
+    let n = pts.len();
+    for k in 0..n {
+        let (a, b) = (pts[k], pts[(k + 1) % n]);
+        // posição na diagonal (canto de cima à esquerda = cor A, de baixo à direita = cor B)
+        let t = (((a.x - rect.left()) / rect.width()) + ((a.y - rect.top()) / rect.height())) * 0.5;
+        let neon = mix_color(ca, cb, t);
+        let idle = Color32::from_rgb(0x26, 0x2b, 0x36);
+        // perto do mouse a borda brilha mais (a luz "escorre" pela borda)
+        let near = spot
+            .map(|m| (1.0 - (a.distance(m) / (rect.width() * 0.6))).clamp(0.0, 1.0))
+            .unwrap_or(0.0);
+        let c = mix_color(mix_color(idle, neon, 0.25 + 0.75 * light), Color32::WHITE, near * near * 0.55);
+        p.line_segment([a, b], Stroke::new(1.2 + 1.0 * light + 1.2 * near, c));
+    }
+    // nome pequeno no canto de cima (como no sampler)
+    let pad_in = (rect.width() * 0.10).clamp(8.0, 13.0);
+    let font = (rect.width() * 0.105).clamp(10.0, 13.0);
     let name = crate::efeitos::DRUM_NAMES[i % crate::efeitos::DRUMS];
+    let txt = mix_color(Color32::from_rgb(0x8a, 0x92, 0xa3), Color32::WHITE, light);
     match own {
         Some(file) => {
-            let short: String = file.chars().take(12).collect();
-            p.text(
-                Pos2::new(rect.left() + pad_in, rect.bottom() - pad_in - big - 2.0),
-                Align2::LEFT_BOTTOM,
-                format!("♪ {name}"),
-                FontId::proportional(small),
-                accent,
-            );
+            let short: String = file.chars().take(14).collect();
+            p.text(rect.min + Vec2::new(pad_in, pad_in), Align2::LEFT_TOP, name.to_uppercase(), FontId::proportional(font), txt);
             p.text(
                 Pos2::new(rect.left() + pad_in, rect.bottom() - pad_in),
                 Align2::LEFT_BOTTOM,
-                short,
-                FontId::proportional(big),
-                Color32::WHITE,
+                format!("♪ {short}"),
+                FontId::proportional(font - 1.0),
+                mix_color(ca, Color32::WHITE, 0.3),
             );
         }
         None => {
-            p.text(
-                Pos2::new(rect.left() + pad_in, rect.bottom() - pad_in),
-                Align2::LEFT_BOTTOM,
-                name.to_uppercase(),
-                FontId::proportional(big),
-                Color32::from_white_alpha((200.0 + 55.0 * glow) as u8),
-            );
+            p.text(rect.min + Vec2::new(pad_in, pad_in), Align2::LEFT_TOP, name.to_uppercase(), FontId::proportional(font), txt);
         }
     }
 }

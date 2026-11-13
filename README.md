@@ -194,6 +194,12 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.25.1 — DrumPads refeitos (preto + luz RGB neon)
+- Parado: pad **preto**, borda fininha discreta e só o nome pequeno no canto (sem números, sem bolinha), como no sampler.
+- **Passando o mouse**: acende como **luz RGB neon** — borda em degradê de duas cores (ex.: laranja → rosa), luz entrando pelas
+  bordas e subindo de baixo, centro escuro e transparente. Uma **luz mais forte segue o mouse** por dentro do pad.
+- Bateu: acende forte e apaga suave.
+
 ### v0.25 — DrumPads com visual novo
 - Pads de vidro escuro com **cor neon própria** (Kick laranja, Snare verde-água, Clap rosa, Hi-hat amarelo, Crash azul,
   808 roxo, Riser verde, Impact vermelho), reflexo de vidro em cima, número no canto e nome pequeno embaixo.
