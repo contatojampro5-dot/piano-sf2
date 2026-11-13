@@ -194,6 +194,15 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.33 — Sequencer (batida em loop) na aba DrumPads
+- Faixa **Sequencer** embaixo dos DrumPads: botão redondo **▶ / ■**, luzes dos tempos (1 2 3 4) e **ritmos prontos**:
+  Louvor, Balada, Animado, 6/8, Só bumbo e Vazio. Toca no andamento do **Tempo** (BPM e Tap ali mesmo).
+- **▦ Mudar a batida** abre a grade: uma linha por DrumPad (Kick, Snare, Clap, Hi-hat; "+ Mais sons" mostra todos),
+  16 quadradinhos em 4 grupos (12 no 6/8). Clicar acende/apaga; parado, o som toca para você ouvir. Ritmo mudado mostra ✎
+  (clicar nele volta ao original). A coluna que está tocando acende e os DrumPads piscam junto.
+- A batida roda no motor de áudio (no tempo exato). O ▶ pode ir num botão do AMW pelo Aprender; o Pânico para a batida.
+  O programa sempre abre com a batida parada.
+
 ### v0.32 — constelações no Voice FX, tons iguais aos Pads
 - As texturas do Voice FX ganharam nomes de **constelação**: Órion (ex-Urano), Lyra (ex-Mercúrio), Cassiopeia (ex-Lua),
   Andrômeda (ex-Plutão); Choir Rise e Prayer ficam iguais. A bolinha do Voice FX mostra uma constelação.

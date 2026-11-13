@@ -1702,3 +1702,115 @@ fn v031_sons_da_pixabay_viram_vozes_do_voice_fx() {
         assert_eq!(fx.active_voices(), 0);
     }
 }
+
+#[test]
+fn v033_ritmos_prontos_e_passos() {
+    use crate::efeitos::{rhythm_grid, Seq, SeqParams, RHYTHMS, SEQ_MAX_STEPS};
+    // Louvor: bumbo nos passos 1, 9 e 11; caixa no 2 e no 4 (passos 5 e 13); chimbal nas colcheias
+    let g = rhythm_grid(0);
+    assert_eq!(g[0], (1 << 0) | (1 << 8) | (1 << 10));
+    assert_eq!(g[1], (1 << 4) | (1 << 12));
+    assert_eq!(g[3].count_ones(), 8);
+    // todos os desenhos têm o tamanho certo do compasso
+    for r in RHYTHMS.iter() {
+        assert!(r.steps as usize <= SEQ_MAX_STEPS && r.steps as u32 % r.per_beat == 0, "{}", r.name);
+        for (pad, row) in r.rows {
+            assert_eq!(row.len(), r.steps as usize, "{}: linha do pad {pad}", r.name);
+        }
+    }
+    // o contador toca os pads acesos de cada passo e volta ao começo no fim do compasso
+    let mut s = Seq { p: SeqParams { on: true, steps: 16, per_beat: 4, grid: g }, step: 0 };
+    let mut hits = Vec::new();
+    for _ in 0..17 {
+        let step = s.tick(|pad, vel| hits.push((pad, vel)));
+        if step == 0 {
+            assert!(hits.contains(&(0, 124)), "o 1 do compasso é o mais forte");
+        }
+        hits.clear();
+    }
+    assert_eq!(s.step, 1, "deu a volta");
+    // o chimbal fica mais leve no contratempo
+    assert!(s.p.velocity(3, 2) < s.p.velocity(3, 0));
+}
+
+#[test]
+fn v033_sequencer_toca_no_tempo_e_para() {
+    let (mut core, mut engine) = pad_rig();
+    core.set_bpm(120.0);
+    core.set_seq_rhythm(4); // "Só bumbo": um bumbo em cada tempo
+    assert!(!core.seq_on, "abre parado");
+    core.toggle_seq();
+    assert!(core.seq_on);
+    // anota em que amostra cada passo tocou (o motor avisa o passo pelo Stats)
+    let stats = engine.stats.clone();
+    let mut last = 0u32;
+    let mut when: Vec<(u32, usize)> = Vec::new();
+    let mut audio = Vec::new();
+    let mut out = vec![0.0f32; 512];
+    let block = 256;
+    for b in 0..(48_000 * 2 / block) {
+        engine.render_interleaved(&mut out, 2);
+        audio.extend_from_slice(&out);
+        let pos = stats.seq_pos.load(std::sync::atomic::Ordering::Relaxed);
+        if pos != last {
+            when.push((pos, (b + 1) * block));
+            last = pos;
+        }
+    }
+    // 120 BPM: um passo (semicolcheia) a cada 0,125 s = 6000 amostras
+    assert!(when.len() >= 14, "andou os passos: {}", when.len());
+    for w in when.windows(2) {
+        let d = w[1].1 as i64 - w[0].1 as i64;
+        assert!((d - 6000).abs() <= block as i64, "passo a passo no tempo: {d}");
+        assert_eq!(w[1].0, w[0].0 % 16 + 1, "passos em ordem");
+    }
+    // o bumbo soa logo no começo e em cada tempo (a cada 0,5 s)
+    let at = |t: f32| rms(&audio[(t * 48_000.0) as usize * 2..((t + 0.05) * 48_000.0) as usize * 2]);
+    for t in [0.0, 0.5, 1.0, 1.5] {
+        assert!(at(t) > 0.01, "bumbo no tempo {t}: {}", at(t));
+    }
+    // ■: para (o último bumbo termina sozinho) e o passo volta a 0
+    core.toggle_seq();
+    let tail = render_secs(&mut engine, 2.0);
+    assert_eq!(stats.seq_pos.load(std::sync::atomic::Ordering::Relaxed), 0);
+    assert!(rms(&tail[tail.len() - 48_000..]) < 1e-4, "parou de verdade");
+    // ▶ de novo e o pânico também para a batida
+    core.toggle_seq();
+    render_secs(&mut engine, 0.3);
+    core.panic();
+    assert!(!core.seq_on);
+    render_secs(&mut engine, 0.1);
+    assert_eq!(stats.seq_pos.load(std::sync::atomic::Ordering::Relaxed), 0);
+}
+
+#[test]
+fn v033_mudar_a_batida_e_config_antiga() {
+    let (mut core, _engine) = pad_rig();
+    // config antiga (sem Sequencer): vem com o ritmo "Louvor" pronto
+    let c: Config = serde_json::from_str(r#"{"efeitos":{"bpm":80}}"#).unwrap();
+    let mut e = c.efeitos.clone();
+    e.normalize();
+    assert_eq!(e.seq_rhythm, 0);
+    assert!(!e.seq_edited());
+    // acender e apagar um quadradinho
+    assert!(!core.cfg.efeitos.seq_edited());
+    core.seq_toggle_cell(2, 6);
+    assert!(core.cfg.efeitos.seq_grid[2] & (1 << 6) != 0);
+    assert!(core.cfg.efeitos.seq_edited(), "✎ mudou");
+    core.seq_toggle_cell(2, 6);
+    assert!(!core.cfg.efeitos.seq_edited(), "voltou igual");
+    // apagar a linha e voltar ao original escolhendo o ritmo de novo
+    core.seq_clear_row(0);
+    assert_eq!(core.cfg.efeitos.seq_grid[0], 0);
+    core.set_seq_rhythm(0);
+    assert!(!core.cfg.efeitos.seq_edited());
+    // 6/8 tem 12 passos: o passo 13 não existe
+    core.set_seq_rhythm(3);
+    assert_eq!(core.cfg.efeitos.seq_steps(), 12);
+    let before = core.cfg.efeitos.seq_grid.clone();
+    core.seq_toggle_cell(0, 13);
+    assert_eq!(core.cfg.efeitos.seq_grid, before);
+    // o ▶ pode ir num botão do AMW (Aprender)
+    assert_eq!(Target::SeqToggle.label(), "Sequencer (▶ tocar / ■ parar)");
+    assert!(!Target::SeqToggle.is_continuous());
+}

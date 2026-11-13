@@ -142,6 +142,8 @@ pub struct Core {
     voicefx_tex: Option<Arc<crate::efeitos::VoiceTexture>>,
     /// Quando cada DrumPad foi tocado (a tela acende o botão por um instante).
     pub drum_flash: [Option<Instant>; crate::efeitos::MAX_DRUMS],
+    /// v0.33: o Sequencer está tocando a batida? (não fica salvo: abre sempre parado)
+    pub seq_on: bool,
 }
 
 pub type SharedCore = Arc<Mutex<Core>>;
@@ -266,6 +268,7 @@ impl Core {
             voicefx_src: None,
             voicefx_tex: None,
             drum_flash: [None; crate::efeitos::MAX_DRUMS],
+            seq_on: false,
         }
     }
 
@@ -289,6 +292,7 @@ impl Core {
             latch: e.arp_latch,
         }));
         self.send(Cmd::DrumVolume(e.drum_volume));
+        self.send(Cmd::Seq(e.seq_params(self.seq_on)));
         if let Some(k) = &self.drum_kit {
             self.send(Cmd::DrumKit(k.clone()));
         }
@@ -640,6 +644,53 @@ impl Core {
             .iter()
             .find(|(i, _)| *i == pad)
             .map(|(_, p)| pads::name_from_file(p))
+    }
+
+    // ---------- v0.33: Sequencer (batida em loop no andamento do Tempo) ----------
+
+    /// ▶ / ■: toca a batida desde o começo do compasso, ou para (os sons que já tocaram terminam sozinhos).
+    pub fn toggle_seq(&mut self) {
+        self.ensure_drum_kit();
+        self.seq_on = !self.seq_on;
+        self.send(Cmd::Seq(self.cfg.efeitos.seq_params(self.seq_on)));
+        let name = crate::efeitos::RHYTHMS[self.cfg.efeitos.seq_rhythm].name;
+        self.notify(if self.seq_on {
+            format!("▶ Sequencer tocando: {name} · {:.0} BPM", self.cfg.efeitos.bpm)
+        } else {
+            "■ Sequencer parado".to_string()
+        });
+    }
+
+    /// Escolhe um ritmo pronto (a batida volta a ser a dele). Se estiver tocando, continua tocando.
+    pub fn set_seq_rhythm(&mut self, i: usize) {
+        let mut e = self.cfg.efeitos.clone();
+        e.seq_rhythm = i.min(crate::efeitos::RHYTHMS.len() - 1);
+        e.seq_grid = crate::efeitos::rhythm_grid(e.seq_rhythm).to_vec();
+        self.set_efeitos(e);
+    }
+
+    /// Acende/apaga um quadradinho (DrumPad `pad`, passo `step`). Parado, toca o som para ouvir.
+    pub fn seq_toggle_cell(&mut self, pad: usize, step: usize) {
+        if pad >= crate::efeitos::MAX_DRUMS || step >= self.cfg.efeitos.seq_steps() {
+            return;
+        }
+        let mut e = self.cfg.efeitos.clone();
+        e.seq_grid.resize(crate::efeitos::MAX_DRUMS, 0);
+        e.seq_grid[pad] ^= 1 << step;
+        let lit = e.seq_grid[pad] & (1 << step) != 0;
+        self.set_efeitos(e);
+        if lit && !self.seq_on {
+            self.drum_hit(pad, 100);
+        }
+    }
+
+    /// Apaga toda a batida de um DrumPad (a linha inteira).
+    pub fn seq_clear_row(&mut self, pad: usize) {
+        let mut e = self.cfg.efeitos.clone();
+        if let Some(g) = e.seq_grid.get_mut(pad) {
+            *g = 0;
+        }
+        self.set_efeitos(e);
     }
 
     pub fn drum_hit(&mut self, pad: usize, vel: u8) {
@@ -1536,6 +1587,7 @@ impl Core {
         self.modulation = 0.0;
         self.freeze_on = false; // o motor cala o congelado no pânico
         self.swell_in = true; // e o swell volta a "cheio"
+        self.seq_on = false; // e a batida do Sequencer para
         self.send(Cmd::Panic);
         self.notify("Pânico: todas as notas cortadas");
     }
@@ -1725,6 +1777,7 @@ impl Core {
             Target::Drum(i) => self.drum_hit(i, 110),
             Target::SwellToggle => self.toggle_swell(),
             Target::FreezeRecall => self.freeze_recall(),
+            Target::SeqToggle => self.toggle_seq(),
             Target::TabToggle => {
                 self.cfg.tab = 1 - self.cfg.tab.min(1);
                 self.dirty = true;
@@ -2124,6 +2177,7 @@ impl Core {
                     Target::PulseToggle => self.pulse_on,
                     Target::ArpToggle => self.arp_on,
                     Target::VoiceFxToggle => self.voicefx_on,
+                    Target::SeqToggle => self.seq_on,
                     _ => continue,
                 };
                 out.push((ch, num, lit));

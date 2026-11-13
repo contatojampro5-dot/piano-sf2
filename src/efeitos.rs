@@ -618,6 +618,144 @@ impl Drums {
 }
 
 // ---------------------------------------------------------------------------------------------
+// v0.33 — Sequencer (batida em loop, no andamento do Tempo)
+// ---------------------------------------------------------------------------------------------
+
+/// Passos de um compasso: 16 (4 tempos × 4) ou 12 (4 tempos × 3, para 6/8).
+pub const SEQ_MAX_STEPS: usize = 16;
+
+/// A batida que o motor toca: para cada DrumPad, um "bit" por passo (bit 0 = passo 1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SeqParams {
+    pub on: bool,
+    /// Quantos passos (12 ou 16).
+    pub steps: u8,
+    /// Passos por tempo (3 no 6/8, 4 no normal).
+    pub per_beat: u32,
+    pub grid: [u16; MAX_DRUMS],
+}
+
+impl Default for SeqParams {
+    fn default() -> Self {
+        Self {
+            on: false,
+            steps: 16,
+            per_beat: 4,
+            grid: [0; MAX_DRUMS],
+        }
+    }
+}
+
+impl SeqParams {
+    /// Força do toque no passo `s` do pad `pad`: o começo de cada tempo um pouco mais forte
+    /// e o chimbal mais leve no contratempo (a batida não fica "de robô").
+    pub fn velocity(&self, pad: usize, s: usize) -> u8 {
+        let beat = s % self.per_beat.max(1) as usize == 0;
+        let first = s == 0;
+        match (pad, beat) {
+            (3, true) => 92,
+            (3, false) => 66,
+            (_, true) if first => 124,
+            (_, true) => 112,
+            _ => 88,
+        }
+    }
+}
+
+/// Um ritmo pronto. Cada linha: (DrumPad, desenho dos passos — `x` toca, `.` não toca).
+pub struct Rhythm {
+    pub name: &'static str,
+    pub hint: &'static str,
+    pub steps: u8,
+    pub per_beat: u32,
+    pub rows: &'static [(usize, &'static str)],
+}
+
+// DrumPads: 0 Kick, 1 Snare, 2 Clap, 3 Hi-hat, 4 Crash, 5 808, 6 Riser, 7 Impact
+pub const RHYTHMS: [Rhythm; 6] = [
+    Rhythm {
+        name: "Louvor",
+        hint: "pop/louvor 4/4: bumbo, caixa no 2 e no 4, chimbal",
+        steps: 16,
+        per_beat: 4,
+        rows: &[(0, "x.......x.x....."), (1, "....x.......x..."), (3, "x.x.x.x.x.x.x.x.")],
+    },
+    Rhythm {
+        name: "Balada",
+        hint: "lenta, a caixa só no 3 (meio tempo)",
+        steps: 16,
+        per_beat: 4,
+        rows: &[(0, "x.....x...x....."), (1, "........x......."), (3, "x.x.x.x.x.x.x.x.")],
+    },
+    Rhythm {
+        name: "Animado",
+        hint: "celebração: bumbo em todos os tempos, palmas no 2 e no 4",
+        steps: 16,
+        per_beat: 4,
+        rows: &[(0, "x...x...x...x..."), (2, "....x.......x..."), (3, "..x...x...x...x.")],
+    },
+    Rhythm {
+        name: "6/8",
+        hint: "balanço em 3 (6/8), bom para adoração",
+        steps: 12,
+        per_beat: 3,
+        rows: &[(0, "x.......x..."), (1, "......x....."), (3, "xxxxxxxxxxxx")],
+    },
+    Rhythm {
+        name: "Só bumbo",
+        hint: "só o bumbo em cada tempo (para começar e para introduções)",
+        steps: 16,
+        per_beat: 4,
+        rows: &[(0, "x...x...x...x...")],
+    },
+    Rhythm {
+        name: "Vazio",
+        hint: "começa sem nada: você acende os quadradinhos",
+        steps: 16,
+        per_beat: 4,
+        rows: &[],
+    },
+];
+
+/// O desenho de um ritmo pronto virando a grade (um `u16` por DrumPad).
+pub fn rhythm_grid(i: usize) -> [u16; MAX_DRUMS] {
+    let mut g = [0u16; MAX_DRUMS];
+    if let Some(r) = RHYTHMS.get(i) {
+        for (pad, row) in r.rows {
+            for (s, c) in row.chars().take(SEQ_MAX_STEPS).enumerate() {
+                if c == 'x' {
+                    g[*pad] |= 1 << s;
+                }
+            }
+        }
+    }
+    g
+}
+
+/// Contador do Sequencer (no motor).
+#[derive(Default)]
+pub struct Seq {
+    pub p: SeqParams,
+    /// Próximo passo a tocar.
+    pub step: usize,
+}
+
+impl Seq {
+    /// Toca o passo atual (chama `hit` para cada pad aceso) e anda um passo. Devolve o passo tocado.
+    pub fn tick(&mut self, mut hit: impl FnMut(usize, u8)) -> usize {
+        let steps = (self.p.steps as usize).clamp(1, SEQ_MAX_STEPS);
+        let s = self.step % steps;
+        for pad in 0..MAX_DRUMS {
+            if self.p.grid[pad] & (1 << s) != 0 {
+                hit(pad, self.p.velocity(pad, s));
+            }
+        }
+        self.step = (s + 1) % steps;
+        s
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Voice FX: coral que segue as notas
 // ---------------------------------------------------------------------------------------------
 

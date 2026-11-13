@@ -80,6 +80,10 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   `cfg.efeitos.voicefx_key`, `core.voicefx_tex`; `FREE_PADS` voltou a 3 e `cfg.pads_v31` tira livre:3..6 dos pads.
 - v0.32: texturas com nomes de constelação (Órion, Lyra, Cassiopeia, Andrômeda); `constellation_ball` e `key_tile`
   (tom no estilo dos botões dos Pads) no Voice FX.
+- v0.33: Sequencer — `efeitos::{Seq, SeqParams, RHYTHMS, rhythm_grid}` (grade = `u16` por DrumPad, bit = passo),
+  `Cmd::Seq`, `Stats.seq_pos` (passo tocado + 1; a tela acende coluna e pads), corte de bloco igual ao arpejo;
+  `cfg.efeitos.seq_rhythm/seq_grid`, `core.seq_on` (não salvo), `toggle_seq/set_seq_rhythm/seq_toggle_cell`,
+  `Target::SeqToggle`; tela em `seq_card` (app.rs) embaixo dos DrumPads.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

@@ -10,7 +10,7 @@ use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
 use rustysynth::{SoundFont, Synthesizer, SynthesizerSettings};
 
-use crate::efeitos::{self, Arp, ArpParams, DrumKit, Drums, PulseParams, VoiceFx};
+use crate::efeitos::{self, Arp, ArpParams, DrumKit, Drums, PulseParams, Seq, SeqParams, VoiceFx};
 use crate::freeze::FreezeVoice;
 use crate::granular::{ChurchReverb, GrainParams, GranularVoice};
 use crate::model::LAYERS;
@@ -91,6 +91,8 @@ pub enum Cmd {
         vel: u8,
     },
     DrumVolume(f32),
+    /// v0.33: Sequencer (batida em loop no andamento do Tempo).
+    Seq(SeqParams),
     /// v0.17: textura do coral do Voice FX.
     VoiceFxSource(Arc<crate::granular::GrainSource>),
     /// v0.31: textura do Voice FX (None = volta às vozes nota por nota). Criada fora daqui.
@@ -149,6 +151,8 @@ pub struct Stats {
     pub voices: AtomicUsize,
     /// Callbacks que passaram do tempo (possível estalo).
     pub overruns: AtomicU32,
+    /// v0.33: passo do Sequencer que acabou de tocar + 1 (0 = parado). A tela acende a coluna e os pads.
+    pub seq_pos: AtomicU32,
 }
 
 const KILL_DELAY_MS: f32 = 60.0;
@@ -202,6 +206,9 @@ pub struct Engine {
     arp_next: f64,
     drums: Drums,
     drum_vol: f32,
+    /// v0.33: Sequencer e quando toca o próximo passo (no relógio).
+    seq: Seq,
+    seq_next: f64,
     voicefx: VoiceFx,
     fz_l: Vec<f32>,
     fz_r: Vec<f32>,
@@ -264,6 +271,8 @@ impl Engine {
             arp_next: 0.0,
             drums: Drums::default(),
             drum_vol: 0.8,
+            seq: Seq::default(),
+            seq_next: 0.0,
             voicefx: VoiceFx::new(),
             fz_l: vec![0.0; 8192],
             fz_r: vec![0.0; 8192],
@@ -423,6 +432,29 @@ impl Engine {
             Cmd::TempoSync => {
                 self.pulse_origin = self.clock;
                 self.arp_next = self.clock as f64;
+                // v0.33: a batida acerta o tempo na batida do Tap (segue o compasso, pulando para o próximo tempo)
+                if self.seq.p.on {
+                    let pb = self.seq.p.per_beat.max(1) as usize;
+                    let steps = (self.seq.p.steps as usize).clamp(1, efeitos::SEQ_MAX_STEPS);
+                    // o passo que acabou de tocar: se já é o começo de um tempo, não repete
+                    let last = (self.seq.step + steps - 1) % steps;
+                    if last % pb != 0 {
+                        self.seq.step = (last / pb + 1) * pb % steps;
+                        self.seq_next = self.clock as f64;
+                    }
+                }
+            }
+            Cmd::Seq(p) => {
+                let start = p.on && !self.seq.p.on;
+                self.seq.p = p;
+                self.seq.step %= (p.steps as usize).clamp(1, efeitos::SEQ_MAX_STEPS);
+                if start {
+                    self.seq.step = 0;
+                    self.seq_next = self.clock as f64;
+                }
+                if !p.on {
+                    self.stats.seq_pos.store(0, Ordering::Relaxed);
+                }
             }
             Cmd::Pulse(p) => {
                 if p.on && !self.pulse.on {
@@ -639,6 +671,8 @@ impl Engine {
                 self.voicefx.set_sustain(false);
                 self.voicefx.all_off();
                 self.drums.stop();
+                self.seq.p.on = false;
+                self.stats.seq_pos.store(0, Ordering::Relaxed);
                 if let Some(s) = self.synth.as_mut() {
                     s.note_off_all(true);
                     for i in 0..LAYERS {
@@ -739,6 +773,21 @@ impl Engine {
                     }
                 }
                 let until = (self.arp_next - self.clock as f64).ceil().max(1.0) as usize;
+                n = n.min(until);
+            }
+            // v0.33: Sequencer no tempo certo (igual ao arpejo: o bloco é cortado na hora do próximo passo)
+            if self.seq.p.on {
+                let step = efeitos::step_samples(self.bpm, self.seq.p.per_beat, sr);
+                while self.clock as f64 >= self.seq_next {
+                    let drums = &mut self.drums;
+                    let s = self.seq.tick(|pad, vel| drums.hit(pad, vel));
+                    self.stats.seq_pos.store(s as u32 + 1, Ordering::Relaxed);
+                    self.seq_next += step;
+                    if self.seq_next < self.clock as f64 {
+                        self.seq_next = self.clock as f64 + step; // ficou para trás (mudou o tempo): segue daqui
+                    }
+                }
+                let until = (self.seq_next - self.clock as f64).ceil().max(1.0) as usize;
                 n = n.min(until);
             }
             // Ganho do PulsePad para a amostra `f` deste bloco.

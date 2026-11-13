@@ -159,6 +159,8 @@ pub enum Target {
     /// v0.24: ↺ volta o último Freeze; mix entre os dois pads.
     FreezeRecall,
     PadMix,
+    /// v0.33: Sequencer (▶ toca a batida / ■ para).
+    SeqToggle,
 }
 
 impl Target {
@@ -227,6 +229,7 @@ impl Target {
             Target::SwellToggle => "Swell In / Fade Out".into(),
             Target::FreezeRecall => "Freeze: voltar o último (↺)".into(),
             Target::PadMix => "Mix entre os 2 pads".into(),
+            Target::SeqToggle => "Sequencer (▶ tocar / ■ parar)".into(),
         }
     }
 }
@@ -607,6 +610,10 @@ pub struct Efeitos {
     pub drum_colors: Vec<u8>,
     /// v0.31: tom em que as texturas do Voice FX tocam (0 = C … 11 = B).
     pub voicefx_key: usize,
+    /// v0.33: Sequencer: ritmo pronto escolhido (`efeitos::RHYTHMS`) e a batida de cada DrumPad
+    /// (um número por pad; bit 0 = passo 1). O ▶ não fica salvo: o programa abre com a batida parada.
+    pub seq_rhythm: usize,
+    pub seq_grid: Vec<u16>,
 }
 
 /// v0.21: número da voz "Minha" (o arquivo do Theo) no Voice FX.
@@ -641,6 +648,8 @@ impl Default for Efeitos {
             drum_names: Vec::new(),
             drum_colors: Vec::new(),
             voicefx_key: 0,
+            seq_rhythm: 0,
+            seq_grid: crate::efeitos::rhythm_grid(0).to_vec(),
         }
     }
 }
@@ -678,6 +687,37 @@ impl Efeitos {
         self.drum_colors.truncate(crate::efeitos::MAX_DRUMS);
         self.drum_files.sort_by_key(|(i, _)| *i);
         self.drum_files.dedup_by_key(|(i, _)| *i);
+        // v0.33: batida do Sequencer: um número por DrumPad, só os passos do compasso do ritmo
+        self.seq_rhythm = self.seq_rhythm.min(crate::efeitos::RHYTHMS.len() - 1);
+        self.seq_grid.resize(crate::efeitos::MAX_DRUMS, 0);
+        let mask = self.seq_mask();
+        for g in &mut self.seq_grid {
+            *g &= mask;
+        }
+    }
+
+    /// v0.33: quantos passos o compasso do ritmo escolhido tem (16, ou 12 no 6/8).
+    pub fn seq_steps(&self) -> usize {
+        crate::efeitos::RHYTHMS[self.seq_rhythm.min(crate::efeitos::RHYTHMS.len() - 1)].steps as usize
+    }
+
+    fn seq_mask(&self) -> u16 {
+        ((1u32 << self.seq_steps()) - 1) as u16
+    }
+
+    /// v0.33: a batida mudou do ritmo pronto (o Theo acendeu/apagou algum quadradinho)?
+    pub fn seq_edited(&self) -> bool {
+        self.seq_grid[..] != crate::efeitos::rhythm_grid(self.seq_rhythm)[..]
+    }
+
+    /// v0.33: o que o motor precisa para tocar a batida.
+    pub fn seq_params(&self, on: bool) -> crate::efeitos::SeqParams {
+        let r = &crate::efeitos::RHYTHMS[self.seq_rhythm.min(crate::efeitos::RHYTHMS.len() - 1)];
+        let mut grid = [0u16; crate::efeitos::MAX_DRUMS];
+        for (i, g) in self.seq_grid.iter().take(crate::efeitos::MAX_DRUMS).enumerate() {
+            grid[i] = *g;
+        }
+        crate::efeitos::SeqParams { on, steps: r.steps, per_beat: r.per_beat, grid }
     }
 }
 

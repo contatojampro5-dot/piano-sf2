@@ -85,6 +85,10 @@ struct UiState {
     drum_sel: usize,
     /// v0.31: lista de vozes do Voice FX aberta (bolinha).
     voice_list_open: bool,
+    /// v0.33: Sequencer: grade da batida aberta, mostrar todos os sons, último passo que a tela viu.
+    seq_open: bool,
+    seq_all_rows: bool,
+    seq_last: u32,
     voicefx_file_dialog: bool,
     /// v0.21: lista de pads aberta (a bolinha de planeta na aba Pads).
     pad_list_open: bool,
@@ -193,6 +197,9 @@ impl PianoApp {
                 drum_edit: false,
                 drum_sel: 0,
                 voice_list_open: false,
+                seq_open: false,
+                seq_all_rows: false,
+                seq_last: 0,
                 voicefx_file_dialog: false,
                 pad_list_open: false,
                 pad_mix_mode: false,
@@ -319,7 +326,7 @@ impl eframe::App for PianoApp {
                     0 => mixer(ui, &mut core, &mut self.ui),
                     1 => pads_page(ui, &mut core, &mut self.ui),
                     2 => efeitos_page(ui, &mut core, &mut self.ui),
-                    _ => drum_page(ui, &mut core, &mut self.ui),
+                    _ => drum_page(ui, &mut core, &mut self.ui, &self.stats),
                 }
             });
 
@@ -1678,10 +1685,18 @@ fn drum_colors_of(e: &crate::model::Efeitos, i: usize) -> (Color32, Color32) {
     DRUM_ACCENTS[k]
 }
 
-fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
+fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState, stats: &Stats) {
     core.ensure_drum_kit();
     ui.add_space(12.0); // v0.31: um pouco mais longe das abas
-    let avail = ui.available_size();
+    // v0.33: o Sequencer fica embaixo dos pads (fechado: só uma faixa; aberto: a grade da batida)
+    seq_follow(core, st, stats);
+    let seq_rows = seq_rows(core, st);
+    let full = ui.available_size();
+    // a grade aberta encolhe as linhas para caber numa tela pequena (os pads ficam com pelo menos 190)
+    let room = full.y - 190.0 - 12.0 - (SEQ_BAR_H + 8.0 + 20.0 + 40.0);
+    let seq_row_h = (room / seq_rows.len().max(1) as f32 - SEQ_ROW_GAP).clamp(18.0, SEQ_ROW_H);
+    let seq_h = seq_height(st, seq_rows.len(), seq_row_h);
+    let avail = Vec2::new(full.x, (full.y - seq_h - 12.0).max(190.0));
     let mut e = core.cfg.efeitos.clone();
     let mut drum_reset: Option<usize> = None;
     let mut drum_dialog: Option<usize> = None;
@@ -1917,6 +1932,390 @@ fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     }
     if drum_dialog.is_some() {
         st.drum_file_dialog = drum_dialog;
+    }
+    ui.add_space(12.0);
+    seq_card(ui, core, st, Vec2::new(full.x, seq_h), &seq_rows, seq_row_h);
+}
+
+// ---------- v0.33: Sequencer (batida em loop, bem simples) ----------
+
+const SEQ_COLOR: Color32 = Color32::from_rgb(0xff, 0xa8, 0x2e);
+/// Altura da faixa do Sequencer fechado (▶, ritmos e andamento).
+const SEQ_BAR_H: f32 = 84.0;
+const SEQ_ROW_H: f32 = 30.0;
+const SEQ_ROW_GAP: f32 = 6.0;
+
+/// A tela acompanha a batida: os DrumPads que tocaram no passo de agora acendem.
+fn seq_follow(core: &mut Core, st: &mut UiState, stats: &Stats) {
+    if !core.seq_on {
+        st.seq_last = 0;
+        return;
+    }
+    let pos = stats.seq_pos.load(Ordering::Relaxed);
+    if pos != st.seq_last {
+        st.seq_last = pos;
+        if pos > 0 {
+            let s = (pos - 1) as usize;
+            let now = Instant::now();
+            for (i, g) in core.cfg.efeitos.seq_grid.iter().enumerate().take(crate::efeitos::MAX_DRUMS) {
+                if g & (1 << s) != 0 {
+                    core.drum_flash[i] = Some(now);
+                }
+            }
+        }
+    }
+}
+
+/// Linhas da grade: Kick, Snare, Clap e Hi-hat sempre; os outros sons quando têm batida (ou "+ Mais sons").
+fn seq_rows(core: &Core, st: &UiState) -> Vec<usize> {
+    let e = &core.cfg.efeitos;
+    let n = e.drum_count.clamp(4, crate::efeitos::MAX_DRUMS);
+    (0..n)
+        .filter(|&i| st.seq_all_rows || i < 4 || e.seq_grid.get(i).is_some_and(|g| *g != 0))
+        .collect()
+}
+
+fn seq_height(st: &UiState, rows: usize, row_h: f32) -> f32 {
+    if !st.seq_open {
+        return SEQ_BAR_H;
+    }
+    SEQ_BAR_H + 8.0 + 20.0 + rows as f32 * (row_h + SEQ_ROW_GAP) + 40.0
+}
+
+/// Brilho redondo liso (sem anéis): da borda do círculo para fora, sumindo.
+fn soft_halo(p: &egui::Painter, c: Pos2, r: f32, h: f32, color: Color32, a: f32) {
+    let n = 48;
+    let inner = color.gamma_multiply(a.clamp(0.0, 1.0));
+    let mut mesh = egui::Mesh::default();
+    for k in 0..n {
+        let d = Vec2::angled(k as f32 / n as f32 * std::f32::consts::TAU);
+        mesh.colored_vertex(c + d * r, inner);
+        mesh.colored_vertex(c + d * (r + h), Color32::TRANSPARENT);
+    }
+    for i in 0..n {
+        let (a, b) = ((2 * i) as u32, (2 * ((i + 1) % n)) as u32);
+        mesh.add_triangle(a, b, b + 1);
+        mesh.add_triangle(a, b + 1, a + 1);
+    }
+    p.add(Shape::mesh(mesh));
+}
+
+/// O botão redondo ▶ / ■ do Sequencer.
+fn seq_play_button(ui: &mut Ui, on: bool, beat: f32) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(52.0), Sense::click());
+    let p = ui.painter().clone();
+    let c = rect.center();
+    let r = 24.0;
+    let hover = ui.ctx().animate_bool_with_time(resp.id.with("h"), resp.hovered(), 0.15);
+    if on {
+        // tocando: acende na cor do Sequencer e "respira" a cada tempo
+        soft_halo(&p, c, r, 12.0 + 6.0 * beat, SEQ_COLOR, 0.45 + 0.35 * beat);
+        p.circle_filled(c, r, mix_color(SEQ_COLOR, Color32::WHITE, 0.12 * beat));
+        let s = 8.5;
+        p.rect_filled(Rect::from_center_size(c, Vec2::splat(2.0 * s)), 3, th().ink);
+    } else {
+        if hover > 0.01 {
+            soft_halo(&p, c, r, 10.0, SEQ_COLOR, 0.35 * hover);
+        }
+        p.circle_filled(c, r, if hover > 0.5 { th().glass_hi.gamma_multiply(1.4) } else { th().glass_hi });
+        p.circle_stroke(c, r - 0.5, Stroke::new(1.6, SEQ_COLOR.gamma_multiply(0.55 + 0.45 * hover)));
+        // ▶ desenhado (um pouco para a direita: o triângulo fica no meio "de olho")
+        let t = [c + Vec2::new(-6.0, -10.0), c + Vec2::new(11.0, 0.0), c + Vec2::new(-6.0, 10.0)];
+        p.add(Shape::convex_polygon(t.to_vec(), SEQ_COLOR, Stroke::NONE));
+    }
+    if hover > 0.0 && hover < 1.0 {
+        ui.ctx().request_repaint();
+    }
+    resp
+}
+
+/// As luzes dos tempos (1 2 3 4): a do tempo de agora acende.
+fn beat_dots(ui: &mut Ui, beats: usize, cur: Option<usize>) {
+    let w = 20.0;
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(beats as f32 * w, 40.0), Sense::hover());
+    let p = ui.painter().clone();
+    for b in 0..beats {
+        let c = Pos2::new(rect.left() + w * (b as f32 + 0.5), rect.center().y);
+        let r = if b == 0 { 6.0 } else { 4.5 };
+        if cur == Some(b) {
+            soft_halo(&p, c, r, 8.0, SEQ_COLOR, 0.6);
+            p.circle_filled(c, r, SEQ_COLOR);
+        } else {
+            p.circle_filled(c, r, th().dim.gamma_multiply(0.45));
+        }
+    }
+}
+
+/// Um quadradinho da grade.
+fn seq_cell(p: &egui::Painter, r: Rect, on: bool, beat_start: bool, hover: bool, now: bool, colors: (Color32, Color32)) {
+    let (ca, cb) = colors;
+    if on {
+        let c = mix_color(ca, cb, 0.35);
+        if now {
+            // está tocando agora: brilha forte
+            p.rect_filled(r.expand(4.0), 10, c.gamma_multiply(0.22));
+            p.rect_filled(r.expand(2.0), 9, c.gamma_multiply(0.30));
+            p.rect_filled(r, 7, mix_color(c, Color32::WHITE, 0.40));
+        } else {
+            p.rect_filled(r, 7, c);
+            // luz em cima (vidro)
+            p.rect_filled(
+                Rect::from_min_size(r.min + Vec2::new(3.0, 3.0), Vec2::new(r.width() - 6.0, r.height() * 0.32)),
+                4,
+                Color32::from_white_alpha(38),
+            );
+        }
+        if hover {
+            p.rect_stroke(r, 7, Stroke::new(1.5, th().text), StrokeKind::Outside);
+        }
+    } else {
+        let base = if beat_start { th().glass_hi.gamma_multiply(1.7) } else { th().glass_hi };
+        p.rect_filled(r, 7, if now { mix_color(base, SEQ_COLOR, 0.18) } else { base });
+        if hover {
+            p.rect_stroke(r, 7, Stroke::new(1.5, ca.gamma_multiply(0.85)), StrokeKind::Inside);
+        }
+    }
+}
+
+fn seq_card(ui: &mut Ui, core: &mut Core, st: &mut UiState, size: Vec2, rows: &[usize], row_h: f32) {
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    lit_glass(ui, rect, 18, false, None, accent_pair(SEQ_COLOR), 1.0);
+    ui.painter().rect_filled(
+        Rect::from_min_size(rect.min + Vec2::new(16.0, 0.0), Vec2::new(rect.width() - 32.0, 3.0)),
+        2,
+        SEQ_COLOR,
+    );
+    let e = core.cfg.efeitos.clone();
+    let rhythm = &crate::efeitos::RHYTHMS[e.seq_rhythm];
+    let steps = e.seq_steps();
+    let per_beat = rhythm.per_beat.max(1) as usize;
+    let beats = steps / per_beat;
+    let playing = core.seq_on;
+    let cur = if playing { st.seq_last.checked_sub(1).map(|s| s as usize).filter(|s| *s < steps) } else { None };
+    // a "respiração" do ▶: forte no começo de cada tempo, apagando até o próximo
+    let beat_glow = cur.map(|s| if s % per_beat == 0 { 1.0 } else { 0.35 }).unwrap_or(0.0);
+    let edited = e.seq_edited();
+
+    let mut toggle = false;
+    let mut pick: Option<usize> = None;
+    let mut cell: Option<(usize, usize)> = None;
+    let mut clear: Option<usize> = None;
+    let mut test: Option<usize> = None;
+    let mut bpm: Option<f32> = None;
+    let mut tap = false;
+
+    let inner = rect.shrink2(Vec2::new(18.0, 14.0));
+    // ---- faixa de cima: ▶, nome, luzes dos tempos, ritmos prontos, andamento ----
+    let bar = Rect::from_min_size(inner.min, Vec2::new(inner.width(), 56.0));
+    ui.scope_builder(egui::UiBuilder::new().max_rect(bar).layout(Layout::left_to_right(Align::Center)), |ui| {
+        ui.spacing_mut().item_spacing.x = 10.0;
+        let r = seq_play_button(ui, playing, beat_glow).on_hover_text(if playing {
+            "■ Parar a batida"
+        } else {
+            "▶ Tocar a batida (no andamento do Tempo)\nDá para ligar num botão do AMW pelo Aprender (menu ⚙)"
+        });
+        if !learnable(ui, core, &r, Target::SeqToggle) && r.clicked() {
+            toggle = true;
+        }
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 1.0;
+            ui.add_space(6.0);
+            ui.label(RichText::new("Sequencer").strong().size(17.0));
+            ui.label(
+                RichText::new(if playing { "tocando a batida" } else { "escolha o ritmo e aperte ▶" })
+                    .size(12.0)
+                    .color(if playing { SEQ_COLOR } else { th().dim }),
+            );
+        });
+        beat_dots(ui, beats, cur.map(|s| s / per_beat));
+        ui.add_space(4.0);
+        ui.spacing_mut().item_spacing.x = 6.0;
+        for (i, r) in crate::efeitos::RHYTHMS.iter().enumerate() {
+            let sel = e.seq_rhythm == i;
+            let label = if sel && edited { format!("{}  ✎", r.name) } else { r.name.to_string() };
+            let b = egui::Button::new(
+                RichText::new(label).size(14.0).strong().color(if sel { th().ink } else { th().text }),
+            )
+            .fill(if sel { SEQ_COLOR } else { th().glass_hi })
+            .corner_radius(16)
+            .min_size(Vec2::new(0.0, 32.0));
+            let tip = if sel && edited {
+                format!("{} — {}\n✎ Você mudou a batida. Clique para voltar à original.", r.name, r.hint)
+            } else {
+                format!("{} — {}", r.name, r.hint)
+            };
+            if ui.add(b).on_hover_text(tip).clicked() && (!sel || edited) {
+                pick = Some(i);
+            }
+        }
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            let open = st.seq_open;
+            let b = egui::Button::new(
+                RichText::new(if open { "✔ Pronto" } else { "▦ Mudar a batida" })
+                    .size(14.0)
+                    .strong()
+                    .color(if open { th().ink } else { th().text }),
+            )
+            .fill(if open { SEQ_COLOR } else { th().glass_hi })
+            .corner_radius(10)
+            .min_size(Vec2::new(0.0, 34.0));
+            let hint = if open { "Fechar a grade" } else { "Abrir a grade: acender e apagar cada batida, passo por passo" };
+            if ui.add(b).on_hover_text(hint).clicked() {
+                st.seq_open = !open;
+            }
+            ui.add_space(8.0);
+            let t = ui
+                .add(egui::Button::new(RichText::new("Tap").size(14.0)).corner_radius(10).min_size(Vec2::new(46.0, 34.0)))
+                .on_hover_text("Tap Tempo: bata aqui no ritmo da música (2 vezes ou mais) e o andamento acerta");
+            if !learnable(ui, core, &t, Target::TapTempo) && t.clicked() {
+                tap = true;
+            }
+            let mut v = e.bpm;
+            let d = ui
+                .add_sized(
+                    [92.0, 34.0],
+                    egui::DragValue::new(&mut v)
+                        .range(crate::efeitos::BPM_MIN..=crate::efeitos::BPM_MAX)
+                        .speed(0.4)
+                        .fixed_decimals(0)
+                        .suffix(" BPM"),
+                )
+                .on_hover_text("Andamento (o mesmo do bloco Tempo, na aba Efeitos)\nArraste para os lados ou clique para digitar");
+            if d.changed() {
+                bpm = Some(v);
+            }
+        });
+    });
+
+    // ---- a grade (aberta no "▦ Mudar a batida") ----
+    if st.seq_open {
+        let p = ui.painter().clone();
+        let top = bar.bottom() + 8.0;
+        let name_w = 124.0;
+        let gx = inner.left() + name_w;
+        let (ggap, cgap) = (14.0, 4.0);
+        let gw = inner.right() - gx;
+        let cell_w = ((gw - (beats as f32 - 1.0) * ggap - (steps - beats) as f32 * cgap) / steps as f32).max(14.0);
+        let x_of = |s: usize| gx + s as f32 * (cell_w + cgap) + (s / per_beat) as f32 * (ggap - cgap);
+        // os números dos tempos em cima de cada grupo (para contar 1, 2, 3, 4)
+        for b in 0..beats {
+            let lit = cur.map(|s| s / per_beat) == Some(b);
+            p.text(
+                Pos2::new(x_of(b * per_beat) + 3.0, top),
+                Align2::LEFT_TOP,
+                format!("{}", b + 1),
+                FontId::new(14.0, egui::FontFamily::Name("pad".into())),
+                if lit { SEQ_COLOR } else { th().dim },
+            );
+        }
+        let y0 = top + 20.0;
+        let rows_h = rows.len() as f32 * (row_h + SEQ_ROW_GAP) - SEQ_ROW_GAP;
+        // a coluna que está tocando agora
+        if let Some(s) = cur {
+            p.rect_filled(
+                Rect::from_min_size(Pos2::new(x_of(s) - 3.0, y0 - 4.0), Vec2::new(cell_w + 6.0, rows_h + 8.0)),
+                9,
+                SEQ_COLOR.gamma_multiply(0.14),
+            );
+        }
+        for (ri, &pad) in rows.iter().enumerate() {
+            let y = y0 + ri as f32 * (row_h + SEQ_ROW_GAP);
+            let colors = drum_colors_of(&e, pad);
+            // nome do som (clique = ouvir)
+            let name_rect = Rect::from_min_size(Pos2::new(inner.left(), y), Vec2::new(name_w - 14.0, row_h));
+            let nr = ui.interact(name_rect, egui::Id::unique(("seq_name", pad)), Sense::click());
+            if nr.hovered() {
+                p.rect_filled(name_rect, 8, th().glass_hi);
+            }
+            let lit_now = cur.is_some_and(|s| e.seq_grid.get(pad).is_some_and(|g| g & (1 << s) != 0));
+            let dot = Pos2::new(name_rect.left() + 10.0, name_rect.center().y);
+            if lit_now {
+                soft_halo(&p, dot, 5.0, 7.0, colors.0, 0.7);
+            }
+            p.circle_filled(dot, 5.0, colors.0);
+            p.text(
+                Pos2::new(name_rect.left() + 22.0, name_rect.center().y),
+                Align2::LEFT_CENTER,
+                core.drum_name(pad),
+                FontId::proportional(14.0),
+                th().text,
+            );
+            let nr = nr.on_hover_text("Clique para ouvir este som\nBotão direito: apagar a batida dele");
+            if nr.clicked() {
+                test = Some(pad);
+            }
+            nr.context_menu(|ui| {
+                if ui.button("Apagar a batida deste som").clicked() {
+                    clear = Some(pad);
+                    ui.close();
+                }
+            });
+            let g = e.seq_grid.get(pad).copied().unwrap_or(0);
+            for s in 0..steps {
+                let r = Rect::from_min_size(Pos2::new(x_of(s), y), Vec2::new(cell_w, row_h));
+                let resp = ui.interact(r, egui::Id::unique(("seq_cell", pad, s)), Sense::click());
+                let on = g & (1 << s) != 0;
+                seq_cell(&p, r, on, s % per_beat == 0, resp.hovered(), cur == Some(s), colors);
+                if resp.clicked() {
+                    cell = Some((pad, s));
+                }
+            }
+        }
+        // embaixo: mais sons e uma dica curta
+        let y = y0 + rows_h + 10.0;
+        ui.scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(Rect::from_min_max(Pos2::new(inner.left(), y), Pos2::new(inner.right(), y + 30.0)))
+                .layout(Layout::left_to_right(Align::Center)),
+            |ui| {
+                let n = e.drum_count.clamp(4, crate::efeitos::MAX_DRUMS);
+                if n > 4 {
+                    let b = egui::Button::new(RichText::new(if st.seq_all_rows { "− Menos sons" } else { "+ Mais sons" }).size(13.0))
+                        .corner_radius(10)
+                        .min_size(Vec2::new(110.0, 28.0));
+                    let hint = if st.seq_all_rows {
+                        "Mostrar só Kick, Snare, Clap, Hi-hat (e os que têm batida)"
+                    } else {
+                        "Mostrar todos os DrumPads na grade (Crash, 808, Riser...)"
+                    };
+                    if ui.add(b).on_hover_text(hint).clicked() {
+                        st.seq_all_rows = !st.seq_all_rows;
+                    }
+                    ui.add_space(10.0);
+                }
+                ui.label(
+                    RichText::new("Clique num quadradinho para acender ou apagar a batida. Cada grupo é um tempo: conte 1, 2, 3, 4.")
+                        .size(12.0)
+                        .color(th().dim),
+                );
+            },
+        );
+    }
+
+    if playing {
+        ui.ctx().request_repaint_after(Duration::from_millis(16));
+    }
+    if toggle {
+        core.toggle_seq();
+    }
+    if let Some(i) = pick {
+        core.set_seq_rhythm(i);
+    }
+    if let Some((pad, s)) = cell {
+        core.seq_toggle_cell(pad, s);
+    }
+    if let Some(pad) = clear {
+        core.seq_clear_row(pad);
+    }
+    if let Some(pad) = test {
+        core.drum_hit(pad, 110);
+    }
+    if let Some(v) = bpm {
+        core.set_bpm(v);
+    }
+    if tap {
+        core.tap_tempo();
     }
 }
 
