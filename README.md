@@ -194,6 +194,15 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.34 — Frase no Arpeggiator (Sequencer de notas, com Learn)
+- No bloco **Arpeggiator**, dois botões: **Arpejo** (as notas do acorde, uma a uma) e **Frase** (Sequencer de notas).
+- **● Learn**: aperte e toque as notas no teclado (até 16); **✔ Pronto** guarda, **✖ Cancelar** mantém a de antes.
+  Enquanto grava, o arpejo descansa e você ouve o que toca. As notas aparecem em pílulas (G4, C5…).
+- Ligue o **ARP** e segure uma tecla: a camada do arpejo toca a frase em loop, no **Rate** e no BPM do Tempo; soltou, para;
+  tecla nova recomeça do início. **Latch** continua valendo.
+- **Segue a tecla** (desligado = sempre as mesmas notas, como a introdução de "Estações"; ligado = a 1ª nota da frase vira a
+  tecla segurada, pelo caminho mais curto). Ideia tirada do vídeo do Sequencer da Lab 1.0 (Kontakt).
+
 ### v0.33 — Sequencer (batida em loop) na aba DrumPads
 - Faixa **Sequencer** embaixo dos DrumPads: botão redondo **▶ / ■**, luzes dos tempos (1 2 3 4) e **ritmos prontos**:
   Louvor, Balada, Animado, 6/8, Só bumbo e Vazio. Toca no andamento do **Tempo** (BPM e Tap ali mesmo).

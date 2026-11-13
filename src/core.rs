@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::io::Read;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -193,9 +193,38 @@ pub fn mark_note(key: u8, down: bool) {
     let (i, bit) = ((key as usize >> 6) & 1, 1u64 << (key & 63));
     if down {
         HELD[i].fetch_or(bit, Ordering::Relaxed);
+        phrase_record(key);
     } else {
         HELD[i].fetch_and(!bit, Ordering::Relaxed);
     }
+}
+
+// ---------- v0.34: Learn da Frase (as notas tocadas no teclado viram a frase do Arpeggiator) ----------
+// Gravado aqui (sem travar o `core`): a thread do MIDI só marca as notas; a tela lê e guarda.
+static PHRASE_REC: AtomicBool = AtomicBool::new(false);
+static PHRASE_N: AtomicUsize = AtomicUsize::new(0);
+static PHRASE_NOTES: [AtomicU8; crate::efeitos::PHRASE_MAX] = [const { AtomicU8::new(0) }; crate::efeitos::PHRASE_MAX];
+
+fn phrase_record(key: u8) {
+    if !PHRASE_REC.load(Ordering::Relaxed) {
+        return;
+    }
+    let n = PHRASE_N.load(Ordering::Relaxed);
+    if n < crate::efeitos::PHRASE_MAX {
+        PHRASE_NOTES[n].store(key.min(127), Ordering::Relaxed);
+        PHRASE_N.store(n + 1, Ordering::Relaxed);
+    }
+}
+
+/// O Learn da Frase está gravando?
+pub fn phrase_recording() -> bool {
+    PHRASE_REC.load(Ordering::Relaxed)
+}
+
+/// Notas gravadas até agora no Learn da Frase.
+pub fn phrase_recorded() -> Vec<u8> {
+    let n = PHRASE_N.load(Ordering::Relaxed).min(crate::efeitos::PHRASE_MAX);
+    (0..n).map(|i| PHRASE_NOTES[i].load(Ordering::Relaxed)).collect()
 }
 
 pub fn note_is_held(key: u8) -> bool {
@@ -283,13 +312,21 @@ impl Core {
             per_beat: e.pulse_per_beat,
             depth: e.pulse_depth,
         }));
+        let mut phrase = [0u8; crate::efeitos::PHRASE_MAX];
+        for (i, n) in e.arp_phrase.iter().take(crate::efeitos::PHRASE_MAX).enumerate() {
+            phrase[i] = *n;
+        }
         self.send(Cmd::Arp(crate::efeitos::ArpParams {
-            on: self.arp_on,
+            // v0.34: gravando a frase, o arpejo descansa (você ouve as notas que está tocando)
+            on: self.arp_on && !phrase_recording(),
             layer: e.arp_layer,
             pattern: e.arp_pattern,
             per_beat: e.arp_per_beat,
             octaves: e.arp_octaves,
             latch: e.arp_latch,
+            phrase,
+            phrase_len: e.arp_phrase.len().min(crate::efeitos::PHRASE_MAX) as u8,
+            follow: e.arp_follow,
         }));
         self.send(Cmd::DrumVolume(e.drum_volume));
         self.send(Cmd::Seq(e.seq_params(self.seq_on)));
@@ -644,6 +681,36 @@ impl Core {
             .iter()
             .find(|(i, _)| *i == pad)
             .map(|(_, p)| pads::name_from_file(p))
+    }
+
+    // ---------- v0.34: Frase do Arpeggiator (Sequencer de notas) ----------
+
+    /// ● Learn: as próximas notas tocadas no teclado (ou no teclado da tela) viram a frase.
+    pub fn phrase_learn_start(&mut self) {
+        PHRASE_N.store(0, Ordering::Relaxed);
+        PHRASE_REC.store(true, Ordering::Relaxed);
+        self.send_efeitos(); // o arpejo descansa enquanto grava
+        self.notify("● Learn: toque as notas da frase no teclado (até 16)");
+    }
+
+    /// ✔ Pronto (guarda as notas tocadas) ou ✖ Cancelar (a frase de antes fica).
+    pub fn phrase_learn_finish(&mut self, keep: bool) {
+        if !phrase_recording() {
+            return;
+        }
+        let notes = phrase_recorded();
+        PHRASE_REC.store(false, Ordering::Relaxed);
+        if keep && !notes.is_empty() {
+            let n = notes.len();
+            let mut e = self.cfg.efeitos.clone();
+            e.arp_phrase = notes;
+            e.arp_pattern = crate::efeitos::ARP_PHRASE;
+            self.set_efeitos(e);
+            self.notify(format!("Frase gravada: {n} notas. Ligue o ARP e segure uma tecla"));
+        } else {
+            self.notify("Learn cancelado: a frase continua a mesma");
+        }
+        self.send_efeitos(); // o arpejo volta
     }
 
     // ---------- v0.33: Sequencer (batida em loop no andamento do Tempo) ----------

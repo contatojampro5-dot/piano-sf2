@@ -1814,3 +1814,96 @@ fn v033_mudar_a_batida_e_config_antiga() {
     assert_eq!(Target::SeqToggle.label(), "Sequencer (▶ tocar / ■ parar)");
     assert!(!Target::SeqToggle.is_continuous());
 }
+
+#[test]
+fn v034_frase_toca_as_notas_gravadas_no_tempo() {
+    let mut r = rig();
+    r.core.cfg.efeitos.arp_layer = 0;
+    r.core.cfg.efeitos.arp_per_beat = 2;
+    r.core.set_bpm(120.0); // colcheia a 120 = 12000 amostras
+    // a frase da introdução de "Estações": Sol, Dó, Ré, Mi, Sol
+    let mut e = r.core.cfg.efeitos.clone();
+    e.arp_pattern = crate::efeitos::ARP_PHRASE;
+    e.arp_phrase = vec![67, 72, 74, 76, 79];
+    r.core.set_efeitos(e);
+    r.core.toggle_arp();
+    r.render(64);
+    // segura o Fá: toca a frase (as mesmas notas, sem seguir a tecla)
+    r.core.handle_piano(&[0x90, 53, 100]);
+    let mut got = Vec::new();
+    r.render(16);
+    got.push(r.engine.test_arp_playing());
+    for _ in 0..6 {
+        r.render(12_000);
+        got.push(r.engine.test_arp_playing());
+    }
+    assert_eq!(got, [67, 72, 74, 76, 79, 67, 72].map(Some).to_vec(), "frase em loop, uma nota por colcheia");
+    // troca para o Mi: a frase recomeça do início e continua igual
+    r.core.handle_piano(&[0x80, 53, 0]);
+    r.render(12_000);
+    assert_eq!(r.engine.test_arp_playing(), None, "soltou: para");
+    r.core.handle_piano(&[0x90, 52, 100]);
+    r.render(16);
+    assert_eq!(r.engine.test_arp_playing(), Some(67), "recomeça na 1ª nota");
+    r.core.handle_piano(&[0x80, 52, 0]);
+    r.render(12_000);
+    // "Segue a tecla": a 1ª nota (Sol) vira a tecla segurada (Lá = +2)
+    let mut e = r.core.cfg.efeitos.clone();
+    e.arp_follow = true;
+    r.core.set_efeitos(e);
+    r.core.handle_piano(&[0x90, 57, 100]);
+    r.render(16);
+    assert_eq!(r.engine.test_arp_playing(), Some(69));
+    r.render(12_000);
+    assert_eq!(r.engine.test_arp_playing(), Some(74));
+}
+
+#[test]
+fn v034_frase_regras_do_arpejo() {
+    use crate::efeitos::{Arp, ARP_PHRASE};
+    let mut a = Arp::default();
+    a.p.pattern = ARP_PHRASE;
+    a.p.phrase[..3].copy_from_slice(&[60, 64, 67]);
+    a.p.phrase_len = 3;
+    assert_eq!(a.next_note(), None, "sem tecla segurada, nada");
+    a.key_down(48, 100);
+    a.transpose = 2;
+    assert_eq!(a.next_note(), Some(62), "transpõe junto com o programa");
+    a.transpose = 0;
+    // segue a tecla pelo caminho mais curto: Dó → Sol é 7 acima, então vai 5 abaixo (não pula de oitava)
+    a.p.follow = true;
+    a.clear();
+    a.key_down(55, 100); // Sol grave
+    assert_eq!(a.next_note(), Some(55), "a frase começa no Sol logo abaixo do Dó gravado");
+    assert_eq!(a.next_note(), Some(59));
+    // frase vazia não toca
+    a.p.phrase_len = 0;
+    assert_eq!(a.next_note(), None);
+}
+
+#[test]
+fn v034_learn_grava_as_notas_tocadas() {
+    let (mut core, _engine) = pad_rig();
+    core.phrase_learn_start();
+    assert!(crate::core::phrase_recording());
+    for k in [91u8, 93, 95] {
+        core.note_on(k, 100);
+        core.note_off(k);
+    }
+    core.phrase_learn_finish(true);
+    assert!(!crate::core::phrase_recording());
+    // (outros testes podem tocar notas ao mesmo tempo: confere só as deste)
+    let mine: Vec<u8> = core.cfg.efeitos.arp_phrase.iter().copied().filter(|n| (90..=96).contains(n)).collect();
+    assert_eq!(mine, vec![91, 93, 95]);
+    assert_eq!(core.cfg.efeitos.arp_pattern, crate::efeitos::ARP_PHRASE, "já fica no modo Frase");
+    // cancelar não muda a frase
+    let before = core.cfg.efeitos.arp_phrase.clone();
+    core.phrase_learn_start();
+    core.note_on(90, 100);
+    core.phrase_learn_finish(false);
+    assert_eq!(core.cfg.efeitos.arp_phrase, before);
+    // config antiga: sem frase, no modo de sempre
+    let c: Config = serde_json::from_str(r#"{"efeitos":{"arp_pattern":2}}"#).unwrap();
+    assert!(c.efeitos.arp_phrase.is_empty());
+    assert_eq!(c.efeitos.arp_pattern, 2);
+}

@@ -84,6 +84,10 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   `Cmd::Seq`, `Stats.seq_pos` (passo tocado + 1; a tela acende coluna e pads), corte de bloco igual ao arpejo;
   `cfg.efeitos.seq_rhythm/seq_grid`, `core.seq_on` (não salvo), `toggle_seq/set_seq_rhythm/seq_toggle_cell`,
   `Target::SeqToggle`; tela em `seq_card` (app.rs) embaixo dos DrumPads.
+- v0.34: Frase — `ARP_PATTERNS[4] = "Frase"` (`ARP_PHRASE`), `ArpParams.phrase/phrase_len/follow`, `Arp.transpose`,
+  `Arp::next_phrase_note`; Learn sem travar o core: `core::mark_note` grava em `PHRASE_NOTES` quando `PHRASE_REC`
+  (`phrase_learn_start/finish`, `phrase_recording/recorded`); gravando, o arpejo vai desligado ao motor.
+  `cfg.efeitos.arp_phrase/arp_follow`. Tela no bloco Arpeggiator (`phrase_chips`, `REC_COLOR`).
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

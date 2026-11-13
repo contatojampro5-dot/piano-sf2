@@ -74,7 +74,11 @@ pub fn pulse_gain(phase: f32, depth: f32) -> f32 {
 // Arpejador
 // ---------------------------------------------------------------------------------------------
 
-pub const ARP_PATTERNS: [&str; 4] = ["Up", "Down", "Up/Down", "Random"];
+pub const ARP_PATTERNS: [&str; 5] = ["Up", "Down", "Up/Down", "Random", "Frase"];
+/// v0.34: número do padrão "Frase" (toca as notas gravadas no Learn, em vez do acorde).
+pub const ARP_PHRASE: u8 = 4;
+/// v0.34: até quantas notas uma frase tem.
+pub const PHRASE_MAX: usize = 16;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ArpParams {
@@ -89,6 +93,11 @@ pub struct ArpParams {
     pub octaves: u8,
     /// Segurar: o arpejo continua depois de soltar as teclas (até o próximo acorde).
     pub latch: bool,
+    /// v0.34: frase gravada (notas do teclado, sem transpor) e quantas notas ela tem.
+    pub phrase: [u8; PHRASE_MAX],
+    pub phrase_len: u8,
+    /// v0.34: a frase acompanha a tecla segurada (a 1ª nota da frase vira a nota que você segura).
+    pub follow: bool,
 }
 
 impl Default for ArpParams {
@@ -100,6 +109,9 @@ impl Default for ArpParams {
             per_beat: 2,
             octaves: 2,
             latch: false,
+            phrase: [0; PHRASE_MAX],
+            phrase_len: 0,
+            follow: false,
         }
     }
 }
@@ -115,6 +127,8 @@ pub struct Arp {
     step: u32,
     rng: u32,
     pub vel: u8,
+    /// v0.34: transposição do programa (a frase gravada transpõe junto, como as teclas).
+    pub transpose: i32,
 }
 
 impl Default for Arp {
@@ -127,6 +141,7 @@ impl Default for Arp {
             step: 0,
             rng: 0x2545_f491,
             vel: 96,
+            transpose: 0,
         }
     }
 }
@@ -182,8 +197,33 @@ impl Arp {
         self.rng
     }
 
+    /// v0.34: próxima nota da frase gravada (enquanto alguma tecla estiver segurada, ou no "segurar").
+    /// Sem "segue": as notas são as gravadas (como na introdução de "Estações": a mesma frase no Fá e no Mi).
+    /// Com "segue": a frase anda junto com a tecla mais grave (pelo caminho mais curto, sem pular de oitava).
+    fn next_phrase_note(&mut self) -> Option<u8> {
+        let len = (self.p.phrase_len as usize).min(PHRASE_MAX);
+        if len == 0 || self.is_empty() {
+            return None;
+        }
+        let s = self.step as usize % len;
+        self.step = self.step.wrapping_add(1);
+        let mut shift = self.transpose;
+        if self.p.follow {
+            let low = (0..128u8).find(|k| {
+                let (i, b) = Self::bit(*k);
+                self.keys[i] & b != 0
+            })?;
+            let d = (low as i32 - (self.p.phrase[0] as i32 + self.transpose)).rem_euclid(12);
+            shift += if d > 6 { d - 12 } else { d };
+        }
+        Some((self.p.phrase[s] as i32 + shift).clamp(0, 127) as u8)
+    }
+
     /// Próxima nota do arpejo (None = nada segurado).
     pub fn next_note(&mut self) -> Option<u8> {
+        if self.p.pattern == ARP_PHRASE {
+            return self.next_phrase_note();
+        }
         let mut notes = [0u8; 128];
         let mut n = 0;
         for k in 0..128u8 {

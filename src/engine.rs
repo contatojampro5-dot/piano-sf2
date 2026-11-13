@@ -657,7 +657,10 @@ impl Engine {
                 }
             }
             Cmd::PadVolume(v) => self.pad_vol = v.clamp(0.0, 1.0).powi(2),
-            Cmd::SetTranspose(t) => self.transpose = t.clamp(-24, 24),
+            Cmd::SetTranspose(t) => {
+                self.transpose = t.clamp(-24, 24);
+                self.arp.transpose = self.transpose;
+            }
             Cmd::Panic => {
                 // pânico também cala o congelado (rápido, sem estalo), o arpejo, o coral e as batidas
                 let sr = self.sample_rate;

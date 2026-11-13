@@ -614,6 +614,9 @@ pub struct Efeitos {
     /// (um número por pad; bit 0 = passo 1). O ▶ não fica salvo: o programa abre com a batida parada.
     pub seq_rhythm: usize,
     pub seq_grid: Vec<u16>,
+    /// v0.34: Frase do Arpeggiator (padrão "Frase"): as notas gravadas no Learn (até 16) e se ela segue a tecla.
+    pub arp_phrase: Vec<u8>,
+    pub arp_follow: bool,
 }
 
 /// v0.21: número da voz "Minha" (o arquivo do Theo) no Voice FX.
@@ -650,6 +653,8 @@ impl Default for Efeitos {
             voicefx_key: 0,
             seq_rhythm: 0,
             seq_grid: crate::efeitos::rhythm_grid(0).to_vec(),
+            arp_phrase: Vec::new(),
+            arp_follow: false,
         }
     }
 }
@@ -665,7 +670,9 @@ impl Efeitos {
         }
         self.pulse_depth = self.pulse_depth.clamp(0.0, 1.0);
         self.arp_layer = self.arp_layer.min(LAYERS - 1);
-        self.arp_pattern = self.arp_pattern.min(3);
+        self.arp_pattern = self.arp_pattern.min(crate::efeitos::ARP_PHRASE);
+        self.arp_phrase.truncate(crate::efeitos::PHRASE_MAX);
+        self.arp_phrase.retain(|n| *n < 128);
         if !matches!(self.arp_per_beat, 2..=4) {
             self.arp_per_beat = 2;
         }

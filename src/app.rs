@@ -1305,6 +1305,9 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     // v0.31: abrir/fechar a lista de vozes do Voice FX (aplicado no fim)
     let mut voice_list_toggle = false;
     let mut voice_list_close = false;
+    // v0.34: Learn da Frase (Some(true) = começar, Some(false) = parar); ✔/✖ no fim
+    let mut phrase_learn: Option<bool> = None;
+    let mut phrase_keep = false;
 
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
@@ -1368,6 +1371,104 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                     .size(13.0)
                     .color(if live { th().dim } else { ORANGE }),
             );
+            // v0.34: Arpejo (as notas do acorde, uma a uma) ou Frase (as notas que você gravou: Sequencer de notas)
+            ui.add_space(8.0);
+            let phrase_mode = e.arp_pattern == crate::efeitos::ARP_PHRASE;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                let half = ((w - 6.0) / 2.0).max(40.0);
+                for (label, ph, tip) in [
+                    ("Arpejo", false, "Arpejo: toca as notas do acorde que você segura, uma a uma"),
+                    ("Frase", true, "Frase (Sequencer de notas): toca uma sequência de notas que você grava no ● Learn"),
+                ] {
+                    let sel = phrase_mode == ph;
+                    let b = egui::Button::new(
+                        RichText::new(label).size(14.0).strong().color(if sel { th().ink } else { th().text }),
+                    )
+                    .fill(if sel { ARP_COLOR } else { th().glass_hi })
+                    .corner_radius(16)
+                    .min_size(Vec2::new(half, 32.0));
+                    if ui.add(b).on_hover_text(tip).clicked() && !sel {
+                        e.arp_pattern = if ph { crate::efeitos::ARP_PHRASE } else { 0 };
+                    }
+                }
+            });
+            if phrase_mode {
+                ui.add_space(8.0);
+                if crate::core::phrase_recording() {
+                    let got = crate::core::phrase_recorded();
+                    ui.label(
+                        RichText::new(format!("● Gravando…  {}/{}", got.len(), crate::efeitos::PHRASE_MAX))
+                            .strong()
+                            .size(15.0)
+                            .color(REC_COLOR),
+                    );
+                    ui.label(RichText::new("Toque as notas da frase no teclado, uma de cada vez").size(12.0).color(th().dim));
+                    ui.add_space(4.0);
+                    phrase_chips(ui, &got);
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 6.0;
+                        let half = ((w - 6.0) / 2.0).max(40.0);
+                        let ok = egui::Button::new(RichText::new("✔ Pronto").strong().size(14.0).color(th().ink))
+                            .fill(ARP_COLOR)
+                            .corner_radius(10)
+                            .min_size(Vec2::new(half, 34.0));
+                        if ui.add_enabled(!got.is_empty(), ok).on_hover_text("Guardar estas notas como a frase").clicked() {
+                            phrase_learn = Some(false);
+                            phrase_keep = true;
+                        }
+                        let no = egui::Button::new(RichText::new("✖ Cancelar").size(14.0))
+                            .corner_radius(10)
+                            .min_size(Vec2::new(half, 34.0));
+                        if ui.add(no).on_hover_text("Parar de gravar (a frase de antes continua)").clicked() {
+                            phrase_learn = Some(false);
+                        }
+                    });
+                    if got.len() >= crate::efeitos::PHRASE_MAX {
+                        // 16 notas: termina sozinho
+                        phrase_learn = Some(false);
+                        phrase_keep = true;
+                    }
+                    ui.ctx().request_repaint_after(Duration::from_millis(40));
+                } else {
+                    if e.arp_phrase.is_empty() {
+                        ui.label(
+                            RichText::new("Ainda sem frase. Aperte ● Learn e toque as notas no teclado.")
+                                .size(13.0)
+                                .color(th().dim),
+                        );
+                    } else {
+                        phrase_chips(ui, &e.arp_phrase);
+                    }
+                    ui.add_space(6.0);
+                    let label = if e.arp_phrase.is_empty() { "● Learn (gravar a frase)" } else { "● Learn (gravar de novo)" };
+                    let b = egui::Button::new(RichText::new(label).strong().size(14.0).color(REC_COLOR))
+                        .fill(th().glass_hi)
+                        .stroke(Stroke::new(1.2, REC_COLOR.gamma_multiply(0.7)))
+                        .corner_radius(10)
+                        .min_size(Vec2::new(w, 36.0));
+                    if ui
+                        .add(b)
+                        .on_hover_text("Aperte e toque as notas no teclado (até 16). Depois ✔ Pronto.")
+                        .clicked()
+                    {
+                        phrase_learn = Some(true);
+                    }
+                    if !e.arp_phrase.is_empty() {
+                        ui.add_space(2.0);
+                        ui.checkbox(&mut e.arp_follow, "Segue a tecla").on_hover_text(
+                            "Desligado: a frase toca sempre as mesmas notas (como a introdução de \"Estações\").\nLigado: a frase muda junto com a tecla que você segura (a 1ª nota da frase vira a sua tecla).",
+                        );
+                    }
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new("Ligue o ARP e segure uma tecla: a frase toca em loop, no tempo (BPM).")
+                            .size(12.0)
+                            .color(th().dim),
+                    );
+                }
+            }
             if o_arp || learning {
                 // v0.18.1: 4 listas compactas (antes eram fileiras de botões que vazavam do painel)
                 ui.add_space(6.0);
@@ -1393,7 +1494,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                     ui.label(RichText::new("Pattern").size(13.0).color(th().dim)).on_hover_text("Up = sobe, Down = desce, Up/Down = sobe e desce, Random = aleatório");
                     egui::ComboBox::from_id_salt("arp_pattern")
                         .width(combo_w)
-                        .selected_text(crate::efeitos::ARP_PATTERNS[e.arp_pattern as usize % 4])
+                        .selected_text(crate::efeitos::ARP_PATTERNS[(e.arp_pattern as usize).min(crate::efeitos::ARP_PATTERNS.len() - 1)])
                         .show_ui(ui, |ui| {
                             for (i, n) in crate::efeitos::ARP_PATTERNS.iter().enumerate() {
                                 ui.selectable_value(&mut e.arp_pattern, i as u8, *n);
@@ -1658,6 +1759,11 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     }
     core.set_efeitos(e);
     // v0.19: ações que mexem nos arquivos depois de guardar os ajustes (senão a cópia `e` desfazia)
+    match phrase_learn {
+        Some(true) => core.phrase_learn_start(),
+        Some(false) => core.phrase_learn_finish(phrase_keep),
+        None => {}
+    }
     if voice_reset {
         core.set_voicefx_file(None);
     }
@@ -1935,6 +2041,28 @@ fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState, stats: &Stats) {
     }
     ui.add_space(12.0);
     seq_card(ui, core, st, Vec2::new(full.x, seq_h), &seq_rows, seq_row_h);
+}
+
+// ---------- v0.34: Frase do Arpeggiator ----------
+
+/// Cor do "● gravando" (Learn da Frase).
+const REC_COLOR: Color32 = Color32::from_rgb(0xff, 0x5a, 0x6e);
+
+/// As notas da frase em bolinhas (pílulas), na ordem em que tocam.
+fn phrase_chips(ui: &mut Ui, notes: &[u8]) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
+        for (i, n) in notes.iter().enumerate() {
+            let text = note_name(*n);
+            let galley = ui.painter().layout_no_wrap(text, FontId::proportional(13.0), ARP_COLOR);
+            let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 14.0, 24.0), Sense::hover());
+            let p = ui.painter();
+            p.rect_filled(rect, 9, th().glass_hi);
+            p.rect_stroke(rect, 9, Stroke::new(1.0, ARP_COLOR.gamma_multiply(0.55)), StrokeKind::Inside);
+            p.galley(rect.center() - galley.size() / 2.0, galley, ARP_COLOR);
+            resp.on_hover_text(format!("{}ª nota: {} ({})", i + 1, note_name(*n), pads::KEY_NAMES_PT[*n as usize % 12]));
+        }
+    });
 }
 
 // ---------- v0.33: Sequencer (batida em loop, bem simples) ----------
