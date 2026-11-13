@@ -194,6 +194,13 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.27 — aba própria dos DrumPads
+- Nova aba **DrumPads** (4ª aba): pads grandes em 2 linhas de 4, centralizados, com **volume em pé** (de baixo para cima),
+  igual aos da aba Sons SF2.
+- Nomes dos pads com fonte mais bonita (Segoe UI Semibold, letras espaçadas).
+- Passando o mouse perto da borda de um pad, o **pad vizinho acende de leve** do lado mais perto.
+- Aba Efeitos reorganizada: 3 cartões em cima e 2 embaixo, maiores.
+
 ### v0.26.1 — luz desfocada nos DrumPads + tema Verde
 - A luz dos DrumPads agora é um **degradê liso** (sem os anéis/círculos aparecendo), tanto a que segue o mouse quanto a
   que sobe de baixo e entra pelas bordas. Perto da borda, a luz **escorre para as laterais** também.

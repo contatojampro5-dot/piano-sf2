@@ -64,6 +64,9 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
 - v0.25.1/v0.26: `drum_tile` (app.rs) — luz feita com `egui::Mesh` de cor por ponto (degradê liso; nada de círculos empilhados),
   holofote no mouse, grade fixa 2×4. Temas: `Palette.light` ("Branco": cartões brancos + sombra em `glass()`, `th().light`) e
   `Palette.cards` ("Verde", estilo Spotify: cartões firmes, `th().stars = false`).
+- v0.27: aba 3 = `drum_page` (DrumPads 2×4 + `fader` em pé; tab 2 = `efeitos_page` em 3+2 cartões). `drum_tile` recebe o
+  mouse mesmo fora do pad (vizinho acende de leve: `reach`/`fall`). Fonte `FontFamily::Name("pad")` = seguisb.ttf do
+  Windows (carregada em `setup_style`, cai na padrão se faltar), desenhada por `pad_label`.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

@@ -310,7 +310,8 @@ impl eframe::App for PianoApp {
                 match core.cfg.tab {
                     0 => mixer(ui, &mut core, &mut self.ui),
                     1 => pads_page(ui, &mut core, &mut self.ui),
-                    _ => efeitos_page(ui, &mut core, &mut self.ui),
+                    2 => efeitos_page(ui, &mut core, &mut self.ui),
+                    _ => drum_page(ui, &mut core, &mut self.ui),
                 }
             });
 
@@ -429,6 +430,19 @@ impl eframe::App for PianoApp {
 }
 
 fn setup_style(ctx: &egui::Context) {
+    // v0.27: fonte dos nomes dos DrumPads — Segoe UI Semibold do Windows (ou Bahnschrift); sem elas, a padrão
+    let mut fonts = egui::FontDefinitions::default();
+    let base = fonts.families.get(&egui::FontFamily::Proportional).cloned().unwrap_or_default();
+    let mut fam = base.clone();
+    for path in [r"C:\Windows\Fonts\seguisb.ttf", r"C:\Windows\Fonts\bahnschrift.ttf"] {
+        if let Ok(bytes) = std::fs::read(path) {
+            fonts.font_data.insert("pad".into(), std::sync::Arc::new(egui::FontData::from_owned(bytes)));
+            fam = std::iter::once("pad".to_string()).chain(base).collect();
+            break;
+        }
+    }
+    fonts.families.insert(egui::FontFamily::Name("pad".into()), fam);
+    ctx.set_fonts(fonts);
     ctx.set_visuals(egui::Visuals::dark());
     ctx.global_style_mut(|s| {
         use egui::TextStyle::*;
@@ -1066,6 +1080,8 @@ fn tabs_bar(ui: &mut Ui, core: &mut Core) {
                 "✨  Efeitos".to_string(),
                 core.pulse_on || core.arp_on || core.voicefx_on,
             ),
+            // v0.27: aba própria dos DrumPads (o ícone de grade é desenhado abaixo)
+            ("      DrumPads".to_string(), core.drum_flash.iter().any(|t| t.is_some_and(|t| t.elapsed().as_secs_f32() < 0.45))),
         ];
         for (i, (label, live)) in tabs.iter().enumerate() {
             if i == 1 && core.cfg.is_hidden("tab_pads") {
@@ -1100,17 +1116,34 @@ fn tabs_bar(ui: &mut Ui, core: &mut Core) {
                     match i {
                         0 => LAYER_COLORS[0],
                         1 => PAD_COLOR,
-                        _ => MOD_COLOR,
+                        2 => MOD_COLOR,
+                        _ => DRUM_COLOR,
                     },
                 );
             }
-            p.text(
+            let label_rect = p.text(
                 rect.center() + Vec2::new(if *live { 6.0 } else { 0.0 }, 1.0),
                 Align2::CENTER_CENTER,
                 label,
                 FontId::proportional(16.0),
                 if active { th().text } else { th().dim },
             );
+            if i == 3 {
+                // ícone de grade 4×2 (a fonte não tem um de bateria)
+                let c = if active { th().text } else { th().dim };
+                let (s, g) = (4.0, 1.8);
+                let x0 = label_rect.left() + 2.0;
+                let y0 = label_rect.center().y - s - g / 2.0;
+                for r in 0..2 {
+                    for k in 0..4 {
+                        p.rect_filled(
+                            Rect::from_min_size(Pos2::new(x0 + k as f32 * (s + g), y0 + r as f32 * (s + g)), Vec2::splat(s)),
+                            1,
+                            c,
+                        );
+                    }
+                }
+            }
             if *live {
                 p.circle_filled(
                     Pos2::new(rect.left() + 16.0, rect.center().y + 1.0),
@@ -1235,19 +1268,17 @@ fn fx_bar(ui: &mut Ui, core: &mut Core, w: f32, value: &mut f32, color: Color32,
 }
 
 fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
-    core.ensure_drum_kit();
     let avail = ui.available_size();
     let gap = 12.0;
-    let top_h = (avail.y * 0.56).clamp(240.0, 380.0);
-    let drum_h = (avail.y - top_h - gap).max(150.0);
-    let card_w = ((avail.x - 4.0 * gap) / 5.0).max(150.0);
+    // v0.27: os DrumPads foram para a aba deles; aqui ficam 3 cartões em cima e 2 embaixo, maiores
+    let row_h = ((avail.y - gap) / 2.0).max(240.0);
+    let w1 = ((avail.x - 2.0 * gap) / 3.0).max(180.0);
+    let w2 = ((avail.x - gap) / 2.0).max(220.0);
     let mut e = core.cfg.efeitos.clone();
     let learning = core.learn.active;
     let [mut d_tempo, mut d_pulse, mut d_arp, mut d_voice, mut d_filt] = st.fx_details;
     let [o_tempo, o_pulse, o_arp, o_voice, o_filt] = st.fx_details;
     // pedidos que rodam no fim (ver depois de `set_efeitos`)
-    let mut drum_reset: Option<usize> = None;
-    let mut drum_dialog: Option<usize> = None;
     let mut voice_reset = false;
     let mut voice_key: Option<usize> = None;
     let mut st_voice_dialog = false;
@@ -1256,7 +1287,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
         // ---- Tempo ----
-        fx_card(ui, Vec2::new(card_w, top_h), "⏱ Tempo", th().text, Some((&mut d_tempo, "Acertar o BPM com − e +")), |ui| {
+        fx_card(ui, Vec2::new(w1, row_h), "⏱ Tempo", th().text, Some((&mut d_tempo, "Acertar o BPM com − e +")), |ui| {
             let w = ui.available_width();
             ui.vertical_centered(|ui| {
                 ui.label(RichText::new(format!("{:.0}", e.bpm)).size(46.0).strong());
@@ -1285,7 +1316,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         });
 
         // ---- PulsePad ----
-        fx_card(ui, Vec2::new(card_w, top_h), "💓 PulsePad", PAD_COLOR, Some((&mut d_pulse, "Pulsos por tempo e profundidade")), |ui| {
+        fx_card(ui, Vec2::new(w1, row_h), "💓 PulsePad", PAD_COLOR, Some((&mut d_pulse, "Pulsos por tempo e profundidade")), |ui| {
             let w = ui.available_width();
             if fx_toggle(ui, core, w, core.pulse_on, "PULSE", PAD_COLOR, Target::PulseToggle, "Os pads e o ❄ Freeze pulsam no tempo") {
                 core.toggle_pulse();
@@ -1302,7 +1333,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         });
 
         // ---- Arpejador ----
-        fx_card(ui, Vec2::new(card_w, top_h), "🎼 Arpeggiator", ARP_COLOR, Some((&mut d_arp, "Layer, padrão (Up/Down), Rate, Octaves e Latch")), |ui| {
+        fx_card(ui, Vec2::new(w1, row_h), "🎼 Arpeggiator", ARP_COLOR, Some((&mut d_arp, "Layer, padrão (Up/Down), Rate, Octaves e Latch")), |ui| {
             let w = ui.available_width();
             if fx_toggle(ui, core, w, core.arp_on, "ARP", ARP_COLOR, Target::ArpToggle, "Segure o acorde: a camada escolhida toca as notas uma a uma") {
                 core.toggle_arp();
@@ -1374,8 +1405,12 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             }
         });
 
+    });
+    ui.add_space(gap);
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = gap;
         // ---- Voice FX ----
-        fx_card(ui, Vec2::new(card_w, top_h), "🎤 Voice FX", VOICE_COLOR, Some((&mut d_voice, "Oitava do coral")), |ui| {
+        fx_card(ui, Vec2::new(w2, row_h), "🎤 Voice FX", VOICE_COLOR, Some((&mut d_voice, "Oitava do coral")), |ui| {
             let w = ui.available_width();
             if fx_toggle(ui, core, w, core.voicefx_on, "VOICE", VOICE_COLOR, Target::VoiceFxToggle, "Um coral (\"aah\") acompanha cada nota que você tocar") {
                 core.toggle_voicefx();
@@ -1437,7 +1472,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
         });
 
         // ---- v0.23: Abrir / fechar (filtro) + Swell ----
-        fx_card(ui, Vec2::new(card_w, top_h), "Filter Sweep", PITCH_COLOR, Some((&mut d_filt, "Resonance, tempo do swell e onde vale")), |ui| {
+        fx_card(ui, Vec2::new(w2, row_h), "Filter Sweep", PITCH_COLOR, Some((&mut d_filt, "Resonance, tempo do swell e onde vale")), |ui| {
             let w = ui.available_width();
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Cutoff").size(13.0).strong()).on_hover_text("O filtro: fechado = escuro e abafado; aberto = brilhante");
@@ -1488,102 +1523,8 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     });
     st.fx_details = [d_tempo, d_pulse, d_arp, d_voice, d_filt];
 
-    ui.add_space(gap);
-    // ---- DrumPads (v0.25: visual novo — vidro escuro, neon por pad, brilho que acende e apaga) ----
-    fx_card(ui, Vec2::new(avail.x, drum_h), "DrumPads", DRUM_COLOR, None, |ui| {
-        let w = ui.available_width();
-        let vol_w = 170.0;
-        let gap = 10.0;
-        let n = crate::efeitos::DRUMS;
-        // grade que deixa os pads maiores: 8 numa fileira ou 4×2
-        // margem de 10 px em volta: o brilho neon passa um pouco da borda do pad e não pode ser cortado
-        let room_w = w - vol_w - 18.0 - 20.0;
-        let room_h = ui.available_height() - 4.0 - 20.0;
-        // v0.26.1: sempre 2 linhas de 4 (pedido do Theo)
-        let (cols, rows, pad) = [(n / 2, 2usize)]
-            .iter()
-            .map(|&(c, r)| {
-                let s = ((room_w - (c as f32 - 1.0) * gap) / c as f32).min((room_h - (r as f32 - 1.0) * gap) / r as f32);
-                (c, r, s)
-            })
-            .fold((n, 1, 0.0f32), |best, x| if x.2 > best.2 { x } else { best });
-        let pad = pad.max(56.0);
-        let now = Instant::now();
-        let mut glowing = false;
-        egui::Frame::new().inner_margin(10).show(ui, |ui| {
-        ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing = Vec2::splat(gap);
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing = Vec2::splat(gap);
-                for row in 0..rows {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = gap;
-                        for col in 0..cols {
-                            let i = row * cols + col;
-                            if i >= n {
-                                break;
-                            }
-                            // brilho do toque: acende na hora e apaga em ~0,45 s
-                            let glow = core
-                                .drum_flash[i]
-                                .map(|t| 1.0 - (now.duration_since(t).as_secs_f32() / 0.45).min(1.0))
-                                .unwrap_or(0.0)
-                                .powf(1.6);
-                            glowing |= glow > 0.0;
-                            let (rect, resp) = ui.allocate_exact_size(Vec2::splat(pad), Sense::click());
-                            let own = core.drum_file_name(i);
-                            let pressed = resp.is_pointer_button_down_on();
-                            // v0.25.1: passou o mouse = acende suave (RGB neon); bateu = acende forte e apaga
-                            let hover = ui.ctx().animate_bool_with_time(resp.id.with("luz"), resp.hovered(), 0.18);
-                            let light = (0.75 * hover).max(glow);
-                            glowing |= hover > 0.0 && hover < 1.0;
-                            drum_tile(
-                                ui.painter(),
-                                if pressed { rect.shrink(2.0) } else { rect },
-                                DRUM_ACCENTS[i % DRUM_ACCENTS.len()],
-                                light,
-                                resp.hover_pos(),
-                                i,
-                                own.as_deref(),
-                            );
-                            let resp = resp.on_hover_text(match &own {
-                                Some(nm) => format!("{} · seu som: {nm}\nBotão direito: trocar ou voltar ao som do programa", crate::efeitos::DRUM_NAMES[i]),
-                                None => format!("{}\nBotão direito: usar um som seu (WAV/MP3)", crate::efeitos::DRUM_NAMES[i]),
-                            });
-                            if !learnable(ui, core, &resp, Target::Drum(i)) && resp.clicked() {
-                                core.drum_hit(i, 110);
-                            }
-                            resp.context_menu(|ui| {
-                                if ui.button("♪ Usar meu som (WAV/MP3)...").clicked() {
-                                    drum_dialog = Some(i);
-                                    ui.close();
-                                }
-                                if own.is_some() && ui.button("Voltar ao som do programa").clicked() {
-                                    drum_reset = Some(i);
-                                    ui.close();
-                                }
-                            });
-                        }
-                    });
-                }
-            });
-            ui.vertical(|ui| {
-                ui.set_width(vol_w);
-                ui.label(RichText::new(format!("Volume {:.0}%", e.drum_volume * 100.0)).size(12.0).color(th().dim));
-                fx_bar(ui, core, vol_w, &mut e.drum_volume, DRUM_COLOR, Some(Target::DrumVolume));
-            });
-        });
-        });
-        if glowing {
-            ui.ctx().request_repaint_after(Duration::from_millis(16));
-        }
-    });
-
     core.set_efeitos(e);
     // v0.19: ações que mexem nos arquivos depois de guardar os ajustes (senão a cópia `e` desfazia)
-    if let Some(i) = drum_reset {
-        core.set_drum_file(i, None);
-    }
     if voice_reset {
         core.set_voicefx_file(None);
     }
@@ -1593,11 +1534,126 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     if let Some(v) = voice_sel {
         core.set_voicefx_voice(v);
     }
-    if drum_dialog.is_some() {
-        st.drum_file_dialog = drum_dialog;
-    }
     if st_voice_dialog {
         st.voicefx_file_dialog = true;
+    }
+}
+
+// ---------- v0.27: aba DrumPads (pads grandes em 2 linhas de 4, volume em pé) ----------
+
+fn drum_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
+    core.ensure_drum_kit();
+    let avail = ui.available_size();
+    let mut drum_volume = core.cfg.efeitos.drum_volume;
+    let mut drum_reset: Option<usize> = None;
+    let mut drum_dialog: Option<usize> = None;
+    let n = crate::efeitos::DRUMS;
+    let (cols, rows) = (n / 2, 2usize);
+    fx_card(ui, avail, "DrumPads", DRUM_COLOR, None, |ui| {
+        let (area, _) = ui.allocate_exact_size(ui.available_size() - Vec2::new(0.0, 4.0), Sense::hover());
+        let gap = 18.0;
+        let margin = 16.0; // o brilho neon passa um pouco da borda do pad
+        let fader_w = 58.0;
+        let fader_gap = 34.0;
+        let label_h = 22.0;
+        let pad = ((area.width() - 2.0 * margin - fader_w - fader_gap - (cols as f32 - 1.0) * gap) / cols as f32)
+            .min((area.height() - 2.0 * margin - (rows as f32 - 1.0) * gap) / rows as f32)
+            .clamp(56.0, 230.0);
+        let grid = Vec2::new(cols as f32 * pad + (cols as f32 - 1.0) * gap, rows as f32 * pad + (rows as f32 - 1.0) * gap);
+        let total_w = grid.x + fader_gap + fader_w;
+        let origin = Pos2::new(area.center().x - total_w / 2.0, area.center().y - grid.y / 2.0);
+        let grid_rect = Rect::from_min_size(origin, grid);
+        // mouse por perto: o pad embaixo acende forte e os vizinhos de leve
+        let mouse = ui.ctx().pointer_hover_pos().filter(|m| grid_rect.expand(gap).contains(*m));
+        let now = Instant::now();
+        let mut glowing = false;
+        for i in 0..n {
+            let (row, col) = (i / cols, i % cols);
+            let rect = Rect::from_min_size(origin + Vec2::new(col as f32 * (pad + gap), row as f32 * (pad + gap)), Vec2::splat(pad));
+            let resp = ui.interact(rect, egui::Id::unique(("drumpad", i)), Sense::click());
+            // brilho do toque: acende na hora e apaga em ~0,45 s
+            let glow = core.drum_flash[i]
+                .map(|t| 1.0 - (now.duration_since(t).as_secs_f32() / 0.45).min(1.0))
+                .unwrap_or(0.0)
+                .powf(1.6);
+            glowing |= glow > 0.0;
+            let own = core.drum_file_name(i);
+            let pressed = resp.is_pointer_button_down_on();
+            let hover = ui.ctx().animate_bool_with_time(resp.id.with("luz"), resp.hovered(), 0.18);
+            let light = (0.75 * hover).max(glow);
+            glowing |= hover > 0.0 && hover < 1.0;
+            let near_mouse = mouse.filter(|m| rect.distance_to_pos(*m) < pad * 0.6);
+            drum_tile(
+                ui.painter(),
+                if pressed { rect.shrink(3.0) } else { rect },
+                DRUM_ACCENTS[i % DRUM_ACCENTS.len()],
+                light,
+                near_mouse,
+                i,
+                own.as_deref(),
+            );
+            let resp = resp.on_hover_text(match &own {
+                Some(nm) => format!("{} · seu som: {nm}\nBotão direito: trocar ou voltar ao som do programa", crate::efeitos::DRUM_NAMES[i]),
+                None => format!("{}\nBotão direito: usar um som seu (WAV/MP3)", crate::efeitos::DRUM_NAMES[i]),
+            });
+            if !learnable(ui, core, &resp, Target::Drum(i)) && resp.clicked() {
+                core.drum_hit(i, 110);
+            }
+            resp.context_menu(|ui| {
+                if ui.button("♪ Usar meu som (WAV/MP3)...").clicked() {
+                    drum_dialog = Some(i);
+                    ui.close();
+                }
+                if own.is_some() && ui.button("Voltar ao som do programa").clicked() {
+                    drum_reset = Some(i);
+                    ui.close();
+                }
+            });
+        }
+        // volume em pé (de baixo para cima), igual aos da aba Sons SF2
+        let fx = grid_rect.right() + fader_gap;
+        let fader_rect = Rect::from_min_size(
+            Pos2::new(fx, grid_rect.top() + label_h),
+            Vec2::new(fader_w, (grid.y - 2.0 * label_h).max(60.0)),
+        );
+        ui.painter().text(
+            Pos2::new(fader_rect.center().x, grid_rect.top()),
+            Align2::CENTER_TOP,
+            "Volume",
+            FontId::proportional(13.0),
+            th().dim,
+        );
+        ui.painter().text(
+            Pos2::new(fader_rect.center().x, grid_rect.bottom()),
+            Align2::CENTER_BOTTOM,
+            format!("{:.0}%", drum_volume * 100.0),
+            FontId::monospace(14.0),
+            th().text,
+        );
+        let learning = core.learn.active;
+        let (resp, newv) = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(fader_rect), |ui| {
+                fader(ui, fader_rect.size(), drum_volume, DRUM_COLOR, learning)
+            })
+            .inner;
+        learnable(ui, core, &resp, Target::DrumVolume);
+        if let Some(v) = newv {
+            drum_volume = v;
+        }
+        if glowing {
+            ui.ctx().request_repaint_after(Duration::from_millis(16));
+        }
+    });
+    if drum_volume != core.cfg.efeitos.drum_volume {
+        let mut e = core.cfg.efeitos.clone();
+        e.drum_volume = drum_volume;
+        core.set_efeitos(e);
+    }
+    if let Some(i) = drum_reset {
+        core.set_drum_file(i, None);
+    }
+    if drum_dialog.is_some() {
+        st.drum_file_dialog = drum_dialog;
     }
 }
 
@@ -3238,9 +3294,13 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
             (alpha * 255.0) as u8,
         )
     };
-    let spot = spot.filter(|m| rect.contains(*m));
+    // v0.27: `spot` = mouse por perto (pode estar no pad vizinho). Dentro: luz forte que segue o mouse.
+    // No vizinho: só a borda do lado mais perto acende de leve.
+    let inside = spot.is_some_and(|m| rect.contains(m));
+    let reach = if inside { (light / 0.75).min(1.0) } else { 0.40 };
+    let fall = rect.width() * if inside { 1.1 } else { 0.6 };
     // brilho de fora (halo), só quando acende — uma faixa com degradê liso (sem anéis)
-    if light > 0.01 {
+    if light > 0.01 || spot.is_some() {
         let h = (rect.width() * 0.16).clamp(8.0, 16.0);
         let inner = rounded_outline(rect, r, 8);
         let outer = rounded_outline(rect.expand(h), r + h, 8);
@@ -3248,8 +3308,8 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
         let mut mesh = egui::Mesh::default();
         for k in 0..n {
             let c = mix_color(ca, cb, diag(inner[k]));
-            let near = spot.map(|m| (1.0 - inner[k].distance(m) / (rect.width() * 1.1)).clamp(0.0, 1.0)).unwrap_or(0.0);
-            let w = light * (0.30 + 0.35 * near * near);
+            let near = spot.map(|m| (1.0 - inner[k].distance(m) / fall).clamp(0.0, 1.0)).unwrap_or(0.0);
+            let w = light * 0.30 + 0.35 * near * near * reach;
             mesh.colored_vertex(inner[k], glow_px([c.r() as f32 * w, c.g() as f32 * w, c.b() as f32 * w], w));
             mesh.colored_vertex(outer[k], Color32::TRANSPARENT);
         }
@@ -3291,7 +3351,7 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
         for &s in &RINGS {
             for &q in &outline {
                 let v = center + (q - center) * s;
-                let near = spot.map(|m| (1.0 - v.distance(m) / (rect.width() * 1.1)).clamp(0.0, 1.0)).unwrap_or(0.0);
+                let near = spot.map(|m| (1.0 - v.distance(m) / fall).clamp(0.0, 1.0)).unwrap_or(0.0);
                 let mut acc = [0.0f32; 3];
                 let mut sum = 0.0f32;
                 let mut add = |c: Color32, w: f32| {
@@ -3302,12 +3362,12 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
                 };
                 // luz entrando pelas bordas (mais forte do lado do mouse, inclusive nas laterais)
                 let e = ((s - 0.55) / 0.45).clamp(0.0, 1.0).powf(2.2);
-                add(mix_color(ca, cb, diag(v)), e * light * (0.50 + 0.9 * near * near));
+                add(mix_color(ca, cb, diag(v)), e * (light * 0.50 + 0.9 * near * near * reach));
                 // fita de LED subindo de baixo
                 let dl = v.distance(led) / (rect.width() * 0.75);
                 add(mix_color(ca, cb, 0.5), (-dl * dl).exp() * light * 0.42);
                 // holofote que segue o mouse
-                if let (Some(m), Some(c)) = (spot, spot_c) {
+                if let (true, Some(m), Some(c)) = (inside, spot, spot_c) {
                     let d = v.distance(m) / (rect.width() * 0.42);
                     add(c, (-d * d).exp() * 0.55 * spot_on);
                 }
@@ -3342,15 +3402,15 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
         let idle = if white { Color32::from_rgb(0xdc, 0xdf, 0xe5) } else { Color32::from_rgb(0x26, 0x2b, 0x36) };
         // perto do mouse a borda brilha mais (a luz "escorre" pela borda)
         let near = spot
-            .map(|m| (1.0 - (a.distance(m) / (rect.width() * 1.1))).clamp(0.0, 1.0).powf(1.6))
+            .map(|m| (1.0 - (a.distance(m) / fall)).clamp(0.0, 1.0).powf(1.6) * reach)
             .unwrap_or(0.0);
         let hot = if white { neon } else { Color32::WHITE };
         let c = mix_color(mix_color(idle, neon, (if white { 0.10 } else { 0.25 } + 0.75 * light + 0.6 * near).min(1.0)), hot, near * near * 0.45);
         p.line_segment([a, b], Stroke::new(1.2 + 1.0 * light + 1.2 * near, c));
     }
     // nome pequeno no canto de cima (como no sampler)
-    let pad_in = (rect.width() * 0.10).clamp(8.0, 13.0);
-    let font = (rect.width() * 0.105).clamp(10.0, 13.0);
+    let pad_in = (rect.width() * 0.09).clamp(8.0, 18.0);
+    let font = (rect.width() * 0.075).clamp(10.0, 17.0);
     let name = crate::efeitos::DRUM_NAMES[i % crate::efeitos::DRUMS];
     let txt = if white {
         mix_color(Color32::from_rgb(0x6b, 0x72, 0x80), Color32::from_rgb(0x1d, 0x20, 0x27), light)
@@ -3361,7 +3421,7 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
     match own {
         Some(file) => {
             let short: String = file.chars().take(14).collect();
-            p.text(rect.min + Vec2::new(pad_in, pad_in), Align2::LEFT_TOP, name.to_uppercase(), FontId::proportional(font), txt);
+            pad_label(p, rect.min + Vec2::new(pad_in, pad_in), &name.to_uppercase(), font, txt);
             p.text(
                 Pos2::new(rect.left() + pad_in, rect.bottom() - pad_in),
                 Align2::LEFT_BOTTOM,
@@ -3371,9 +3431,26 @@ fn drum_tile(p: &egui::Painter, rect: Rect, colors: (Color32, Color32), light: f
             );
         }
         None => {
-            p.text(rect.min + Vec2::new(pad_in, pad_in), Align2::LEFT_TOP, name.to_uppercase(), FontId::proportional(font), txt);
+            pad_label(p, rect.min + Vec2::new(pad_in, pad_in), &name.to_uppercase(), font, txt);
         }
     }
+}
+
+/// v0.27: nome do DrumPad com a fonte "pad" (Segoe UI Semibold) e letras um pouco espaçadas.
+fn pad_label(p: &egui::Painter, pos: Pos2, text: &str, size: f32, color: Color32) {
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        text,
+        0.0,
+        egui::TextFormat {
+            font_id: FontId::new(size, egui::FontFamily::Name("pad".into())),
+            color,
+            extra_letter_spacing: size * 0.14,
+            ..Default::default()
+        },
+    );
+    let galley = p.layout_job(job);
+    p.galley(pos, galley, color);
 }
 
 /// v0.21: bolinha com um planetinha desenhado (abre/fecha a lista de pads).
