@@ -194,6 +194,12 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.25 — DrumPads com visual novo
+- Pads de vidro escuro com **cor neon própria** (Kick laranja, Snare verde-água, Clap rosa, Hi-hat amarelo, Crash azul,
+  808 roxo, Riser verde, Impact vermelho), reflexo de vidro em cima, número no canto e nome pequeno embaixo.
+- Bateu: o pad **acende** na cor dele e **vai apagando** em ~0,5 s (antes só piscava). Encolhe um pouquinho ao apertar.
+- A grade escolhe sozinha 8 numa fileira ou 4×2, o que deixar os pads maiores na tela.
+
 ### v0.24 — dois pads juntos, ↺ último Freeze, cena = preset completo, nomes originais
 - **Dois pads juntos**: na lista de pads, **+ Misturar** e clique no segundo pad. Aparece a barra **Mix** (esquerda = mais o 1º,
   meio = os dois iguais, direita = mais o 2º; dá para pôr num knob). ✖ tira o segundo. Trocar de tom leva os dois.

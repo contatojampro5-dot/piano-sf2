@@ -1489,68 +1489,88 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
     st.fx_details = [d_tempo, d_pulse, d_arp, d_voice, d_filt];
 
     ui.add_space(gap);
-    // ---- DrumPads ----
+    // ---- DrumPads (v0.25: visual novo — vidro escuro, neon por pad, brilho que acende e apaga) ----
     fx_card(ui, Vec2::new(avail.x, drum_h), "DrumPads", DRUM_COLOR, None, |ui| {
         let w = ui.available_width();
         let vol_w = 170.0;
-        let n = crate::efeitos::DRUMS as f32;
-        let pad = ((w - vol_w - 12.0 - (n - 1.0) * 8.0) / n).min(ui.available_height() - 4.0).max(60.0);
+        let gap = 10.0;
+        let n = crate::efeitos::DRUMS;
+        // grade que deixa os pads maiores: 8 numa fileira ou 4×2
+        // margem de 10 px em volta: o brilho neon passa um pouco da borda do pad e não pode ser cortado
+        let room_w = w - vol_w - 18.0 - 20.0;
+        let room_h = ui.available_height() - 4.0 - 20.0;
+        let (cols, rows, pad) = [(n, 1usize), (n / 2, 2)]
+            .iter()
+            .map(|&(c, r)| {
+                let s = ((room_w - (c as f32 - 1.0) * gap) / c as f32).min((room_h - (r as f32 - 1.0) * gap) / r as f32);
+                (c, r, s)
+            })
+            .fold((n, 1, 0.0f32), |best, x| if x.2 > best.2 { x } else { best });
+        let pad = pad.max(56.0);
         let now = Instant::now();
-        let mut flashing = false;
+        let mut glowing = false;
+        egui::Frame::new().inner_margin(10).show(ui, |ui| {
         ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
-            for i in 0..crate::efeitos::DRUMS {
-                let lit = core.drum_flash[i].is_some_and(|t| now.duration_since(t) < Duration::from_millis(160));
-                flashing |= lit;
-                let (rect, resp) = ui.allocate_exact_size(Vec2::splat(pad), Sense::click());
-                let p = ui.painter();
-                p.rect_filled(rect, 14, if lit { DRUM_COLOR } else { th().glass_hi });
-                p.rect_stroke(rect, 14, Stroke::new(1.5, DRUM_COLOR.gamma_multiply(0.6)), StrokeKind::Inside);
-                // v0.19: pad com som próprio mostra o nome do arquivo (e um ♪)
-                let own = core.drum_file_name(i);
-                let fg = if lit { th().ink } else { th().text };
-                match &own {
-                    Some(name) => {
-                        let short: String = name.chars().take(11).collect();
-                        p.text(rect.center() - Vec2::new(0.0, 9.0), Align2::CENTER_CENTER, short, FontId::proportional(14.0), fg);
-                        p.text(
-                            rect.center() + Vec2::new(0.0, 12.0),
-                            Align2::CENTER_CENTER,
-                            format!("♪ {}", crate::efeitos::DRUM_NAMES[i]),
-                            FontId::proportional(11.0),
-                            if lit { th().ink } else { DRUM_COLOR },
-                        );
-                    }
-                    None => {
-                        p.text(rect.center(), Align2::CENTER_CENTER, crate::efeitos::DRUM_NAMES[i], FontId::proportional(16.0), fg);
-                    }
+            ui.spacing_mut().item_spacing = Vec2::splat(gap);
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::splat(gap);
+                for row in 0..rows {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = gap;
+                        for col in 0..cols {
+                            let i = row * cols + col;
+                            if i >= n {
+                                break;
+                            }
+                            // brilho do toque: acende na hora e apaga em ~0,45 s
+                            let glow = core
+                                .drum_flash[i]
+                                .map(|t| 1.0 - (now.duration_since(t).as_secs_f32() / 0.45).min(1.0))
+                                .unwrap_or(0.0)
+                                .powf(1.6);
+                            glowing |= glow > 0.0;
+                            let (rect, resp) = ui.allocate_exact_size(Vec2::splat(pad), Sense::click());
+                            let own = core.drum_file_name(i);
+                            let pressed = resp.is_pointer_button_down_on();
+                            drum_tile(
+                                ui.painter(),
+                                if pressed { rect.shrink(2.0) } else { rect },
+                                DRUM_ACCENTS[i % DRUM_ACCENTS.len()],
+                                glow,
+                                resp.hovered(),
+                                i,
+                                own.as_deref(),
+                            );
+                            let resp = resp.on_hover_text(match &own {
+                                Some(nm) => format!("{} · seu som: {nm}\nBotão direito: trocar ou voltar ao som do programa", crate::efeitos::DRUM_NAMES[i]),
+                                None => format!("{}\nBotão direito: usar um som seu (WAV/MP3)", crate::efeitos::DRUM_NAMES[i]),
+                            });
+                            if !learnable(ui, core, &resp, Target::Drum(i)) && resp.clicked() {
+                                core.drum_hit(i, 110);
+                            }
+                            resp.context_menu(|ui| {
+                                if ui.button("♪ Usar meu som (WAV/MP3)...").clicked() {
+                                    drum_dialog = Some(i);
+                                    ui.close();
+                                }
+                                if own.is_some() && ui.button("Voltar ao som do programa").clicked() {
+                                    drum_reset = Some(i);
+                                    ui.close();
+                                }
+                            });
+                        }
+                    });
                 }
-                let resp = resp.on_hover_text(match &own {
-                    Some(n) => format!("Seu som: {n}\nBotão direito: trocar ou voltar ao som do programa"),
-                    None => "Botão direito: usar um som seu (WAV/MP3)".to_string(),
-                });
-                if !learnable(ui, core, &resp, Target::Drum(i)) && resp.clicked() {
-                    core.drum_hit(i, 110);
-                }
-                resp.context_menu(|ui| {
-                    if ui.button("♪ Usar meu som (WAV/MP3)...").clicked() {
-                        drum_dialog = Some(i);
-                        ui.close();
-                    }
-                    if own.is_some() && ui.button("Voltar ao som do programa").clicked() {
-                        drum_reset = Some(i);
-                        ui.close();
-                    }
-                });
-            }
+            });
             ui.vertical(|ui| {
                 ui.set_width(vol_w);
                 ui.label(RichText::new(format!("Volume {:.0}%", e.drum_volume * 100.0)).size(12.0).color(th().dim));
                 fx_bar(ui, core, vol_w, &mut e.drum_volume, DRUM_COLOR, Some(Target::DrumVolume));
             });
         });
-        if flashing {
-            ui.ctx().request_repaint_after(Duration::from_millis(40));
+        });
+        if glowing {
+            ui.ctx().request_repaint_after(Duration::from_millis(16));
         }
     });
 
@@ -3152,6 +3172,120 @@ fn hold_button(ui: &mut Ui, core: &mut Core, size: Vec2, label: &str, target: Ta
         Stroke::NONE,
     ));
     resp.on_hover_text(target.label());
+}
+
+/// v0.25: cor neon de cada DrumPad (Kick, Snare, Clap, Hi-hat, Crash, 808, Riser, Impact).
+const DRUM_ACCENTS: [Color32; 8] = [
+    Color32::from_rgb(0xff, 0x8a, 0x3d),
+    Color32::from_rgb(0x2e, 0xe6, 0xd6),
+    Color32::from_rgb(0xff, 0x4f, 0xa3),
+    Color32::from_rgb(0xff, 0xd2, 0x3f),
+    Color32::from_rgb(0x4d, 0xa3, 0xff),
+    Color32::from_rgb(0xa0, 0x66, 0xff),
+    Color32::from_rgb(0x3d, 0xff, 0x9a),
+    Color32::from_rgb(0xff, 0x4b, 0x4b),
+];
+
+fn mix_color(a: Color32, b: Color32, t: f32) -> Color32 {
+    let t = t.clamp(0.0, 1.0);
+    let l = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
+    Color32::from_rgb(l(a.r(), b.r()), l(a.g(), b.g()), l(a.b(), b.b()))
+}
+
+/// v0.25: um DrumPad no estilo das referências do Theo: vidro escuro, borda neon na cor do pad,
+/// reflexo de vidro em cima, nome pequeno embaixo à esquerda e número no canto. `glow` (0..1) = brilho do toque.
+fn drum_tile(p: &egui::Painter, rect: Rect, accent: Color32, glow: f32, hovered: bool, i: usize, own: Option<&str>) {
+    let r: u8 = (rect.width() * 0.16).clamp(10.0, 22.0) as u8;
+    let base = Color32::from_rgb(0x10, 0x14, 0x1d);
+    // halo neon por fora (fraquinho parado, forte no toque)
+    let halo = 0.10 + 0.9 * glow + if hovered { 0.08 } else { 0.0 };
+    for k in 1..=6 {
+        let a = (halo * 70.0 * (1.0 - k as f32 / 7.0)) as u8;
+        if a > 0 {
+            p.rect_stroke(
+                rect.expand(k as f32 * 1.6),
+                r + k as u8,
+                Stroke::new(1.6, Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), a)),
+                StrokeKind::Outside,
+            );
+        }
+    }
+    // corpo: vidro escuro com um tom da cor; no toque, enche de cor
+    let body = mix_color(mix_color(base, accent, 0.06), accent, 0.55 * glow);
+    p.rect_filled(rect, r, body);
+    // "luz" de dentro, mais forte embaixo (como os quadrados azuis)
+    let inner = rect.shrink(rect.width() * 0.12);
+    let inner = Rect::from_min_max(Pos2::new(inner.left(), rect.center().y), Pos2::new(inner.right(), rect.bottom() - 4.0));
+    p.rect_filled(
+        inner,
+        r,
+        Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), (14.0 + 70.0 * glow) as u8),
+    );
+    // reflexo de vidro em cima (as teclas polidas do vidro líquido)
+    let sheen = Rect::from_min_max(rect.min + Vec2::new(3.0, 3.0), Pos2::new(rect.right() - 3.0, rect.top() + rect.height() * 0.42));
+    p.rect_filled(
+        sheen,
+        CornerRadius { nw: r.saturating_sub(2), ne: r.saturating_sub(2), sw: 6, se: 6 },
+        Color32::from_white_alpha((12.0 + 14.0 * glow) as u8),
+    );
+    p.line_segment(
+        [Pos2::new(rect.left() + r as f32, rect.top() + 1.5), Pos2::new(rect.right() - r as f32, rect.top() + 1.5)],
+        Stroke::new(1.0, Color32::from_white_alpha(60)),
+    );
+    // borda neon
+    let edge = Color32::from_rgba_unmultiplied(
+        accent.r(),
+        accent.g(),
+        accent.b(),
+        (110.0 + 145.0 * glow + if hovered { 40.0 } else { 0.0 }).min(255.0) as u8,
+    );
+    p.rect_stroke(rect, r, Stroke::new(1.6 + 0.8 * glow, edge), StrokeKind::Inside);
+    // número no canto e nome embaixo à esquerda (pequenos, como no sampler)
+    let pad_in = (rect.width() * 0.1).clamp(7.0, 14.0);
+    let small = (rect.width() * 0.10).clamp(9.0, 12.0);
+    let big = (rect.width() * 0.13).clamp(11.0, 16.0);
+    p.text(
+        rect.min + Vec2::new(pad_in, pad_in),
+        Align2::LEFT_TOP,
+        format!("{:02}", i + 1),
+        FontId::monospace(small),
+        Color32::from_white_alpha((120.0 + 120.0 * glow) as u8),
+    );
+    // bolinha de "aceso" no canto, na cor do pad
+    p.circle_filled(
+        Pos2::new(rect.right() - pad_in - 3.0, rect.top() + pad_in + 4.0),
+        3.0,
+        Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), (90.0 + 165.0 * glow) as u8),
+    );
+    let name = crate::efeitos::DRUM_NAMES[i % crate::efeitos::DRUMS];
+    match own {
+        Some(file) => {
+            let short: String = file.chars().take(12).collect();
+            p.text(
+                Pos2::new(rect.left() + pad_in, rect.bottom() - pad_in - big - 2.0),
+                Align2::LEFT_BOTTOM,
+                format!("♪ {name}"),
+                FontId::proportional(small),
+                accent,
+            );
+            p.text(
+                Pos2::new(rect.left() + pad_in, rect.bottom() - pad_in),
+                Align2::LEFT_BOTTOM,
+                short,
+                FontId::proportional(big),
+                Color32::WHITE,
+            );
+        }
+        None => {
+            p.text(
+                Pos2::new(rect.left() + pad_in, rect.bottom() - pad_in),
+                Align2::LEFT_BOTTOM,
+                name.to_uppercase(),
+                FontId::proportional(big),
+                Color32::from_white_alpha((200.0 + 55.0 * glow) as u8),
+            );
+        }
+    }
 }
 
 /// v0.21: bolinha com um planetinha desenhado (abre/fecha a lista de pads).
