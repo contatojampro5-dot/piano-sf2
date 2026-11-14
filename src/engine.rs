@@ -120,6 +120,11 @@ pub enum Cmd {
     Panic,
     /// Novo sintetizador (SF2 novo ou taxa de amostragem nova).
     Replace(Box<Synthesizer>),
+    /// v0.35: sintetizador próprio de uma camada (timbre de outro arquivo da Biblioteca). None = volta ao SF2 principal.
+    LayerSynth {
+        layer: usize,
+        synth: Option<Box<Synthesizer>>,
+    },
     /// Taxa de amostragem da placa de som (os pads precisam dela mesmo sem SF2).
     SetSampleRate(u32),
     /// Toca um pad (o que estiver tocando some devagar).
@@ -159,6 +164,10 @@ const KILL_DELAY_MS: f32 = 60.0;
 
 pub struct Engine {
     synth: Option<Box<Synthesizer>>,
+    /// v0.35: camada com sintetizador próprio (arquivo da Biblioteca); None = usa o principal.
+    extra: [Option<Box<Synthesizer>>; LAYERS],
+    ex_l: Vec<f32>,
+    ex_r: Vec<f32>,
     rx: Receiver<Cmd>,
     garbage: Sender<Garbage>,
     pub stats: Arc<Stats>,
@@ -238,6 +247,9 @@ impl Engine {
         let _ = crate::freeze::ring();
         Self {
             synth: None,
+            extra: Default::default(),
+            ex_l: vec![0.0; 8192],
+            ex_r: vec![0.0; 8192],
             rx,
             garbage,
             stats,
@@ -312,25 +324,54 @@ impl Engine {
         Synthesizer::new(sf, &settings).ok().map(Box::new)
     }
 
+    /// v0.35: o sintetizador que toca a camada `i` (o dela, se veio de outro arquivo, ou o principal).
+    fn syn(&mut self, i: usize) -> Option<&mut Synthesizer> {
+        match self.extra.get_mut(i).and_then(|e| e.as_deref_mut()) {
+            Some(s) => Some(s),
+            None => self.synth.as_deref_mut(),
+        }
+    }
+
+    /// Todos os sintetizadores ligados (principal + os das camadas).
+    fn all_synths(&mut self) -> impl Iterator<Item = &mut Synthesizer> {
+        self.synth
+            .as_deref_mut()
+            .into_iter()
+            .chain(self.extra.iter_mut().filter_map(|e| e.as_deref_mut()))
+    }
+
     fn apply_layer(&mut self, i: usize) {
-        let Some(s) = self.synth.as_mut() else { return };
+        let master = self.master;
+        let has_extra = self.extra[i].is_some();
+        let (preset, volume, reverb, cutoff, audible, pitch_range) = (
+            self.presets[i],
+            self.volumes[i],
+            self.reverbs[i],
+            self.cutoffs[i],
+            self.audible[i],
+            self.pitch_range,
+        );
+        let Some(s) = self.syn(i) else { return };
+        if has_extra {
+            s.set_master_volume(master);
+        }
         let ch = i as i32;
-        if let Some((bank, patch)) = self.presets[i] {
+        if let Some((bank, patch)) = preset {
             s.set_channel_preset(ch, bank, patch);
         }
-        let v = (self.volumes[i].clamp(0.0, 1.0) * 16383.0) as i32;
+        let v = (volume.clamp(0.0, 1.0) * 16383.0) as i32;
         s.process_midi_message(ch, 0xB0, 0x07, v >> 7);
         s.process_midi_message(ch, 0xB0, 0x27, v & 0x7F);
         s.process_midi_message(
             ch,
             0xB0,
             0x5B,
-            (self.reverbs[i].clamp(0.0, 1.0) * 127.0) as i32,
+            (reverb.clamp(0.0, 1.0) * 127.0) as i32,
         );
         s.process_midi_message(ch, 0xB0, 0x5D, 0);
-        s.process_midi_message(ch, 0xB0, 0x4A, (self.cutoffs[i].clamp(0.0, 1.0) * 127.0).round() as i32);
-        s.process_midi_message(ch, 0xB0, 0x0B, if self.audible[i] { 127 } else { 0 });
-        Self::send_pitch_range(s, ch, self.pitch_range);
+        s.process_midi_message(ch, 0xB0, 0x4A, (cutoff.clamp(0.0, 1.0) * 127.0).round() as i32);
+        s.process_midi_message(ch, 0xB0, 0x0B, if audible { 127 } else { 0 });
+        Self::send_pitch_range(s, ch, pitch_range);
     }
 
     /// RPN 0 (alcance do pitch bend) num canal; depois "fecha" o RPN para nada mais mexer nele.
@@ -364,9 +405,10 @@ impl Engine {
             }
             Cmd::PitchRange(semis) => {
                 self.pitch_range = semis.clamp(1, 12);
-                if let Some(s) = self.synth.as_mut() {
-                    for i in 0..LAYERS {
-                        Self::send_pitch_range(s, i as i32, self.pitch_range);
+                let pr = self.pitch_range;
+                for i in 0..LAYERS {
+                    if let Some(s) = self.syn(i) {
+                        Self::send_pitch_range(s, i as i32, pr);
                     }
                 }
             }
@@ -388,6 +430,17 @@ impl Engine {
                     self.apply_layer(i);
                 }
             }
+            Cmd::LayerSynth { layer, synth } if layer < LAYERS => {
+                // o que a camada tocava no principal para na hora (o timbre agora é outro)
+                if let Some(s) = self.synth.as_mut() {
+                    s.note_off_all_channel(layer as i32, true);
+                }
+                let old = std::mem::replace(&mut self.extra[layer], synth);
+                if let Some(old) = old {
+                    let _ = self.garbage.try_send(Garbage::Synth(old));
+                }
+                self.apply_layer(layer);
+            }
             Cmd::NoteOn { key, vel } => {
                 let k = (key as i32 + self.transpose).clamp(0, 127) as u8;
                 // Se a mesma tecla ainda estava presa (sem note off), solta antes.
@@ -399,9 +452,9 @@ impl Engine {
                 self.held[key as usize] = Some(k);
                 // v0.17: a camada do arpejador não toca o acorde direto (ela arpeja).
                 let arp_layer = self.arp.p.on.then_some(self.arp.p.layer);
-                if let Some(s) = self.synth.as_mut() {
-                    for i in 0..LAYERS {
-                        if self.audible[i] && self.presets[i].is_some() && Some(i) != arp_layer {
+                for i in 0..LAYERS {
+                    if self.audible[i] && self.presets[i].is_some() && Some(i) != arp_layer {
+                        if let Some(s) = self.syn(i) {
                             s.note_on(i as i32, k as i32, vel as i32);
                         }
                     }
@@ -529,8 +582,8 @@ impl Engine {
                 if num == 64 {
                     self.voicefx.set_sustain(val >= 64);
                 }
-                if let Some(s) = self.synth.as_mut() {
-                    for i in 0..LAYERS {
+                for i in 0..LAYERS {
+                    if let Some(s) = self.syn(i) {
                         s.process_midi_message(i as i32, 0xB0, num as i32, val as i32);
                     }
                 }
@@ -539,15 +592,15 @@ impl Engine {
                 }
             }
             Cmd::PitchBend { lsb, msb } => {
-                if let Some(s) = self.synth.as_mut() {
-                    for i in 0..LAYERS {
+                for i in 0..LAYERS {
+                    if let Some(s) = self.syn(i) {
                         s.process_midi_message(i as i32, 0xE0, lsb as i32, msb as i32);
                     }
                 }
             }
             Cmd::SetPreset { layer, bank, patch } if layer < LAYERS => {
                 self.presets[layer] = Some((bank, patch));
-                if let Some(s) = self.synth.as_mut() {
+                if let Some(s) = self.syn(layer) {
                     // Notas antigas terminam com o timbre antigo; as novas já saem com o novo.
                     s.set_channel_preset(layer as i32, bank, patch);
                 }
@@ -557,7 +610,7 @@ impl Engine {
                     return;
                 }
                 self.audible[layer] = on;
-                if let Some(s) = self.synth.as_mut() {
+                if let Some(s) = self.syn(layer) {
                     s.process_midi_message(layer as i32, 0xB0, 0x0B, if on { 127 } else { 0 });
                 }
                 self.kill_in[layer] = if on {
@@ -568,7 +621,7 @@ impl Engine {
             }
             Cmd::SetVolume { layer, value } if layer < LAYERS => {
                 self.volumes[layer] = value;
-                if let Some(s) = self.synth.as_mut() {
+                if let Some(s) = self.syn(layer) {
                     let v = (value.clamp(0.0, 1.0) * 16383.0) as i32;
                     s.process_midi_message(layer as i32, 0xB0, 0x07, v >> 7);
                     s.process_midi_message(layer as i32, 0xB0, 0x27, v & 0x7F);
@@ -576,13 +629,13 @@ impl Engine {
             }
             Cmd::SetCutoff { layer, value } if layer < LAYERS => {
                 self.cutoffs[layer] = value;
-                if let Some(s) = self.synth.as_mut() {
+                if let Some(s) = self.syn(layer) {
                     s.process_midi_message(layer as i32, 0xB0, 0x4A, (value.clamp(0.0, 1.0) * 127.0).round() as i32);
                 }
             }
             Cmd::SetReverb { layer, value } if layer < LAYERS => {
                 self.reverbs[layer] = value;
-                if let Some(s) = self.synth.as_mut() {
+                if let Some(s) = self.syn(layer) {
                     s.process_midi_message(
                         layer as i32,
                         0xB0,
@@ -594,8 +647,9 @@ impl Engine {
             Cmd::SetMaster(v) => {
                 // Curva suave: fader em 80% ≈ volume 0,64.
                 self.master = (v.clamp(0.0, 1.0)).powi(2);
-                if let Some(s) = self.synth.as_mut() {
-                    s.set_master_volume(self.master);
+                let m = self.master;
+                for s in self.all_synths() {
+                    s.set_master_volume(m);
                 }
             }
             Cmd::SetSampleRate(sr) => {
@@ -676,7 +730,7 @@ impl Engine {
                 self.drums.stop();
                 self.seq.p.on = false;
                 self.stats.seq_pos.store(0, Ordering::Relaxed);
-                if let Some(s) = self.synth.as_mut() {
+                for s in self.all_synths() {
                     s.note_off_all(true);
                     for i in 0..LAYERS {
                         s.process_midi_message(i as i32, 0xB0, 0x40, 0);
@@ -693,9 +747,9 @@ impl Engine {
     fn note_off_all_layers(&mut self, key: u8) {
         // a camada do arpejador é dele: soltar a tecla não pode cortar a nota do arpejo
         let arp_layer = self.arp.p.on.then_some(self.arp.p.layer);
-        if let Some(s) = self.synth.as_mut() {
-            for i in 0..LAYERS {
-                if Some(i) != arp_layer {
+        for i in 0..LAYERS {
+            if Some(i) != arp_layer {
+                if let Some(s) = self.syn(i) {
                     s.note_off(i as i32, key as i32);
                 }
             }
@@ -728,9 +782,9 @@ impl Engine {
     /// Solta a nota do arpejo que está soando.
     fn arp_silence(&mut self) {
         if let Some(n) = self.arp.playing.take() {
-            let layer = self.arp.p.layer.min(LAYERS - 1) as i32;
-            if let Some(s) = self.synth.as_mut() {
-                s.note_off(layer, n as i32);
+            let layer = self.arp.p.layer.min(LAYERS - 1);
+            if let Some(s) = self.syn(layer) {
+                s.note_off(layer as i32, n as i32);
             }
         }
     }
@@ -744,7 +798,7 @@ impl Engine {
         }
         if let Some(n) = self.arp.next_note() {
             let vel = self.arp.vel as i32;
-            if let Some(s) = self.synth.as_mut() {
+            if let Some(s) = self.syn(layer) {
                 s.note_on(layer as i32, n as i32, vel);
                 self.arp.playing = Some(n);
             }
@@ -807,6 +861,15 @@ impl Engine {
                 None => {
                     l.fill(0.0);
                     r.fill(0.0);
+                }
+            }
+            // v0.35: camadas com timbre de outro arquivo (cada uma no seu sintetizador) somam aqui
+            for s in self.extra.iter_mut().filter_map(|e| e.as_deref_mut()) {
+                let (el, er) = (&mut self.ex_l[..n], &mut self.ex_r[..n]);
+                s.render(el, er);
+                for k in 0..n {
+                    l[k] += el[k];
+                    r[k] += er[k];
                 }
             }
             // v0.17: coral do Voice FX junto das camadas (o Congelar também pega ele).
@@ -967,22 +1030,25 @@ impl Engine {
             }
         }
 
-        let Some(synth) = self.synth.as_mut() else {
+        if self.synth.is_none() && self.extra.iter().all(|e| e.is_none()) {
             self.stats
                 .peak_milli
                 .store((peak * 1000.0) as u32, Ordering::Relaxed);
             return;
-        };
+        }
 
         // Camadas desligadas: depois do "fade", corta as vozes que sobraram (pedal preso etc.).
         for i in 0..LAYERS {
             if self.kill_in[i] >= 0 {
                 self.kill_in[i] -= frames as i64;
                 if self.kill_in[i] < 0 {
-                    synth.note_off_all_channel(i as i32, true);
+                    if let Some(s) = self.syn(i) {
+                        s.note_off_all_channel(i as i32, true);
+                    }
                 }
             }
         }
+        let voices: usize = self.all_synths().map(|s| s.active_voice_count()).sum();
 
         // Estatísticas para a tela.
         self.peak_decay = (self.peak_decay * 0.9).max(peak);
@@ -991,7 +1057,7 @@ impl Engine {
             .store((self.peak_decay * 1000.0) as u32, Ordering::Relaxed);
         self.stats
             .voices
-            .store(synth.active_voice_count(), Ordering::Relaxed);
+            .store(voices, Ordering::Relaxed);
         let budget = frames as f32 / self.sample_rate as f32;
         if budget > 0.0 {
             let used = started.elapsed().as_secs_f32() / budget;

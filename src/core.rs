@@ -81,6 +81,15 @@ pub struct Core {
     pub cfg: Config,
     pub tx: Sender<Cmd>,
     pub presets: Vec<PresetRef>,
+    /// v0.35: timbres do SF2 principal e da Biblioteca (a `presets` é os dois juntos).
+    pub main_presets: Vec<PresetRef>,
+    pub lib_presets: Vec<PresetRef>,
+    /// Arquivos da Biblioteca abertos (só os que alguma camada usa) e os que estão abrindo.
+    pub lib_fonts: HashMap<String, Arc<SoundFont>>,
+    pub lib_loading: std::collections::HashSet<String>,
+    /// Arquivo cujo sintetizador o motor já tem em cada camada.
+    layer_font: [Option<String>; LAYERS],
+    pub font_loader: Option<Sender<String>>,
     pub sound_font: Option<Arc<SoundFont>>,
     pub sf2_name: Option<String>,
     pub loading: Option<Loading>,
@@ -254,6 +263,12 @@ impl Core {
             cfg,
             tx,
             presets: Vec::new(),
+            main_presets: Vec::new(),
+            lib_presets: Vec::new(),
+            lib_fonts: HashMap::new(),
+            lib_loading: Default::default(),
+            layer_font: Default::default(),
+            font_loader: None,
             sound_font: None,
             sf2_name: None,
             loading: None,
@@ -938,7 +953,7 @@ impl Core {
             });
             self.send(Cmd::SetAudible {
                 layer: i,
-                on: mix.audible(i) && l.preset.is_some(),
+                on: mix.audible(i) && l.preset.is_some() && self.layer_ready(i),
             });
         }
         self.send(Cmd::SetMaster(self.cfg.master));
@@ -1315,7 +1330,8 @@ impl Core {
         };
         match (self.my_pad_clips.get(i).cloned().flatten(), self.cfg.my_pads.get(i)) {
             (Some(clip), Some(m)) => {
-                self.send(Cmd::PadLayer2(clip, pads::my_pad_pitch(m.key, key)));
+                let (c, pitch) = pads::clip_for_key(&clip, m.key, key);
+                self.send(Cmd::PadLayer2(c, pitch));
             }
             (None, Some(_)) => {
                 self.pad_pending2 = Some(key);
@@ -1392,7 +1408,8 @@ impl Core {
             match (self.my_pad_clips[i].clone(), self.cfg.my_pads.get(i)) {
                 (Some(clip), Some(m)) => {
                     self.pad_pending = None;
-                    self.send(Cmd::PadPlay(clip, pads::my_pad_pitch(m.key, key)));
+                    let (c, pitch) = pads::clip_for_key(&clip, m.key, key);
+                    self.send(Cmd::PadPlay(c, pitch));
                     return true;
                 }
                 (None, Some(_)) => {
@@ -1532,9 +1549,173 @@ impl Core {
     fn sync_audible(&self) {
         let mix = &self.cfg.mix;
         for i in 0..LAYERS {
-            let on = mix.audible(i) && mix.layers[i].preset.is_some();
+            let on = mix.audible(i) && mix.layers[i].preset.is_some() && self.layer_ready(i);
             self.send(Cmd::SetAudible { layer: i, on });
         }
+    }
+
+    // ---------- v0.35: Biblioteca (timbre de outro arquivo em cada camada) ----------
+
+    /// O som da camada já está pronto no motor? (timbre da Biblioteca precisa do arquivo aberto)
+    pub fn layer_ready(&self, i: usize) -> bool {
+        match self.cfg.mix.layers[i].preset.as_ref().and_then(|p| p.file.as_ref()) {
+            None => true,
+            Some(f) => self.layer_font[i].as_ref() == Some(f),
+        }
+    }
+
+    /// Algum arquivo da Biblioteca abrindo para uma camada (a tela mostra "abrindo...").
+    pub fn layer_loading(&self, i: usize) -> bool {
+        self.cfg.mix.layers[i]
+            .preset
+            .as_ref()
+            .and_then(|p| p.file.as_ref())
+            .is_some_and(|f| self.lib_loading.contains(f))
+    }
+
+    /// Junta os timbres do SF2 principal com os da Biblioteca.
+    fn merge_presets(&mut self) {
+        let mut all = self.main_presets.clone();
+        all.extend(self.lib_presets.iter().cloned());
+        self.presets = all;
+    }
+
+    /// Timbres achados na pasta da Biblioteca (o programa procura ao abrir e depois de baixar).
+    pub fn set_library(&mut self, lib: Vec<crate::biblioteca::LibPreset>) {
+        self.lib_presets = lib
+            .into_iter()
+            .map(|p| PresetRef { bank: p.bank, patch: p.patch, name: p.name, file: Some(p.rel) })
+            .collect();
+        self.merge_presets();
+        // nomes guardados atualizados; timbre de arquivo que sumiu fica sem som (não trava nada)
+        for l in &mut self.cfg.mix.layers {
+            if let Some(p) = &mut l.preset {
+                if p.file.is_some() {
+                    if let Some(q) = self.lib_presets.iter().find(|q| q.same(p)) {
+                        p.name = q.name.clone();
+                    }
+                }
+            }
+        }
+        self.ensure_layer_fonts();
+    }
+
+    /// v0.35: os 6 efeitos do Mobile FX Worship entram nos DrumPads 11 a 16 (uma vez só, em pads vazios).
+    pub fn add_library_drums(&mut self) {
+        if self.cfg.lib_drums_added {
+            return;
+        }
+        let ready = crate::biblioteca::make_lib_drums();
+        if ready.len() < crate::biblioteca::LIB_DRUMS.len() {
+            return;
+        }
+        let e = &mut self.cfg.efeitos;
+        let first = crate::efeitos::BUILTIN_DRUMS; // depois do Choir Rise e do Prayer
+        for (k, (name, path)) in ready.into_iter().enumerate() {
+            let pad = first + k;
+            if pad >= crate::efeitos::MAX_DRUMS || e.drum_files.iter().any(|(i, _)| *i == pad) {
+                continue;
+            }
+            e.drum_files.push((pad, path.to_string_lossy().to_string()));
+            if e.drum_names.len() <= pad {
+                e.drum_names.resize(pad + 1, String::new());
+            }
+            if e.drum_names[pad].trim().is_empty() {
+                e.drum_names[pad] = name.to_string();
+            }
+        }
+        e.drum_count = crate::efeitos::MAX_DRUMS;
+        e.normalize();
+        self.cfg.lib_drums_added = true;
+        self.dirty = true;
+    }
+
+    /// v0.35: os pads da Biblioteca (Sol, Lua, Mercúrio...) entram nos "Meus pads" uma vez só,
+    /// quando o arquivo deles já está no computador e tem vaga.
+    pub fn add_library_pads(&mut self) {
+        for (name, path) in pads::LIB_PADS {
+            if self.cfg.lib_pads_added.iter().any(|p| p == path) || !pads::lib_pad_available(path) {
+                continue;
+            }
+            if self.cfg.my_pads.iter().any(|m| m.path == path) {
+                self.cfg.lib_pads_added.push(path.to_string());
+                continue;
+            }
+            if self.cfg.my_pads.len() >= pads::MY_SLOTS {
+                break;
+            }
+            self.cfg.my_pads.push(MyPad { name: name.into(), path: path.into(), key: 0, auto_key: false });
+            self.cfg.lib_pads_added.push(path.to_string());
+            let i = self.cfg.my_pads.len() - 1;
+            self.my_pad_clips[i] = None;
+            self.request_my_pad(i);
+            self.dirty = true;
+        }
+    }
+
+    /// Deixa cada camada com o sintetizador do arquivo certo: abre o que falta (em segundo plano)
+    /// e tira da memória o que nenhuma camada usa mais.
+    pub fn ensure_layer_fonts(&mut self) {
+        let wanted: Vec<Option<String>> = self
+            .cfg
+            .mix
+            .layers
+            .iter()
+            .map(|l| l.preset.as_ref().and_then(|p| p.file.clone()))
+            .collect();
+        self.lib_fonts.retain(|k, _| wanted.iter().any(|w| w.as_deref() == Some(k.as_str())));
+        for (i, want) in wanted.iter().enumerate().take(LAYERS) {
+            if self.layer_font[i] == *want {
+                continue;
+            }
+            match want {
+                None => {
+                    self.layer_font[i] = None;
+                    self.send(Cmd::LayerSynth { layer: i, synth: None });
+                }
+                Some(f) => match self.lib_fonts.get(f) {
+                    Some(sf) => {
+                        if let Some(s) = Engine::build_synth(sf, self.sample_rate, self.cfg.polyphony) {
+                            self.layer_font[i] = Some(f.clone());
+                            self.send(Cmd::LayerSynth { layer: i, synth: Some(s) });
+                        }
+                    }
+                    None => self.request_font(f.clone()),
+                },
+            }
+        }
+        self.sync_audible();
+    }
+
+    fn request_font(&mut self, rel: String) {
+        if !self.lib_loading.insert(rel.clone()) {
+            return;
+        }
+        match &self.font_loader {
+            Some(tx) => {
+                let _ = tx.send(rel);
+            }
+            None => {
+                let r = load_font_file(&rel);
+                self.font_loaded(rel, r);
+            }
+        }
+    }
+
+    /// Um arquivo da Biblioteca terminou de abrir.
+    pub fn font_loaded(&mut self, rel: String, result: Result<Arc<SoundFont>, String>) {
+        self.lib_loading.remove(&rel);
+        match result {
+            Ok(sf) => {
+                let used = self.cfg.mix.layers.iter().any(|l| l.preset.as_ref().and_then(|p| p.file.as_ref()) == Some(&rel));
+                if used {
+                    self.lib_fonts.insert(rel, sf);
+                    self.ensure_layer_fonts();
+                }
+            }
+            Err(e) => self.notify(format!("{rel}: {e}")),
+        }
+        self.request_repaint();
     }
 
     // ---------- Ações (tela, mesinha e teclado chamam estas) ----------
@@ -1597,7 +1778,8 @@ impl Core {
             patch: p.patch,
         });
         self.cfg.mix.layers[i].preset = Some(p);
-        self.sync_audible();
+        // v0.35: timbre de outro arquivo → a camada ganha o sintetizador dele (sync_audible vem junto)
+        self.ensure_layer_fonts();
         self.dirty = true;
     }
 
@@ -1607,9 +1789,7 @@ impl Core {
             return;
         }
         let cur = self.cfg.mix.layers[i].preset.as_ref().and_then(|p| {
-            self.presets
-                .iter()
-                .position(|q| q.bank == p.bank && q.patch == p.patch)
+            self.presets.iter().position(|q| q.same(p))
         });
         let n = self.presets.len() as i32;
         let next = match cur {
@@ -1674,6 +1854,7 @@ impl Core {
                     self.apply_scene_extra(x);
                 }
                 self.sync_engine();
+                self.ensure_layer_fonts();
                 if let Some(x) = extra {
                     // pads por último (troca suave se estiver tocando)
                     self.set_pad_bank(x.pad_bank);
@@ -2264,11 +2445,13 @@ impl Core {
                 bank: p.get_bank_number(),
                 patch: p.get_patch_number(),
                 name: p.get_name().trim().to_string(),
+                file: None,
             })
             .collect();
         presets.sort_by_key(|p| (p.bank, p.patch));
         presets.dedup_by_key(|p| (p.bank, p.patch));
-        self.presets = presets;
+        self.main_presets = presets;
+        self.merge_presets();
         self.sound_font = Some(sf);
         self.sf2_name = Some(name);
         self.load_error = None;
@@ -2283,21 +2466,19 @@ impl Core {
         // Atualiza os nomes guardados (caso o SF2 tenha mudado).
         let fix = |l: &mut Layer, presets: &[PresetRef]| {
             if let Some(p) = &mut l.preset {
-                if let Some(q) = presets
-                    .iter()
-                    .find(|q| q.bank == p.bank && q.patch == p.patch)
-                {
+                if let Some(q) = presets.iter().find(|q| q.same(p)) {
                     p.name = q.name.clone();
                 }
             }
         };
         for l in &mut self.cfg.mix.layers {
-            fix(l, &self.presets);
+            fix(l, &self.main_presets);
         }
         self.rebuild_synth();
     }
 
     /// Cria um sintetizador novo com o SF2 atual e manda para o motor.
+    /// v0.35: os das camadas da Biblioteca também são refeitos (taxa de amostragem nova, polifonia...).
     pub fn rebuild_synth(&mut self) {
         if let Some(sf) = &self.sound_font {
             if let Some(synth) = Engine::build_synth(sf, self.sample_rate, self.cfg.polyphony) {
@@ -2305,7 +2486,36 @@ impl Core {
                 self.sync_engine();
             }
         }
+        if self.layer_font.iter().any(|f| f.is_some()) {
+            self.layer_font = Default::default();
+        }
+        self.ensure_layer_fonts();
     }
+}
+
+/// v0.35: abre um arquivo da Biblioteca ("Pads/Hillsong Pad.sf2").
+pub fn load_font_file(rel: &str) -> Result<Arc<SoundFont>, String> {
+    let path = crate::biblioteca::full_path(rel);
+    let f = std::fs::File::open(&path).map_err(|_| "o arquivo não está mais na pasta da Biblioteca".to_string())?;
+    let mut r = std::io::BufReader::with_capacity(1 << 20, f);
+    SoundFont::new(&mut r)
+        .map(Arc::new)
+        .map_err(|e| format!("não é um SF2 válido: {e}"))
+}
+
+/// v0.35: thread que abre os arquivos da Biblioteca fora da tela e do áudio (um por vez).
+pub fn start_font_loader(core: SharedCore) {
+    let (tx, rx) = crossbeam_channel::unbounded::<String>();
+    core.lock().unwrap().font_loader = Some(tx);
+    std::thread::Builder::new()
+        .name("abrir-biblioteca".into())
+        .spawn(move || {
+            while let Ok(rel) = rx.recv() {
+                let r = load_font_file(&rel);
+                core.lock().unwrap().font_loaded(rel, r);
+            }
+        })
+        .expect("thread da Biblioteca");
 }
 
 /// Abre um SF2 em segundo plano (pode levar vários segundos num arquivo de 1,4 GB).
@@ -2562,11 +2772,13 @@ mod tests {
                 bank: 0,
                 patch: 0,
                 name: "Piano".into(),
+                file: None,
             },
             PresetRef {
                 bank: 0,
                 patch: 48,
                 name: "Cordas".into(),
+                file: None,
             },
         ];
         (c, rx)

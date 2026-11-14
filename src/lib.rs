@@ -1,5 +1,6 @@
 //! Piano SF2: programa leve para tocar SF2 ao vivo (igreja) com piano MIDI e mesinha SMC-Mixer.
 
+pub mod biblioteca;
 pub mod blemidi;
 pub mod core;
 pub mod efeitos;

@@ -1,0 +1,105 @@
+# v0.35 Biblioteca NoahPad: os melhores timbres do pacote do Drive do Theo (NÃO publicar: sons de terceiros).
+# pasta | arquivo | id no Google Drive | tamanho em MB (aproximado, só para a barra de progresso)
+Pianos|Nord Grand Piano 3D.sf2|1u0qKRRvmt54p6I_TapDL_h5Hgtigc0nn|246.6
+Pianos|Concert Grand Montage 8.sf2|1zBC6cNt1VYBD_ukryJ6QjAzoXjsXTLOl|85.7
+Pianos|Yamaha CFX Grand.sf2|1LSYtXa-LAHoprMTJoiBZ0no5THVTNNTs|297.6
+Pianos|DEX Italian Grand + Pad.sf2|15YBTOf1hiVeWxYtp99TBdb3X-kHQpQhh|481.2
+EP|Nord Rhodes.sf2|119cA0CEfV9InIdQEI4GrC2U9lcFkolRX|75.3
+EP|Rhodes EPs Plus.sf2|17G5gZjQ-UDuZm_tnzNPb-VTr71fYmsvu|113.2
+EP|Montage EP.sf2|10LVPatqFsp-OKITLO1beQhypUmkbPrIf|87.8
+EP|DX7 Romance Tines.sf2|1RzDy4nin4dEYM0sGLcmrxVi1SjBZkylK|36.2
+EP|CP80 Electric Piano.sf2|1o45Kluuv2jcmPPWzHcHCYMWbeXYXsa_O|43.0
+EP|Wurlitzer VL-1.sf2|1yj_5TbHsFyf1x7LhrqEJC4CB8QXGkA54|15.2
+Organ|Hammond B3.sf2|101Jou5Pb2maO7tTsrIlgeAo9WjMVuPDv|40.6
+Organ|Gospel Organ.sf2|1n_38OnAtes2WMcO0XNoRpGNYA-u3PgDx|20.8
+Organ|Slow B3.sf2|1S7-f79TEpYSEnsRDoZ6WlcVZ7Ki9c2Uj|17.0
+Pads|Hillsong Pad.sf2|1J6UOqKR6yY65aSRz7KG6MKFPszCas4mL|51.3
+Pads|Warm Pad.sf2|1J1nAdDqKSAFZ8zToEGmgNRqCzUdsqnT1|28.7
+Pads|Juno Warm Pad.sf2|1JOMkbK9ZwqugkaFms16KaAcq0OhGMC65|12.1
+Pads|Shimmer Dark.sf2|1S-kB7v-FJzT8DFdc92zlpPvu4DkFrdLR|21.9
+Pads|Angels Pad.sf2|1JGiuycYXPR_vyxKjDEy3hfiLS-yBKSTm|13.8
+Pads|Nord Red Ambient Pad.sf2|1lKVpzugUUVQR_sO7tV7B5MYm-K2_Och6|73.8
+Pads|Nord Pad.sf2|135PpazeOHBrUq_buhdl2Q7NmuYQxZAGL|5.6
+Pads|Oceans Pad.sf2|1oCLwGaum5_0ddK-eX8V-Rk-HxTt-8mmU|30.0
+Pads|Motif DX Pad.sf2|11nSR7Ltfc04fGGQDtruL1X5mPWxFk0zn|59.1
+Pads|Continuous Warm Pad.sf2|1S937upcdXCGeB-ik0R02nhz5e7-bGrOk|100.6
+Pads|Analog Pad Bright.sf2|11Yy6RnGsF334is08s1YwoeziQwWo6u7H|61.5
+Pads|Bright Pad 98.sf2|1iFhOIl4_zn2JBYykQytiC5w3BuB5GmhF|6.3
+Pads|Atmospherics.sf2|12gkOmEJvFxxtQF4-lhRcr2L_n0y7BZMo|35.7
+Pads|Dawn.sf2|12jgSBnTLxZx39zMM8VwYzUEi-WyEgu7T|35.7
+Pads|Breathing.sf2|1391P-3eSa0as5dQQ70axa5cRvbiO9k_x|43.3
+Pads|Deep Atmos.sf2|1oMMhtnPuyQGz5GmYCGKR9eDvCltWTSJs|43.1
+Pads|LoFi Pad.sf2|1JkKTqlkrqxLy2Bc3l0xvyw5vS5VglQ_d|19.6
+Pads|Sky Pad.sf2|134nkQPruTSdg9aK76JYWmWqlcjT6BEOl|2.3
+Pads|Silky Pad.sf2|1Ud4VipnJFn-ys1k3j0kim8JYs4E0DtUX|1.2
+Pads|Shine On Pad.sf2|1ZA-bDPUJajnXupap5DC-a2qoupaAYAgY|1.0
+Pads|Soft Warm Pad.sf2|1J-hpoBe43OHOcJzfJx9u55e3JxzuQ8Lp|1.3
+Pads|JP8000 Big Pad.sf2|1SDVoUJkIwUG1GXkAQPgNrqk3eq9mEE1h|1.2
+Pads|Polar Night.sf2|12bB2VD3eiUk6dkK8M_b_3TbvwLUviUWh|14.5
+Pads|Distant Sun.sf2|13EKKR39hhydYFj5zRhcSknogajf3lcdX|14.7
+Pads|Whisper Pad.sf2|14UrbgFdokkJ0kc7MYA2voqQ-_0RJuyt8|14.7
+Pads|Filmscape.sf2|13Lc6mY2jP1iaETNPjoEOSjsWPFFfbYsk|14.6
+Strings|Strings Ensemble.sf2|1LfodnRIiP20jtt7TlaL7Nf7fEA5J3nmt|84.5
+Strings|Eletigna Strings.sf2|1DR9e0cE284qMUEpaV_ApvT1gOdOmNUJB|50.8
+Strings|Legato Strings.sf2|1LPioYnswPqLaHsCbssA5E3OVPRgsvziE|1.6
+Strings|Hollywood Strings.sf2|1DAz81p5fen3F6sFtl-afcZstm5Pgdywq|3.7
+Strings|Triton Legato Strings.sf2|1w26b__cx3WFY81fSDSfwvoiu-YCB4663|3.0
+Strings|JX-3P Synth Strings.sf2|1y-5xVGigt3D5PBBaE8-HkRa_G5G6N_H3|0.4
+Strings|OBX Strings.sf2|1gmGQX1ZGjlsh6R64Z264HWVIlca8Qwtl|0.3
+Strings|Marcato Strings.sf2|15ZBKrBNB1Qu1_-06x1rEBCOgqZybmq4m|4.0
+Strings|Strings Tremolo.sf2|1dUV1vs_iXwBbnvevNaaLdCL86UnllHSq|7.2
+Strings|Cello.sf2|1FH4Ob0mFv4YqDeMUdDiRveG1qOZYK6F7|22.1
+Strings|Violin.sf2|1KNOFIkS29szGmpUkMgb9gic3zTjGeVGw|3.5
+Strings|Orchestra Hit.sf2|1D_zLBuG0GpQcamLmnaoeVdRA-LeJnB0O|1.8
+Synths|Millennium Synths.sf2|1qnuJdIepgoWPTJqNn61fztQIWpql8Xlx|89.0
+Synths|Nord Lead.sf2|1TY_BlUm3uy1NWZCAjrKVOF9ViMeuwJEA|9.9
+Synths|Moog.sf2|1a951Y1QimIh-nRX_4CNFkZ0OKzbtyM5B|45.8
+Synths|Fat Moog Bass.sf2|15UghxU-0QrTpqKKyo_nfoyQIC72nv34w|7.5
+Synths|Sine Moog.sf2|1cxwz4mY4DDmV4qcsjdPzy1tB3OKAy7m4|29.4
+Synths|Saw Synth.sf2|1071q2VtVpkkP7SuzyP_oY3rxpYnJ2c6k|20.0
+Synths|Edge Saw Lead.sf2|15HDXAXHJ82zScDZb37WWefmwk3j5WZ_4|15.5
+Synths|Lead Galileu.sf2|1n-g_yqGaou5oHGUGeYSVLqcvevJnbmus|7.4
+Synths|Dukes Lead.sf2|16H7TPRblmoEoRcPXOSyEFbhqT5cyl5Sj|6.6
+Synths|Moogy Bass.sf2|1VHTnuYRrXz1I_qj5aGvFIvClylxLrp27|6.1
+Synths|M1 Mono Synth.sf2|1j0q4FQhVs9WwQcTfeZbWQwWQ2E3rI6Vn|10.6
+Synths|Galaxy DX.sf2|11za2_lp_OpRzjED608oHnGzi2EB9uwq1|26.8
+Synths|Synths & Keys.sf2|1DWlCBeQaffef591jrMj7-zHxbtYVvGpH|11.7
+Synths|Nord Rave Lead.sf2|1EAH0hVY1rn8agAH52I2tJ3SGDByxLyDZ|2.0
+Synths|Elf Synth Pads.sf2|1pKuZ4M_WQuR-wa07erG6FqzTbx0CNai2|6.8
+Effects|Mobile FX Worship.sf2|1VrRHbHwIcKQz7rpd5QzJGse2ML33SoMG|57.9
+Effects|Reverse.sf2|1UobzhyK9u7e_kky1hIdUTfvDmFGfGhwQ|177.8
+Effects|Fantasia Bells.sf2|1jEx8U8EfBXtdG3kfel3MEoa5eeZxxKMx|27.2
+Effects|Bells & Pad.sf2|18m-a88RFZcmLSX1JWFuocTMB6dJdeBmh|22.1
+Effects|Celesta.sf2|1R2crA8ebE2XekwdO6JBBIChYFvdSbY6j|7.4
+Effects|Synth FX.sf2|183XOgc99WfeeUDuUagKGvsPr6pTOG4CG|1.7
+Effects|Reverse Sweep.sf2|13b-ahatW1etlTRxdOIoi8KwOMOZ6MTLo|18.3
+Effects|Metal Swell.sf2|13eIhn1oNEaDVDypTgB90NicfF_x5c9q0|14.7
+Voices|Super Voice.sf2|1reYWMYRRdzy8ARyDJTzqSvWi3eWXpjBB|8.8
+Voices|Voice Wave M1.sf2|1PaNQDuP5JAvkKiwjH-1fr-dGDNGwkXLT|1.7
+Voices|Choir Laa.sf2|1pDWH8905OQa8Yexu6BSs7W-tdr2-sOMj|0.2
+Voices|Crying Angels.sf2|12co2WiGdsrCQnreH-JfrRZBfEdBf2FOq|37.1
+Voices|Ooh La La.sf2|14ypo4UuUxNOTJiP3aNhHPJ2OS2oQcoCQ|14.7
+Pads 12 tons/Dream Shimmer|C.wav|1k2y_6EyMD_zzn79Z8k-GQd_kRPK-l-7l|5.1
+Pads 12 tons/Dream Shimmer|C#.wav|1Vt749tdW09V1i7cwmYGuZ77HYMpr-04b|5.1
+Pads 12 tons/Dream Shimmer|D.wav|1-JdrfXIQ3YTEJ9CJkUrX0abWMi0GS371|5.1
+Pads 12 tons/Dream Shimmer|D#.wav|1Wp-zpwkI4a192OXKHb9emq5aeeSOg2vV|5.1
+Pads 12 tons/Dream Shimmer|E.wav|1DDjiWJtYNP4ELOU0F9VKE64414cyiqlG|5.1
+Pads 12 tons/Dream Shimmer|F.wav|1TK_qCa8e_yGdPYWFMpcbW18QSiwhdLWD|5.1
+Pads 12 tons/Dream Shimmer|F#.wav|13LGY9SzbdjMw6_GNm-IzhmClXBV7nvN0|5.1
+Pads 12 tons/Dream Shimmer|G.wav|1M07iTEMd0xQCafMoqoUkcELZ4QoZYgS-|5.1
+Pads 12 tons/Dream Shimmer|G#.wav|18h0mFGVlM-_RVtRU66sQ_f9C1B3K7VZd|5.1
+Pads 12 tons/Dream Shimmer|A.wav|1vrWBQnXlcp0fB7fm5kywlTrSfX0pI0CO|5.1
+Pads 12 tons/Dream Shimmer|A#.wav|1Cs_9pBjwQmi4UpkOqFSJVeh2NyD8G6XW|5.1
+Pads 12 tons/Dream Shimmer|B.wav|10QTFs5cedEzelpt7CRGPvnAKMUia17Gq|5.1
+Pads 12 tons/Reverse Waves|C.wav|1MAnW4jtncC8y63EHcAM7hrrPOBdu3D5c|10.1
+Pads 12 tons/Reverse Waves|C#.wav|1c4fsxnbiMlQefTIGK5Fq_-aZQMSXuekh|10.1
+Pads 12 tons/Reverse Waves|D.wav|1TbialI1lM2LDw-KfVnikGbCBnuXZKPhS|10.1
+Pads 12 tons/Reverse Waves|D#.wav|1RTczAk9N40D0SIYWPKvaqdzodBApR2N4|10.1
+Pads 12 tons/Reverse Waves|E.wav|1z8ntNhNA9CraHc741-1L6cjv4OYmpqKY|10.1
+Pads 12 tons/Reverse Waves|F.wav|1Gp4rvR07vCg6D3Crl1K1T07JTeI5vNnZ|10.1
+Pads 12 tons/Reverse Waves|F#.wav|1q0qBbTn31h5ph5wndZBHrae7QMiH3ev6|10.1
+Pads 12 tons/Reverse Waves|G.wav|12CebFefhKhmHxe-dyCTYBJqXyP2Mz9jV|10.1
+Pads 12 tons/Reverse Waves|G#.wav|1y-tw8yi-gt0iV5CsirAGv8rL8Jl6btPE|10.1
+Pads 12 tons/Reverse Waves|A.wav|1VB-AbwgzKQBJCE6NKX__uwpBKR7RgsX3|10.1
+Pads 12 tons/Reverse Waves|A#.wav|1gtlix6p_io2zIV1-xXwnf4vmqaVfATIC|10.1
+Pads 12 tons/Reverse Waves|B.wav|1I37kuAjgNp2X_YuFuEYrKQF9Hqrk_kvG|10.1

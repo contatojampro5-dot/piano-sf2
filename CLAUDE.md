@@ -88,6 +88,13 @@ assistente de **"Zeus"**. Responda sempre em português, simples e direto. Theo 
   `Arp::next_phrase_note`; Learn sem travar o core: `core::mark_note` grava em `PHRASE_NOTES` quando `PHRASE_REC`
   (`phrase_learn_start/finish`, `phrase_recording/recorded`); gravando, o arpejo vai desligado ao motor.
   `cfg.efeitos.arp_phrase/arp_follow`. Tela no bloco Arpeggiator (`phrase_chips`, `REC_COLOR`).
+- v0.35: Biblioteca — `src/biblioteca.rs` (lista `assets/biblioteca.txt`: pasta|arquivo|id do Drive|MB; `read_presets` lê só o
+  `phdr`; `scan`; `DownloadAll` via curl). `PresetRef.file` (None = SF2 principal); `core.presets` = `main_presets` +
+  `lib_presets`; `ensure_layer_fonts` abre (thread `start_font_loader`) e solta os arquivos; `layer_ready` deixa a camada
+  muda até abrir. Motor: `Engine.extra[layer]` (sintetizador próprio, `Cmd::LayerSynth`), `syn(i)` escolhe qual toca.
+  Pads: `PadClip.per_key` (12 tons) + `clip_for_key`; `LIB_PADS` ("tons:X" / "sf2:arq#b:p", `render_sf2_pad`),
+  `cfg.lib_pads_added`; `read_plain_wav` (WAV que o symphonia recusa). Voice FX: `TextureVoice.lib` + `texture_available`.
+  DrumPads 11–16: `biblioteca::LIB_DRUMS` gravados em WAV (`make_lib_drums`), `cfg.lib_drums_added`. NÃO publicar os sons.
 - Mapeamento padrão em `smc_default_mappings()`; mudou o padrão → subir `MAPPINGS_VERSION` (migra configs
   antigas sem apagar o que o Theo aprendeu). Assistente "Configurar mesinha" = `Wizard` em `core.rs`.
 - Visual (v0.5): `src/theme.rs` (temas, vidro `glass()`, fundo `paint_background`), cores via `th()`; ajustes em `cfg.look`.

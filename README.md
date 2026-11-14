@@ -194,6 +194,24 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+### v0.35 — Biblioteca NoahPad (os melhores sons do pacote do Drive)
+- **103 arquivos (3,3 GB)** escolhidos do pacote do Drive: pianos (Nord Grand 3D, Yamaha CFX, Montage, DEX Italian + Pad),
+  **EP** (Nord Rhodes, Rhodes EPs Plus, Montage EP, DX7 Romance Tines, CP80, Wurlitzer), **órgãos** (Hammond B3, Gospel),
+  **pads**, **strings**, **synths** (Millennium, Nord Lead, Moog…), **effects** e **vozes**. Ficam em
+  `%APPDATA%\PianoSF2\sons\biblioteca\<categoria>` (Pianos, EP, Organ, Pads, Strings, Synths, Effects, Voices).
+- Todos entram na **mesma lista de timbres** do Sons SF2 (com ★ e a categoria do lado), junto do seu SF2. Chips no
+  topo da lista: Todos · Meu SF2 · Piano · EP · Órgão · Pads · Strings · Synths · Effects · Vozes.
+- **Cada camada pode usar um arquivo diferente** (camada 1 piano Nord, camada 2 pad Hillsong...). Só o arquivo que
+  alguma camada usa fica na memória; enquanto abre, o nome mostra ⏳ e a camada espera (não toca timbre errado).
+- **Pads em dois lugares**: na lista de timbres e na aba **Pads** com nomes de astros: **Sol** (Dream Shimmer) e
+  **Lua** (Reverse Waves), gravados nos 12 tons; **Mercúrio** (Hillsong Pad), **Urano** (Warm Pad), **Plutão**
+  (Shimmer Dark) e **Cometa** (Oceans Pad), gravados pelo programa a partir do SF2 (tônica + quinta, servem para maior e menor).
+- **Voice FX**: 3 vozes novas com nome de constelação: **Fênix** (Super Voice), **Pégaso** (Crying Angels) e **Cisne** (Ooh La La).
+- **DrumPads 11 a 16**: efeitos do Mobile FX Worship: Boom, Hit FX, Swell, Riser FX, Reverse FX e Whoosh.
+- **⚙ → Sons grátis → ★ Biblioteca NoahPad → ⬇ Baixar tudo**: num notebook novo, baixa o que faltar do Google Drive
+  (um arquivo por vez, com barra de progresso; "Parar" a qualquer hora).
+- **Não publicar**: são sons de terceiros (pacote do Drive), só para uso do Theo.
+
 ### v0.34 — Frase no Arpeggiator (Sequencer de notas, com Learn)
 - No bloco **Arpeggiator**, dois botões: **Arpejo** (as notas do acorde, uma a uma) e **Frase** (Sequencer de notas).
 - **● Learn**: aperte e toque as notas no teclado (até 16); **✔ Pronto** guarda, **✖ Cancelar** mantém a de antes.

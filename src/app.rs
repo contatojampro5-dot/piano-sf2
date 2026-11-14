@@ -11,7 +11,7 @@ use eframe::egui::{
 };
 
 use crate::audio::{self, Audio};
-use crate::core::{load_sf2_async, start_pad_loader, Core, SharedCore};
+use crate::core::{load_sf2_async, start_font_loader, start_pad_loader, Core, SharedCore};
 use crate::engine::{Cmd, Engine, Garbage, Stats};
 use crate::midi::{self, BtCmd, SharedMidiStatus};
 use crate::model::*;
@@ -40,6 +40,8 @@ struct UiState {
     picker: Option<usize>,
     picker_search: String,
     picker_focus: bool,
+    /// v0.35: categoria escolhida no seletor de timbres ("" = todos).
+    picker_cat: String,
     settings: bool,
     /// Modo Editar: tirar/colocar coisas da tela.
     editing: bool,
@@ -58,6 +60,11 @@ struct UiState {
     /// Janela "Sons grátis" e o download em andamento.
     sons_open: bool,
     download: Option<sons::Download>,
+    /// v0.35: "Baixar tudo" da Biblioteca (um arquivo por vez) e quantos já estão no notebook.
+    lib_dl: Option<crate::biblioteca::DownloadAll>,
+    lib_frac: f32,
+    lib_file: String,
+    lib_count: Option<(usize, usize, u64)>,
     dl_frac: f32,
     sons_msg: Option<(bool, String)>,
     /// Nota do som próprio do Pad Vivo (0 = C ... 11 = B).
@@ -129,6 +136,8 @@ impl PianoApp {
         let ctx = cc.egui_ctx.clone();
         core.repaint = Some(Box::new(move || ctx.request_repaint()));
         let core: SharedCore = Arc::new(Mutex::new(core));
+        // v0.35: arquivos da Biblioteca abrem numa thread própria (antes do áudio: nada trava a abertura)
+        start_font_loader(core.clone());
 
         let mut audio = Audio::new(engine);
         {
@@ -147,6 +156,13 @@ impl PianoApp {
         }
 
         start_pad_loader(core.clone());
+        // v0.35: timbres baixados da Biblioteca entram na lista do Sons SF2 (e os pads novos nos Meus pads)
+        {
+            let mut c = core.lock().unwrap();
+            c.set_library(crate::biblioteca::scan());
+            c.add_library_pads();
+            c.add_library_drums();
+        }
 
         let midi_status: SharedMidiStatus = Default::default();
         let midi_rescan = Arc::new(AtomicBool::new(true));
@@ -169,6 +185,7 @@ impl PianoApp {
                 picker: None,
                 picker_search: String::new(),
                 picker_focus: false,
+                picker_cat: String::new(),
                 settings: false,
                 editing: false,
                 bt_open: false,
@@ -181,6 +198,10 @@ impl PianoApp {
                 load_sf2: None,
                 sons_open: false,
                 download: None,
+                lib_dl: None,
+                lib_frac: 0.0,
+                lib_file: String::new(),
+                lib_count: None,
                 dl_frac: 0.0,
                 sons_msg: None,
                 vivo_root_key: 0,
@@ -344,7 +365,12 @@ impl eframe::App for PianoApp {
         );
         rename_window(&ctx, &mut core, &mut self.ui);
         bt_window(&ctx, &mut self.ui, &self.midi_status, &self.bt);
-        sons_window(&ctx, &core, &mut self.ui);
+        if sons_window(&ctx, &core, &mut self.ui) {
+            // v0.35: chegaram sons da Biblioteca: entram na lista de timbres (e os pads novos)
+            core.set_library(crate::biblioteca::scan());
+            core.add_library_pads();
+            core.add_library_drums();
+        }
         // v0.15: diz à thread do MIDI o que do teclado é controle (Aprender ligado/desligado pela tela).
         core.sync_piano_hooks();
         drop(core);
@@ -1545,6 +1571,7 @@ fn efeitos_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
             let textures: Vec<(String, usize, &str)> = pads::TEXTURE_VOICES
                 .iter()
                 .enumerate()
+                .filter(|(i, _)| pads::texture_available(*i)) // v0.35: as da Biblioteca só depois de baixar
                 .map(|(i, t)| (t.name.to_string(), pads::TEXTURE_BASE + i, t.hint))
                 .collect();
             let mut ball_click = false;
@@ -2664,6 +2691,18 @@ fn pads_page(ui: &mut Ui, core: &mut Core, st: &mut UiState) {
                                         path.starts_with("livre:")
                                             .then(|| format!("sons {}", pads::FREE_CREDIT))
                                     })
+                                    // v0.35: pads da Biblioteca
+                                    .or_else(|| {
+                                        path.strip_prefix("tons:").map(|s| format!("★ Biblioteca: {s}, gravado nos 12 tons"))
+                                    })
+                                    .or_else(|| {
+                                        path.strip_prefix("sf2:")
+                                            .and_then(|s| s.split_once('#'))
+                                            .map(|(rel, _)| {
+                                                let name = rel.rsplit('/').next().unwrap_or(rel).trim_end_matches(".sf2");
+                                                format!("★ Biblioteca: {name} (SF2)")
+                                            })
+                                    })
                                     .unwrap_or_else(|| "o programa descobriu o tom pelo som".into());
                                 ui.add_space(12.0);
                                 ui.label(RichText::new(credit).size(12.0).color(th().dim));
@@ -2977,7 +3016,8 @@ fn pad_button(ui: &mut Ui, core: &mut Core, st: &mut UiState, key: usize, size: 
 
 // ---------- Bluetooth (conectar a mesinha direto) ----------
 
-fn sons_window(ctx: &egui::Context, core: &Core, st: &mut UiState) {
+fn sons_window(ctx: &egui::Context, core: &Core, st: &mut UiState) -> bool {
+    let rescan = library_poll(ctx, st);
     if let Some(dl) = &mut st.download {
         match dl.poll() {
             sons::Poll::Running(f) => {
@@ -2999,7 +3039,8 @@ fn sons_window(ctx: &egui::Context, core: &Core, st: &mut UiState) {
         }
     }
     if !st.sons_open {
-        return;
+        st.lib_count = None;
+        return rescan;
     }
     let mut open = true;
     let current = core.cfg.sf2_path.clone().unwrap_or_default();
@@ -3017,6 +3058,8 @@ fn sons_window(ctx: &egui::Context, core: &Core, st: &mut UiState) {
                     .color(th().dim),
             );
             ui.add_space(6.0);
+            library_card(ui, st);
+            ui.add_space(4.0);
             for (i, p) in sons::CATALOG.iter().enumerate() {
                 let path = sons::path(p).to_string_lossy().to_string();
                 let have = sons::installed(p);
@@ -3096,6 +3139,85 @@ fn sons_window(ctx: &egui::Context, core: &Core, st: &mut UiState) {
     if !open {
         st.sons_open = false;
     }
+    rescan
+}
+
+/// v0.35: anda com o "Baixar tudo" da Biblioteca (mesmo com a janela fechada). true = terminou (ler a pasta de novo).
+fn library_poll(ctx: &egui::Context, st: &mut UiState) -> bool {
+    let Some(dl) = &mut st.lib_dl else { return false };
+    match dl.poll() {
+        crate::biblioteca::Poll::Running(f, file) => {
+            st.lib_frac = f;
+            st.lib_file = file;
+            ctx.request_repaint_after(std::time::Duration::from_millis(300));
+            false
+        }
+        crate::biblioteca::Poll::Done => {
+            let failed = dl.failed.len();
+            st.sons_msg = Some(if failed == 0 {
+                (true, "Biblioteca completa! Os sons já estão na lista de timbres de cada camada (★).".into())
+            } else {
+                (false, format!("{failed} arquivos não vieram (internet?). Clique em Baixar tudo de novo para tentar só eles."))
+            });
+            st.lib_dl = None;
+            st.lib_count = None;
+            true
+        }
+    }
+}
+
+/// v0.35: cartão da Biblioteca NoahPad na janela "Sons grátis".
+fn library_card(ui: &mut Ui, st: &mut UiState) {
+    let (have, total, missing_bytes) = *st.lib_count.get_or_insert_with(|| {
+        let all = crate::biblioteca::entries();
+        let missing: Vec<_> = all.iter().filter(|e| !e.path().exists()).collect();
+        (all.len() - missing.len(), all.len(), missing.iter().map(|e| e.bytes).sum())
+    });
+    let accent = PAD_COLOR;
+    egui::Frame::new()
+        .fill(th().glass)
+        .stroke(Stroke::new(1.0, accent.gamma_multiply(0.6)))
+        .corner_radius(10.0)
+        .inner_margin(10.0)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("★ Biblioteca NoahPad").size(16.0).strong().color(accent));
+                ui.label(RichText::new(format!("{total} sons · {:.1} GB", crate::biblioteca::total_bytes() as f64 / 1e9)).color(th().dim));
+                if have == total {
+                    ui.label(RichText::new("✔ tudo no notebook").color(GREEN));
+                }
+            });
+            ui.label(
+                RichText::new("Os melhores do seu pacote: pianos (Nord, CFX, DEX), EPs (Rhodes, DX7), órgãos, pads, strings, synths, effects e vozes. Aparecem com ★ na lista de timbres de cada camada, e os pads também na aba Pads (Sol, Lua, Mercúrio...).")
+                    .size(13.0),
+            );
+            ui.label(RichText::new("Só para uso seu: não compartilhe esses arquivos.").size(11.0).color(th().dim));
+            ui.horizontal(|ui| {
+                if st.lib_dl.is_some() {
+                    let f = st.lib_frac;
+                    ui.add(
+                        egui::ProgressBar::new(f)
+                            .desired_width(300.0)
+                            .text(format!("{:.0}% · {}", f * 100.0, st.lib_file)),
+                    );
+                    if ui.button("Parar").clicked() {
+                        if let Some(dl) = st.lib_dl.take() {
+                            dl.cancel();
+                        }
+                        st.lib_count = None;
+                    }
+                } else if have < total {
+                    let label = format!("⬇ Baixar tudo (faltam {} · {:.1} GB)", total - have, missing_bytes as f64 / 1e9);
+                    if ui.add(egui::Button::new(RichText::new(label).color(th().ink)).fill(ORANGE)).clicked() {
+                        st.lib_dl = Some(crate::biblioteca::DownloadAll::start());
+                        st.lib_frac = 0.0;
+                        st.sons_msg = None;
+                    }
+                    ui.label(RichText::new(format!("{have} de {total} já baixados")).size(12.0).color(th().dim));
+                }
+            });
+        });
 }
 
 fn bt_window(
@@ -3637,7 +3759,7 @@ fn strip(ui: &mut Ui, core: &mut Core, st: &mut UiState, i: usize, size: Vec2) -
     let name = layer
         .preset
         .as_ref()
-        .map(|p| p.name.clone())
+        .map(|p| if core.layer_loading(i) { format!("⏳ {}", p.name) } else { p.name.clone() })
         .unwrap_or_else(|| "— escolher —".into());
     let name_resp = ui.add_sized(
         [inner.width(), if compact { 28.0 } else { 34.0 }],
@@ -4867,11 +4989,11 @@ fn preset_picker(ctx: &egui::Context, core: &mut Core, st: &mut UiState) {
     egui::Window::new(format!("Timbre da camada {}", layer + 1))
         .open(&mut open)
         .collapsible(false)
-        .default_size([460.0, 520.0])
+        .default_size([520.0, 560.0])
         .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
         .show(ctx, |ui| {
             if core.presets.is_empty() {
-                ui.label("Abra um arquivo SF2 primeiro (botão 📂 lá em cima).");
+                ui.label("Abra um arquivo SF2 primeiro (botão 📂 lá em cima) ou baixe a Biblioteca (⚙ → Sons grátis).");
                 return;
             }
             let r = ui.add(
@@ -4883,11 +5005,43 @@ fn preset_picker(ctx: &egui::Context, core: &mut Core, st: &mut UiState) {
                 r.request_focus();
                 st.picker_focus = false;
             }
+            // v0.35: categoria de cada timbre (os do SF2 aberto ficam em "Meu SF2")
+            let cat = |p: &PresetRef| -> &'static str {
+                match &p.file {
+                    Some(f) => crate::biblioteca::category_of(f),
+                    None => "Meu SF2",
+                }
+            };
+            let mut cats: Vec<&'static str> = Vec::new();
+            if core.presets.iter().any(|p| p.file.is_none()) {
+                cats.push("Meu SF2");
+            }
+            for (_, name) in crate::biblioteca::CATEGORIES {
+                if core.presets.iter().any(|p| p.file.is_some() && cat(p) == name) {
+                    cats.push(name);
+                }
+            }
+            if cats.len() > 1 {
+                ui.add_space(4.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = Vec2::new(5.0, 5.0);
+                    for c in std::iter::once("Todos").chain(cats.iter().copied()) {
+                        let sel = if c == "Todos" { st.picker_cat.is_empty() } else { st.picker_cat == c };
+                        let b = egui::Button::selectable(sel, RichText::new(c).size(13.5)).corner_radius(12.0);
+                        if ui.add(b).clicked() {
+                            st.picker_cat = if c == "Todos" { String::new() } else { c.to_string() };
+                        }
+                    }
+                });
+            } else {
+                st.picker_cat.clear();
+            }
             let q = st.picker_search.to_lowercase();
             let list: Vec<&PresetRef> = core
                 .presets
                 .iter()
-                .filter(|p| q.is_empty() || p.name.to_lowercase().contains(&q))
+                .filter(|p| st.picker_cat.is_empty() || cat(p) == st.picker_cat)
+                .filter(|p| q.is_empty() || p.name.to_lowercase().contains(&q) || cat(p).to_lowercase().contains(&q))
                 .collect();
             let current = core.cfg.mix.layers[layer].preset.clone();
             if ui.input(|i| i.key_pressed(Key::Enter)) {
@@ -4907,16 +5061,22 @@ fn preset_picker(ctx: &egui::Context, core: &mut Core, st: &mut UiState) {
                 list.len(),
                 |ui, range| {
                     for p in &list[range] {
-                        let sel = current
-                            .as_ref()
-                            .map(|c| c.bank == p.bank && c.patch == p.patch)
-                            .unwrap_or(false);
-                        let text =
-                            RichText::new(format!("{:03}:{:03}   {}", p.bank, p.patch + 1, p.name))
-                                .size(15.0);
+                        let sel = current.as_ref().is_some_and(|c| c.same(p));
+                        let text = match p.file {
+                            None => RichText::new(format!("{:03}:{:03}   {}", p.bank, p.patch + 1, p.name)).size(15.0),
+                            Some(_) => RichText::new(format!("★  {}", p.name)).size(15.0),
+                        };
                         let btn = egui::Button::selectable(sel, text)
                             .min_size(Vec2::new(ui.available_width(), row_h - 4.0));
                         let r = ui.add(btn);
+                        // categoria em cinza no canto direito
+                        ui.painter().text(
+                            Pos2::new(r.rect.right() - 10.0, r.rect.center().y),
+                            Align2::RIGHT_CENTER,
+                            cat(p),
+                            FontId::proportional(12.0),
+                            th().dim,
+                        );
                         if r.clicked() {
                             chosen = Some((*p).clone());
                         }
@@ -4925,6 +5085,9 @@ fn preset_picker(ctx: &egui::Context, core: &mut Core, st: &mut UiState) {
             );
         });
     if let Some(p) = chosen {
+        if p.file.is_some() {
+            core.notify(format!("{}: abrindo o som…", p.name));
+        }
         core.set_preset(layer, p);
         if !core.cfg.mix.layers[layer].on {
             core.set_on(layer, true);

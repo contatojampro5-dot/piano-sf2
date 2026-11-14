@@ -7,7 +7,7 @@ use rustysynth::SoundFont;
 
 use crate::core::Core;
 use crate::engine::{Cmd, Engine, Stats};
-use crate::model::{Config, Target};
+use crate::model::{Config, PresetRef, Target};
 
 fn chunk(id: &[u8; 4], data: &[u8]) -> Vec<u8> {
     let mut v = id.to_vec();
@@ -1678,7 +1678,7 @@ fn v031_sons_da_pixabay_viram_vozes_do_voice_fx() {
     assert_eq!(crate::efeitos::drum_default_name(9), "Prayer");
 
     // as 6 texturas abrem e soam só enquanto você toca
-    for n in 0..crate::pads::TEXTURE_VOICES.len() {
+    for n in (0..crate::pads::TEXTURE_VOICES.len()).filter(|&n| crate::pads::TEXTURE_VOICES[n].lib.is_none()) {
         let t = crate::pads::load_texture_voice(n).unwrap();
         assert!(t.l.len() > t.rate as usize * 7, "{} é longa", crate::pads::TEXTURE_VOICES[n].name);
         let mut fx = crate::efeitos::VoiceFx::new();
@@ -1906,4 +1906,133 @@ fn v034_learn_grava_as_notas_tocadas() {
     let c: Config = serde_json::from_str(r#"{"efeitos":{"arp_pattern":2}}"#).unwrap();
     assert!(c.efeitos.arp_phrase.is_empty());
     assert_eq!(c.efeitos.arp_pattern, 2);
+}
+
+// ---------- v0.35: Biblioteca (timbre de outro arquivo em cada camada) ----------
+
+#[test]
+fn v035_le_nomes_dos_timbres_sem_abrir_o_som() {
+    let dir = std::env::temp_dir().join("noahpad-teste-v035");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("tiny.sf2");
+    std::fs::write(&path, tiny_sf2()).unwrap();
+    let names = crate::biblioteca::read_presets(&path).unwrap();
+    let sf = SoundFont::new(&mut &tiny_sf2()[..]).unwrap();
+    assert_eq!(names.len(), sf.get_presets().len());
+    for p in sf.get_presets() {
+        assert!(
+            names.iter().any(|n| n.bank == p.get_bank_number() && n.patch == p.get_patch_number() && n.name == p.get_name().trim()),
+            "{}",
+            p.get_name()
+        );
+    }
+    // arquivo que não é SF2
+    std::fs::write(dir.join("ruim.sf2"), b"RIFF\x04\x00\x00\x00WAVE").unwrap();
+    assert!(crate::biblioteca::read_presets(&dir.join("ruim.sf2")).is_err());
+}
+
+#[test]
+fn v035_camada_toca_timbre_de_outro_arquivo() {
+    let mut r = rig();
+    r.render(256);
+    // "abre" um arquivo da Biblioteca (aqui: o mesmo SF2 de teste com outro nome)
+    let lib = Arc::new(SoundFont::new(&mut &tiny_sf2()[..]).unwrap());
+    let rel = "Pads/Teste.sf2".to_string();
+    r.core.lib_fonts.insert(rel.clone(), lib);
+    let main = r.core.presets[0].clone();
+    let p = PresetRef { file: Some(rel.clone()), name: "Teste".into(), ..main.clone() };
+    // camada 1 só com o timbre do outro arquivo
+    r.core.set_preset(0, p.clone());
+    assert!(r.core.layer_ready(0));
+    r.core.handle_piano(&[0x90, 60, 100]);
+    let lib_only = rms(&r.render(4800));
+    assert!(lib_only > 0.01, "timbre da Biblioteca toca: {lib_only}");
+    r.core.handle_piano(&[0x80, 60, 0]);
+    r.core.panic();
+    r.render(4800);
+    // camada 2 com o SF2 principal: as duas somam
+    r.core.set_preset(1, main.clone());
+    r.core.set_on(1, true);
+    r.core.handle_piano(&[0x90, 60, 100]);
+    let both = rms(&r.render(4800));
+    assert!(both > lib_only * 1.3, "principal + Biblioteca somam: {lib_only} → {both}");
+    r.core.handle_piano(&[0x80, 60, 0]);
+    r.core.panic();
+    r.render(4800);
+    // volta a camada 1 para o principal: o arquivo da Biblioteca sai da memória
+    r.core.set_preset(0, main);
+    assert!(r.core.lib_fonts.is_empty(), "arquivo sem uso sai da memória");
+    r.core.handle_piano(&[0x90, 60, 100]);
+    assert!(rms(&r.render(4800)) > 0.01);
+}
+
+#[test]
+fn v035_timbre_ainda_abrindo_fica_mudo_e_lista_junta() {
+    let mut r = rig();
+    r.render(256);
+    let n_main = r.core.presets.len();
+    r.core.set_library(vec![crate::biblioteca::LibPreset {
+        rel: "Pads/NaoExiste.sf2".into(),
+        bank: 0,
+        patch: 0,
+        name: "Pad Fantasma".into(),
+    }]);
+    assert_eq!(r.core.presets.len(), n_main + 1, "a Biblioteca entra na mesma lista");
+    assert_eq!(r.core.presets.last().unwrap().file.as_deref(), Some("Pads/NaoExiste.sf2"));
+    let p = r.core.presets.last().unwrap().clone();
+    r.core.set_preset(0, p);
+    // o arquivo não existe: não trava, avisa e a camada não toca o timbre errado do principal
+    assert!(!r.core.layer_ready(0));
+    assert!(r.core.toast.is_some());
+    r.core.handle_piano(&[0x90, 60, 100]);
+    assert!(rms(&r.render(4800)) < 1e-4, "camada sem o arquivo fica muda");
+    // config antiga (sem "file") continua abrindo
+    let old: PresetRef = serde_json::from_str(r#"{"bank":0,"patch":3,"name":"Piano"}"#).unwrap();
+    assert_eq!(old.file, None);
+    assert!(!serde_json::to_string(&old).unwrap().contains("file"));
+}
+
+#[test]
+fn v035_pad_de_12_tons_usa_a_gravacao_do_tom() {
+    let k: Vec<Arc<crate::pads::PadClip>> = (0..12)
+        .map(|i| Arc::new(crate::pads::PadClip { data: vec![i as i16; 8820], rate: 44_100, per_key: Vec::new() }))
+        .collect();
+    let set = Arc::new(crate::pads::PadClip { data: k[0].data.clone(), rate: 44_100, per_key: k });
+    for key in 0..12 {
+        let (c, pitch) = crate::pads::clip_for_key(&set, 0, key);
+        assert_eq!(c.data[0], key as i16, "tom {key} usa a própria gravação");
+        assert_eq!(pitch, 1.0, "sem mudar a altura");
+    }
+    // pad comum continua mudando a altura
+    let one = Arc::new(crate::pads::PadClip { data: vec![0; 8820], rate: 44_100, per_key: Vec::new() });
+    let (_, pitch) = crate::pads::clip_for_key(&one, 7, 9);
+    assert!((pitch - 2f32.powf(2.0 / 12.0)).abs() < 1e-5);
+}
+
+/// Com a Biblioteca baixada (no notebook do Theo): os pads, vozes e DrumPads novos saem com som.
+/// `cargo test --no-default-features --lib v035_biblioteca_real -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn v035_biblioteca_real_soa() {
+    for (name, path) in crate::pads::LIB_PADS {
+        assert!(crate::pads::lib_pad_available(path), "{name}: baixe a Biblioteca");
+        let t = std::time::Instant::now();
+        let clip = crate::pads::load_my_pad(path).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let r = clip.data.iter().map(|&x| (x as f32 / 32768.0).powi(2)).sum::<f32>() / clip.data.len() as f32;
+        println!("{name}: {:.1} s, rms {:.3}, {} tons, {:.1} s para abrir", clip.frames() as f32 / clip.rate as f32, r.sqrt(), clip.per_key.len(), t.elapsed().as_secs_f32());
+        assert!(r.sqrt() > 0.05, "{name} soa");
+    }
+    for n in 6..crate::pads::TEXTURE_VOICES.len() {
+        let t = crate::pads::load_texture_voice(n).unwrap();
+        let peak = t.l.iter().fold(0f32, |m, x| m.max(x.abs()));
+        println!("{}: {:.1} s, pico {peak:.2}", crate::pads::TEXTURE_VOICES[n].name, t.l.len() as f32 / t.rate as f32);
+        assert!(peak > 0.05);
+    }
+    let drums = crate::biblioteca::make_lib_drums();
+    assert_eq!(drums.len(), 6);
+    for (name, path) in drums {
+        let (l, _) = crate::efeitos::load_drum_file(&path.to_string_lossy(), 48_000).unwrap();
+        println!("{name}: {:.1} s", l.len() as f32 / 48_000.0);
+        assert!(l.len() > 4800);
+    }
 }

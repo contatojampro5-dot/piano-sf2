@@ -32,12 +32,105 @@ pub const BANK_HINTS: [&str; PAD_BANKS] = [
 pub struct PadClip {
     pub data: Vec<i16>,
     pub rate: u32,
+    /// v0.35: pad gravado nos 12 tons (Dream Shimmer, Reverse Waves): uma gravação por tom, sem mudar a altura.
+    pub per_key: Vec<Arc<PadClip>>,
 }
 
 impl PadClip {
     pub fn frames(&self) -> usize {
         self.data.len() / 2
     }
+}
+
+/// v0.35: o que tocar para o tom `key`: a gravação daquele tom (pad de 12 tons) ou o pad mudando a altura.
+pub fn clip_for_key(clip: &Arc<PadClip>, root: usize, key: usize) -> (Arc<PadClip>, f32) {
+    match clip.per_key.get(key % PAD_KEYS) {
+        Some(k) if clip.per_key.len() == PAD_KEYS => (k.clone(), 1.0),
+        _ => (clip.clone(), my_pad_pitch(root, key)),
+    }
+}
+
+/// v0.35: pads da Biblioteca que entram nos "Meus pads" com nome de astro (só se o arquivo foi baixado).
+/// (nome, caminho). "tons:X" = pasta com os 12 tons; "sf2:arquivo#banco:programa" = o programa grava o pad do SF2.
+pub const LIB_PADS: [(&str, &str); 6] = [
+    ("Sol", "tons:Dream Shimmer"),
+    ("Lua", "tons:Reverse Waves"),
+    ("Mercúrio", "sf2:Pads/Hillsong Pad.sf2#0:0"),
+    ("Urano", "sf2:Pads/Warm Pad.sf2#0:0"),
+    ("Plutão", "sf2:Pads/Shimmer Dark.sf2#0:0"),
+    ("Cometa", "sf2:Pads/Oceans Pad.sf2#0:0"),
+];
+
+/// O arquivo de um pad da Biblioteca está no computador?
+pub fn lib_pad_available(path: &str) -> bool {
+    if let Some(set) = path.strip_prefix("tons:") {
+        return (0..PAD_KEYS).all(|k| crate::biblioteca::key_file(set, k).exists());
+    }
+    if let Some((rel, _)) = path.strip_prefix("sf2:").and_then(|s| s.split_once('#')) {
+        return crate::biblioteca::full_path(rel).exists();
+    }
+    false
+}
+
+/// Carrega os 12 tons de um pad gravado em todos os tons.
+fn load_key_set(set: &str) -> Result<PadClip, String> {
+    let mut keys = Vec::with_capacity(PAD_KEYS);
+    for k in 0..PAD_KEYS {
+        let path = crate::biblioteca::key_file(set, k);
+        let file = std::fs::File::open(&path).map_err(|_| format!("falta o tom {} (baixe a Biblioteca)", KEY_NAMES[k]))?;
+        // WAV com cabeçalho fora do padrão (Reverse Waves: fmt de 20 bytes) → leitor simples daqui
+        let clip = match decode_part(Box::new(file), Some("wav"), 0, MY_KEEP_S) {
+            Ok(c) => c,
+            Err(e) => read_plain_wav(&path, MY_KEEP_S).ok_or(e)?,
+        };
+        let mut data = clip.data;
+        smooth_loop(&mut data, clip.rate as usize * 2);
+        normalize_level(&mut data);
+        keys.push(Arc::new(PadClip { data, rate: clip.rate, per_key: Vec::new() }));
+    }
+    // o "clipe principal" é o de C (serve para descobrir o tom e para o ✕/renomear da tela)
+    Ok(PadClip { data: keys[0].data.clone(), rate: keys[0].rate, per_key: keys })
+}
+
+/// v0.35: grava um pad a partir de um timbre de SF2 da Biblioteca: tônica e quinta em C (serve para
+/// maior e menor, igual aos outros pads), segurando as notas. Pula o começo (o pad "entrando").
+pub fn render_sf2_pad(rel: &str, bank: i32, patch: i32) -> Result<PadClip, String> {
+    use rustysynth::{SoundFont, Synthesizer, SynthesizerSettings};
+    const RATE: u32 = 44_100;
+    const SKIP_S: usize = 5;
+    const KEEP_S: usize = 40;
+    let path = crate::biblioteca::full_path(rel);
+    let f = std::fs::File::open(&path).map_err(|_| "baixe a Biblioteca primeiro".to_string())?;
+    let sf = SoundFont::new(&mut std::io::BufReader::with_capacity(1 << 20, f)).map_err(|e| format!("SF2 com problema ({e})"))?;
+    let sf = Arc::new(sf);
+    let mut settings = SynthesizerSettings::new(RATE as i32);
+    settings.enable_reverb_and_chorus = true;
+    let mut s = Synthesizer::new(&sf, &settings).map_err(|e| format!("SF2 com problema ({e})"))?;
+    s.set_channel_preset(0, bank, patch);
+    s.process_midi_message(0, 0xB0, 0x5B, 30); // um pouco de reverb do próprio SF2
+    for n in [36, 48, 55, 60, 67] {
+        s.note_on(0, n, if n == 36 { 70 } else { 92 });
+    }
+    let total = RATE as usize * (SKIP_S + KEEP_S);
+    let (mut l, mut r) = (vec![0f32; 1024], vec![0f32; 1024]);
+    let mut data: Vec<i16> = Vec::with_capacity(RATE as usize * KEEP_S * 2);
+    let mut done = 0;
+    while done < total {
+        let n = (total - done).min(1024);
+        s.render(&mut l[..n], &mut r[..n]);
+        if done + n > RATE as usize * SKIP_S {
+            let from = (RATE as usize * SKIP_S).saturating_sub(done);
+            for i in from..n {
+                data.push((l[i].clamp(-1.0, 1.0) * 32767.0) as i16);
+                data.push((r[i].clamp(-1.0, 1.0) * 32767.0) as i16);
+            }
+        }
+        done += n;
+    }
+    if data.iter().all(|&x| x.unsigned_abs() < 30) {
+        return Err("esse timbre não segura a nota (não serve de pad)".into());
+    }
+    Ok(PadClip { data, rate: RATE, per_key: Vec::new() })
 }
 
 macro_rules! bank {
@@ -400,6 +493,19 @@ pub fn load_my_pad(path: &str) -> Result<Arc<PadClip>, String> {
         .strip_prefix("livre:")
         .and_then(|n| n.parse::<usize>().ok())
         .and_then(|n| FREE_PADS.get(n));
+    // v0.35: pads da Biblioteca
+    if let Some(set) = path.strip_prefix("tons:") {
+        return load_key_set(set).map(Arc::new);
+    }
+    if let Some(spec) = path.strip_prefix("sf2:") {
+        let (rel, bp) = spec.split_once('#').ok_or("pad de SF2 sem timbre")?;
+        let (b, p) = bp.split_once(':').ok_or("pad de SF2 sem timbre")?;
+        let clip = render_sf2_pad(rel, b.parse().unwrap_or(0), p.parse().unwrap_or(0))?;
+        let mut data = clip.data;
+        smooth_loop(&mut data, clip.rate as usize * 2);
+        normalize_level(&mut data);
+        return Ok(Arc::new(PadClip { data, rate: clip.rate, per_key: Vec::new() }));
+    }
     let clip = match (partner, free) {
         (Some(p), _) => decode_part(Box::new(Cursor::new(p.bytes)), Some("ogg"), 0, MY_KEEP_S)?,
         (_, Some(p)) => decode_part(Box::new(Cursor::new(p.bytes)), Some("ogg"), 0, MY_KEEP_S)?,
@@ -420,6 +526,7 @@ pub fn load_my_pad(path: &str) -> Result<Arc<PadClip>, String> {
     Ok(Arc::new(PadClip {
         data,
         rate: clip.rate,
+        per_key: Vec::new(),
     }))
 }
 
@@ -598,7 +705,7 @@ fn decode_part(
     if data.len() < 2 * 4410 {
         return Err("Áudio curto demais (precisa de pelo menos 0,1 s)".into());
     }
-    Ok(PadClip { data, rate })
+    Ok(PadClip { data, rate, per_key: Vec::new() })
 }
 
 /// Deixa o pad no mesmo volume dos pads do programa (média ~ -16 dB), sem passar de -1 dB no pico:
@@ -728,15 +835,21 @@ pub struct TextureVoice {
     pub root: Option<usize>,
     pub looped: bool,
     pub restart: bool,
+    /// v0.35: vem de um SF2 da Biblioteca ("arquivo#banco:programa"): só aparece depois de baixar.
+    pub lib: Option<&'static str>,
 }
 
-pub const TEXTURE_VOICES: [TextureVoice; 6] = [
-    TextureVoice { name: "Órion", hint: "coral angelical, longo", root: Some(1), looped: true, restart: false },
-    TextureVoice { name: "Lyra", hint: "coral celestial, cheio", root: Some(11), looped: true, restart: false },
-    TextureVoice { name: "Cassiopeia", hint: "brilho de sinos, \"céu\"", root: Some(6), looped: true, restart: false },
-    TextureVoice { name: "Andrômeda", hint: "vozes que respiram", root: Some(7), looped: true, restart: false },
-    TextureVoice { name: "Choir Rise", hint: "coral gospel subindo (toca uma vez)", root: None, looped: false, restart: true },
-    TextureVoice { name: "Prayer", hint: "trecho em Dó maior, 120 BPM", root: Some(0), looped: true, restart: true },
+pub const TEXTURE_VOICES: [TextureVoice; 9] = [
+    TextureVoice { name: "Órion", hint: "coral angelical, longo", root: Some(1), looped: true, restart: false, lib: None },
+    TextureVoice { name: "Lyra", hint: "coral celestial, cheio", root: Some(11), looped: true, restart: false, lib: None },
+    TextureVoice { name: "Cassiopeia", hint: "brilho de sinos, \"céu\"", root: Some(6), looped: true, restart: false, lib: None },
+    TextureVoice { name: "Andrômeda", hint: "vozes que respiram", root: Some(7), looped: true, restart: false, lib: None },
+    TextureVoice { name: "Choir Rise", hint: "coral gospel subindo (toca uma vez)", root: None, looped: false, restart: true, lib: None },
+    TextureVoice { name: "Prayer", hint: "trecho em Dó maior, 120 BPM", root: Some(0), looped: true, restart: true, lib: None },
+    // v0.35: vozes da Biblioteca (constelações, como as outras texturas)
+    TextureVoice { name: "Fênix", hint: "coro de vozes sintéticas (Biblioteca)", root: Some(0), looped: true, restart: false, lib: Some("Voices/Super Voice.sf2#0:0") },
+    TextureVoice { name: "Pégaso", hint: "anjos, bem aberto (Biblioteca)", root: Some(0), looped: true, restart: false, lib: Some("Voices/Crying Angels.sf2#0:0") },
+    TextureVoice { name: "Cisne", hint: "\"uuh\" suave de vozes (Biblioteca)", root: Some(0), looped: true, restart: false, lib: Some("Voices/Ooh La La.sf2#0:0") },
 ];
 
 static TEXTURE_BYTES: [&[u8]; 4] = [
@@ -752,11 +865,21 @@ pub const TEXTURE_BASE: usize = 6;
 /// Abre a textura `n` (0..6) pronta para o motor.
 pub fn load_texture_voice(n: usize) -> Result<Arc<crate::efeitos::VoiceTexture>, String> {
     let tv = TEXTURE_VOICES.get(n).ok_or("textura não existe")?;
-    let bytes: &'static [u8] = match n {
-        0..=3 => TEXTURE_BYTES[n],
-        _ => crate::efeitos::EXTRA_DRUM_SAMPLES[n - 4],
+    let clip = match tv.lib {
+        // v0.35: voz da Biblioteca: o programa grava a textura a partir do SF2
+        Some(spec) => {
+            let (rel, bp) = spec.split_once('#').ok_or("textura sem timbre")?;
+            let (b, p) = bp.split_once(':').ok_or("textura sem timbre")?;
+            render_sf2_pad(rel, b.parse().unwrap_or(0), p.parse().unwrap_or(0))?
+        }
+        None => {
+            let bytes: &'static [u8] = match n {
+                0..=3 => TEXTURE_BYTES[n],
+                _ => crate::efeitos::EXTRA_DRUM_SAMPLES[n - 4],
+            };
+            decode(Box::new(Cursor::new(bytes)), Some("ogg"), false)?
+        }
     };
-    let clip = decode(Box::new(Cursor::new(bytes)), Some("ogg"), false)?;
     let root = tv.root.unwrap_or_else(|| detect_key(&clip));
     let mut data = clip.data;
     if tv.looped {
@@ -775,4 +898,72 @@ pub fn load_texture_voice(n: usize) -> Result<Arc<crate::efeitos::VoiceTexture>,
         looped: tv.looped,
         restart: tv.restart,
     }))
+}
+
+/// v0.35: a textura `n` do Voice FX pode ser usada? (as da Biblioteca só depois de baixar o arquivo)
+pub fn texture_available(n: usize) -> bool {
+    match TEXTURE_VOICES.get(n) {
+        None => false,
+        Some(t) => match t.lib {
+            None => true,
+            Some(spec) => spec
+                .split_once('#')
+                .is_some_and(|(rel, _)| crate::biblioteca::full_path(rel).exists()),
+        },
+    }
+}
+
+/// v0.35: leitor simples de WAV (PCM 16/24/32 bits ou float 32), para arquivos com cabeçalho
+/// que o decodificador recusa. Devolve estéreo intercalado, no máximo `keep_s` segundos.
+pub fn read_plain_wav(path: &std::path::Path, keep_s: usize) -> Option<PadClip> {
+    let b = std::fs::read(path).ok()?;
+    if b.len() < 12 || &b[0..4] != b"RIFF" || &b[8..12] != b"WAVE" {
+        return None;
+    }
+    let u16_at = |i: usize| u16::from_le_bytes([b[i], b[i + 1]]);
+    let u32_at = |i: usize| u32::from_le_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]);
+    let (mut fmt, mut data) = (None, None);
+    let mut p = 12;
+    while p + 8 <= b.len() {
+        let size = u32_at(p + 4) as usize;
+        let body = p + 8;
+        match &b[p..p + 4] {
+            b"fmt " if body + 16 <= b.len() => {
+                let mut tag = u16_at(body);
+                if tag == 0xFFFE && size >= 26 && body + 26 <= b.len() {
+                    tag = u16_at(body + 24); // WAVE_FORMAT_EXTENSIBLE: o formato de verdade vem no GUID
+                }
+                fmt = Some((tag, u16_at(body + 2) as usize, u32_at(body + 4), u16_at(body + 14) as usize));
+            }
+            b"data" => data = Some((body, size.min(b.len().saturating_sub(body)))),
+            _ => {}
+        }
+        p = body + size + (size & 1);
+    }
+    let (tag, ch, rate, bits) = fmt?;
+    let (start, len) = data?;
+    if ch == 0 || !matches!((tag, bits), (1, 16) | (1, 24) | (1, 32) | (3, 32)) {
+        return None;
+    }
+    let bytes = bits / 8;
+    let frame = bytes * ch;
+    let frames = (len / frame).min(rate as usize * keep_s);
+    let sample = |i: usize| -> f32 {
+        let s = &b[i..i + bytes];
+        match (tag, bits) {
+            (1, 16) => i16::from_le_bytes([s[0], s[1]]) as f32 / 32768.0,
+            (1, 24) => (i32::from_le_bytes([0, s[0], s[1], s[2]]) >> 8) as f32 / 8_388_608.0,
+            (1, 32) => i32::from_le_bytes([s[0], s[1], s[2], s[3]]) as f32 / 2_147_483_648.0,
+            _ => f32::from_le_bytes([s[0], s[1], s[2], s[3]]),
+        }
+    };
+    let mut out = Vec::with_capacity(frames * 2);
+    for f in 0..frames {
+        let i = start + f * frame;
+        let l = sample(i);
+        let r = if ch > 1 { sample(i + bytes) } else { l };
+        out.push((l.clamp(-1.0, 1.0) * 32767.0) as i16);
+        out.push((r.clamp(-1.0, 1.0) * 32767.0) as i16);
+    }
+    (out.len() >= 2 * 4410).then_some(PadClip { data: out, rate, per_key: Vec::new() })
 }

@@ -15,6 +15,16 @@ pub struct PresetRef {
     pub bank: i32,
     pub patch: i32,
     pub name: String,
+    /// v0.35: timbre de um arquivo da Biblioteca ("Pads/Hillsong Pad.sf2"); None = do SF2 principal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+}
+
+impl PresetRef {
+    /// Mesmo timbre (mesmo arquivo, banco e programa)? O nome não conta.
+    pub fn same(&self, o: &PresetRef) -> bool {
+        self.bank == o.bank && self.patch == o.patch && self.file == o.file
+    }
 }
 
 /// Uma camada (um canal da mesinha).
@@ -492,6 +502,12 @@ pub struct Config {
     /// v0.31: os 4 sons da Pixabay saíram dos "Meus pads" (viraram vozes do Voice FX)?
     #[serde(default)]
     pub pads_v31: bool,
+    /// v0.35: pads da Biblioteca que já entraram nos "Meus pads" (se o Theo tirar, não volta sozinho).
+    #[serde(default)]
+    pub lib_pads_added: Vec<String>,
+    /// v0.35: os DrumPads de efeito da Biblioteca (11 a 16) já entraram?
+    #[serde(default)]
+    pub lib_drums_added: bool,
     /// Versão do mapeamento salvo (ver `MAPPINGS_VERSION`). Config antiga sem o campo = 0.
     #[serde(default)]
     pub mappings_version: u32,
@@ -780,6 +796,8 @@ impl Default for Config {
             pads_v21: false,
             pads_v30: false,
             pads_v31: false,
+            lib_pads_added: Vec::new(),
+            lib_drums_added: false,
         }
     }
 }
