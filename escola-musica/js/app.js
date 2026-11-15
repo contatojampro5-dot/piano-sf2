@@ -6,7 +6,7 @@ const LEVELS = [[0, "Ouvinte"], [150, "Aprendiz"], [400, "Instrumentista"], [800
 const RANKS = ["Ouvinte", "Aprendiz", "Músico", "Mestre"];
 const PASS = 0.7, INTERVALS = [1, 2, 4, 8, 16, 32, 64];
 
-function fresh() { return { v: 1, xp: 0, days: {}, les: {}, mis: {}, ear: {}, cards: {}, unlockAll: false, theme: "auto", mstage: {}, earDays: {}, seenGuide: false }; }
+function fresh() { return { v: 1, name: "", figSeen: {}, voc: null, xp: 0, days: {}, les: {}, mis: {}, ear: {}, cards: {}, unlockAll: false, theme: "auto", mstage: {}, earDays: {}, seenGuide: false }; }
 let S = fresh();
 try { const r = JSON.parse(localStorage.getItem(LS) || "null"); if (r && r.v === 1) S = Object.assign(fresh(), r); } catch (e) {}
 function save() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} }
@@ -68,8 +68,8 @@ function tabs(cur) {
 
 // ---------- mentores ----------
 function ava(k, size = 46, stage) {
-  const M = MENTORS[k]; const st = stage == null ? 0 : stage;
-  return `<span class="ava st${st}" style="--c1:${M.c1};--c2:${M.c2};width:${size}px;height:${size}px;font-size:${size * .46}px" aria-hidden="true">${M.emoji}</span>`;
+  const M = MENTORS[k], st = stage == null ? 0 : stage;
+  return `<span class="ava st${st}" style="--c1:${M.c1};--c2:${M.c2};width:${size}px;height:${size}px" aria-hidden="true">${mArt(k, st, { crop: true })}</span>`;
 }
 
 // ---------- teclado ----------
@@ -139,60 +139,7 @@ function rhythmAnimate(el, info, len) {
 }
 
 // ---------- tela inicial ----------
-function ring(p) { const r = 34, c = 2 * Math.PI * r; return `<svg class="ring" viewBox="0 0 84 84" width="84" height="84" role="img" aria-label="${p}% concluído"><circle cx="42" cy="42" r="${r}" class="ring-bg"/><circle cx="42" cy="42" r="${r}" class="ring-fg" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c * (1 - p / 100)).toFixed(1)}" transform="rotate(-90 42 42)"/><text x="42" y="48" text-anchor="middle">${p}%</text></svg>`; }
-function viewHome() {
-  const Lv = level(), nx = nextLesson(), tot = ALL().length, done = ALL().filter(passed).length, pct = Math.round(done / tot * 100);
-  const due = dueCards().length, ear = earSuggest(), earToday = (S.earDays || {})[today()] || 0;
-  const t = nx ? trackOf(nx) : null, M = t ? MENTORS[t.mk] : null;
-  app().innerHTML = `
-  <section class="hero card">
-    <div class="row" style="flex-wrap:nowrap;gap:16px">
-      ${ring(pct)}
-      <div class="grow">
-        <p class="eyebrow">Escola Harpa · ${esc(Lv.name)}</p>
-        <h1 class="display">A música por dentro</h1>
-        <p class="small muted">${done}/${tot} lições aprovadas · ${streak()} dia(s) seguidos · ${S.xp} XP${Lv.next ? ` · faltam ${Lv.next - S.xp} para ${Lv.nextName}` : ""}</p>
-      </div>
-    </div>
-  </section>
-  ${nx ? `<a class="card next" href="#l-${nx}" style="--c1:${M.c1};--c2:${M.c2}">
-    ${ava(t.mk, 56, mStage(t))}
-    <div class="grow"><p class="eyebrow">Continuar · Nível ${t.n} · ${esc(t.title)}</p><h2>${esc(L(nx).title)}</h2><p class="small muted">${esc(L(nx).sub)}</p></div>
-    <span class="go">${IC.play}</span></a>` : `<div class="card"><h2>Trilha completa!</h2><p class="muted">Você aprovou todas as lições. Busque nota máxima e mantenha o ouvido em dia.</p></div>`}
-  <section class="card stack">
-    <p class="eyebrow">Treino de hoje</p>
-    <div class="mission"><span class="check ${S.les[nx] && S.les[nx].day === today() ? "done" : ""}">${IC.check}</span><div class="grow"><b>1 lição da trilha</b><p class="small muted">Stories + prova: teoria com som de verdade</p></div>${nx ? `<a class="btn pri" href="#l-${nx}">Estudar</a>` : ""}</div>
-    <div class="mission"><span class="check ${earToday >= 10 ? "done" : ""}">${IC.check}</span><div class="grow"><b>10 exercícios de ouvido</b><p class="small muted">${earToday}/10 hoje · sugestão: ${esc(EAR[ear].name)} (nível ${earLv(ear)})</p></div><a class="btn" href="#o-${ear}">Treinar</a></div>
-    <div class="mission"><span class="check ${cardsToday() >= 10 ? "done" : ""}">${IC.check}</span><div class="grow"><b>Revisar cards</b><p class="small muted">${cardsToday()}/10 hoje · ${due} para revisar</p></div><a class="btn" href="#cards">Revisar</a></div>
-  </section>
-  <section class="stack">
-    <div class="row" style="justify-content:space-between"><p class="eyebrow">Seus mestres</p><a class="small" href="#trilha">Ver trilha</a></div>
-    <div class="ments">${TRACKS.map(t => { const st = mStage(t), un = trackUnlocked(t); return `<a class="ment ${un ? "" : "off"}" href="${un ? "#l-" + (t.mods.find(id => !passed(id)) || t.mods[0]) : "#trilha"}">${ava(t.mk, 54, st)}<b>${esc(MENTORS[t.mk].name)}</b><span>${esc(t.short)}</span><em>${RANKS[st]}</em></a>`; }).join("")}</div>
-  </section>
-  <div class="grid2">
-    <a class="card linkcard" href="#guia"><span class="lc-ic">${IC.book}</span><div><b>Guia da faculdade de música</b><p class="small muted">Disciplinas, cursos, carreiras e como este app cobre cada área</p></div></a>
-    <a class="card linkcard" href="#lab"><span class="lc-ic">${IC.lab}</span><div><b>Laboratório</b><p class="small muted">Teclado, campo harmônico, círculo das quintas, metrônomo, ondas e mesa de mixagem</p></div></a>
-  </div>`;
-}
-
 // ---------- trilha ----------
-function viewTrilha() {
-  app().innerHTML = `<header class="phead"><p class="eyebrow">Trilha</p><h1 class="display">7 níveis, 28 lições</h1><p class="muted">As áreas de uma faculdade de música, em ordem de aprendizado. Aprove 3 lições de um nível para abrir o próximo.</p></header>
-  ${TRACKS.map(t => {
-    const un = trackUnlocked(t), M = MENTORS[t.mk], st = mStage(t);
-    return `<section class="track card ${un ? "" : "locked"}" style="--c1:${M.c1};--c2:${M.c2}">
-      <div class="row" style="flex-wrap:nowrap">${ava(t.mk, 52, st)}<div class="grow"><p class="eyebrow">Nível ${t.n} · ${esc(M.name)} · ${RANKS[st]}</p><h2>${esc(t.title)}</h2><p class="small muted">${esc(t.desc)}</p></div></div>
-      <div class="nodes">${t.mods.map((id, i) => {
-        const ok = lessonUnlocked(id), cls = passed(id) ? "done" : ok ? "open" : "lock";
-        return `<a class="node ${cls}" href="${ok ? "#l-" + id : "#trilha"}" style="--off:${[0, 38, 12, 52][i]}%">
-          <span class="dotn">${passed(id) ? IC.check : ok ? i + 1 : IC.lock}</span>
-          <span class="nlabel"><b>${esc(L(id).title)}</b><span>${[storyDone(id), passed(id), perfect(id), misDone(id)].map(x => `<i class="${x ? "on" : ""}"></i>`).join("")}</span></span></a>`;
-      }).join("")}</div>
-      ${un ? "" : `<p class="small muted lockmsg">${IC.lock} Aprove 3 lições de “${esc(TRACKS[t.n - 2].title)}” para abrir.</p>`}
-    </section>`;
-  }).join("")}`;
-}
-
 // ---------- página da lição ----------
 function viewLesson(id) {
   const l = L(id); if (!l || !lessonUnlocked(id)) { location.replace("#trilha"); return; }
@@ -209,7 +156,7 @@ function viewLesson(id) {
     ${misDone(id) ? `<p class="okmsg">${IC.check} Missão cumprida</p>` : `<button class="btn" id="misBtn">Cumpri a missão (+15 XP)</button>`}
   </section>
   ${l.deep ? `<section class="card stack"><p class="eyebrow">Para ir mais fundo</p>${l.deep.map(d => `<p class="small">• ${fmt(d)}</p>`).join("")}</section>` : ""}`;
-  const mb = $("#misBtn"); if (mb) mb.onclick = () => { S.mis[id] = today(); gain(15, "missão"); evoCheck(t); viewLesson(id); };
+  const mb = $("#misBtn"); if (mb) mb.onclick = () => { S.mis[id] = today(); gain(15, "missão"); evoCheck(t); viewLesson(id); setTimeout(packModal, 400); };
 }
 function evoCheck(t) { const st = mStage(t), was = S.mstage[t.id] || 0; if (st > was) { S.mstage[t.id] = st; save(); const M = MENTORS[t.mk]; modal(`<div class="center stack">${ava(t.mk, 96, st)}<p class="eyebrow">Novo título com ${esc(M.name)}</p><h2 class="display">${RANKS[st]}</h2><p class="muted">${esc(M.evo[st - 1] || "")}</p></div>`); } }
 
@@ -217,7 +164,7 @@ function evoCheck(t) { const st = mStage(t), was = S.mstage[t.id] || 0; if (st >
 let ST = null;
 function openStory(id) {
   const l = L(id); if (!l || !lessonUnlocked(id)) { location.replace("#trilha"); return; }
-  ST = { id, i: 0, gate: false, slides: l.s };
+  ST = { id, i: 0, gate: false, slides: [{ k: "cover" }, ...l.s] };
   $("#tabs").hidden = true; document.body.classList.add("storying");
   renderStory();
 }
@@ -227,9 +174,9 @@ function renderStory() {
   AU.stop();
   app().innerHTML = `<div class="story" style="--c1:${M.c1};--c2:${M.c2}">
     <div class="sbars">${ST.slides.map((_, j) => `<span class="${j < ST.i ? "f" : j === ST.i ? "c" : ""}"></span>`).join("")}</div>
-    <div class="shead">${ava(t.mk, 30, mStage(t))}<b>${esc(M.name)}</b><span class="muted small">${esc(l.title)}</span><a class="sx" href="#l-${ST.id}" aria-label="Fechar">${IC.x}</a></div>
+    <div class="shead">${ava(t.mk, 36, mStage(t))}<div class="grow"><b>${esc(M.name)}</b><span class="small">${esc(t.short)} · Lição ${t.n}.${t.mods.indexOf(ST.id) + 1}</span></div><a class="sx" href="#l-${ST.id}" aria-label="Fechar">${IC.x}</a></div>
     <div class="sbody" id="sbody">${slideHTML(sl)}</div>
-    <div class="snav"><button class="btn" id="sPrev" ${ST.i === 0 ? "disabled" : ""}>${IC.back}</button><button class="btn pri grow" id="sNext">${ST.i === n - 1 ? "Concluir" : "Continuar"}</button></div>
+    <div class="snav"><button class="btn" id="sPrev" ${ST.i === 0 ? "disabled" : ""}>${IC.back}</button><button class="btn pri grow" id="sNext">${ST.i === 0 ? "Começar" : ST.i === n - 1 ? "Concluir e ir para a prova" : "Continuar"}</button></div>
   </div>`;
   ST.gate = !!GATED[sl.k];
   $("#sNext").disabled = ST.gate;
@@ -249,7 +196,8 @@ const GATED = { tf: 1, pick: 1, order: 1, match: 1, ear: 1, kb: 1, chat: 1, tap:
 
 function slideHTML(s) {
   switch (s.k) {
-    case "mentor": { const t = trackOf(ST.id); return `<div class="smentor">${ava(t.mk, 84, mStage(t))}<div class="bubble">${fmt(s.t)}</div></div>`; }
+    case "mentor": { const t = trackOf(ST.id); return `<div class="smentor"><div class="sart">${mArt(t.mk, mStage(t))}</div><div class="bubble">${fmt(s.t)}</div></div>`; }
+    case "cover": { const t = trackOf(ST.id), l = L(ST.id), n = l.s.length; return `<div class="scover"><div class="sart big">${mArt(t.mk, mStage(t))}</div><p class="eyebrow gold">Nível ${t.n} · ${esc(t.short)} · Lição ${t.n}.${t.mods.indexOf(ST.id) + 1}</p><h1 class="display">${esc(l.title)}</h1><p class="sp">${esc(l.sub)}</p><div class="row"><span class="pillw">${n} stories</span><span class="pillw">cerca de ${Math.max(4, Math.round(n * .45))} min</span><span class="pillw">com som 🎧</span></div><a class="small linkw" href="#l-${ST.id}">Ver objetivos e missão da lição</a></div>`; }
     case "txt": return `${s.tag ? `<p class="eyebrow">${esc(s.tag)}</p>` : ""}<h2 class="sh">${esc(s.h)}</h2><p class="sp">${fmt(s.p)}</p>${s.staff ? `<div class="staffbox" data-staff="${esc(s.staff)}" data-clef="${s.clef || "sol"}">${staffSVG(s.staff, s.clef, { labels: true })}</div>` : ""}`;
     case "list": return `<h2 class="sh">${esc(s.h)}</h2>${s.p ? `<p class="sp">${fmt(s.p)}</p>` : ""}<ol class="slist">${s.items.map(x => `<li>${fmt(x)}</li>`).join("")}</ol>`;
     case "table": return `<h2 class="sh">${esc(s.h)}</h2>${s.p ? `<p class="sp">${fmt(s.p)}</p>` : ""}<div class="tbl"><table>${s.head ? `<thead><tr>${s.head.map(x => `<th>${esc(x)}</th>`).join("")}</tr></thead>` : ""}<tbody>${s.rows.map((r, i) => `<tr ${s.play ? `data-row="${i}" class="trp"` : ""}>${r.map((x, j) => `<td>${s.play && j === 0 ? `<span class="tdp">${IC.play}</span>` : ""}${fmt(x)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
@@ -362,7 +310,7 @@ function renderQuiz() {
       <div class="row" style="justify-content:center"><a class="btn" href="#l-${QZ.id}">Voltar à lição</a>${sc < 1 ? `<button class="btn" id="again">Refazer</button>` : ""}${nx && nx !== QZ.id ? `<a class="btn pri" href="#l-${nx}">Próxima lição</a>` : ""}</div>
     </section>`;
     const a = $("#again"); if (a) a.onclick = () => openQuiz(QZ.id);
-    evoCheck(t); return;
+    evoCheck(t); setTimeout(packModal, 400); return;
   }
   app().innerHTML = `<a class="back" href="#l-${QZ.id}">${IC.back} Sair da prova</a>
   <section class="card stack quiz">
@@ -778,6 +726,8 @@ function modal(html) {
 // ---------- rotas ----------
 function route() {
   const h = location.hash.slice(1) || "inicio";
+  if (!S.name) { viewBemvindo(); return; }
+  document.body.classList.remove("onb");
   if (window._labStop) { window._labStop(); window._labStop = null; }
   MIX.stop(); METRO.stop();
   if (!h.startsWith("s-")) closeStory();
@@ -788,11 +738,8 @@ function route() {
   if (a === "l") { tabs("trilha"); viewLesson(rest); return; }
   if (a === "o") { tabs("ouvido"); openEar(rest); return; }
   if (a === "lab") { tabs("lab"); viewLab(rest); return; }
-  const V = { inicio: viewHome, trilha: viewTrilha, ouvido: viewOuvido, cards: () => { CQ = null; viewCards(); }, perfil: viewPerfil, guia: viewGuia };
-  tabs(V[a] ? (a === "perfil" || a === "guia" ? "" : a) : "inicio");
+  if (a === "mentor") { tabs(""); viewMentor(rest); return; }
+  const V = { inicio: viewHome, trilha: viewTrilha, ouvido: viewOuvido, cards: () => { CQ = null; viewCards(); }, perfil: viewPerfil, guia: viewGuia, mentores: viewMentores, album: viewAlbum, teste: () => { VT = null; viewTeste(); } };
+  tabs(V[a] ? (["perfil", "guia", "mentores", "album", "teste"].includes(a) ? "" : a) : "inicio");
   (V[a] || viewHome)();
 }
-window.addEventListener("hashchange", route);
-document.addEventListener("pointerdown", () => AU.init(), { once: true });
-applyTheme(); hdr(); route();
-if ("serviceWorker" in navigator && location.protocol === "https:" && !/claude|anthropic/.test(location.host)) navigator.serviceWorker.register("sw.js").catch(() => {});
