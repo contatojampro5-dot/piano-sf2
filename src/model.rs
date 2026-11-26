@@ -931,7 +931,9 @@ impl Config {
             *v = v.clamp(0.0, 1.0);
         }
         self.vivo.files.retain(|(n, _, _)| *n < 3);
-        self.tab = self.tab.min(3);
+        if self.tab != 4 {
+            self.tab = self.tab.min(3);
+        }
         self.look.frost = self.look.frost.clamp(0.0, 1.0);
         self.look.glow = self.look.glow.clamp(0.0, 1.0);
         self.look.scale = self.look.scale.clamp(0.75, 1.5);
@@ -1021,4 +1023,25 @@ pub fn config_path() -> std::path::PathBuf {
         .join(".config")
         .join("piano-sf2")
         .join("config.json")
+}
+
+#[cfg(test)]
+mod workstation_config_tests {
+    use super::Config;
+
+    #[test]
+    fn workstation_tab_round_trips_and_legacy_tabs_keep_their_indices() {
+        for index in 0..=4 {
+            let mut data = serde_json::to_value(Config::default()).unwrap();
+            data["tab"] = serde_json::json!(index);
+            let mut config: Config = serde_json::from_value(data).unwrap();
+            config.normalize();
+            assert_eq!(config.tab, index);
+        }
+        let mut data = serde_json::to_value(Config::default()).unwrap();
+        data.as_object_mut().unwrap().remove("tab");
+        let mut config: Config = serde_json::from_value(data).unwrap();
+        config.normalize();
+        assert_eq!(config.tab, 0);
+    }
 }

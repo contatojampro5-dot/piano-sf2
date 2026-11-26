@@ -914,6 +914,12 @@ impl Core {
         }
     }
 
+    pub fn workstation_action(&mut self, action: crate::workstation::Action) {
+        if self.tx.try_send(Cmd::Workstation(action)).is_err() {
+            self.notify("Não foi possível enviar o comando da Workstation.");
+        }
+    }
+
     fn send(&self, cmd: Cmd) {
         let _ = self.tx.send(cmd);
     }

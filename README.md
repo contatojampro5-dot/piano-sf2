@@ -194,6 +194,8 @@ O GitHub Actions (`.github/workflows/windows.yml`) monta o `PianoSF2.exe` a cada
 
 ## Versões
 
+- **v0.36** — Aba Workstation com quatro loops estéreo gravados ao vivo e alinhados ao compasso.
+
 ### v0.35 — Biblioteca NoahPad (os melhores sons do pacote do Drive)
 - **103 arquivos (3,3 GB)** escolhidos do pacote do Drive: pianos (Nord Grand 3D, Yamaha CFX, Montage, DEX Italian + Pad),
   **EP** (Nord Rhodes, Rhodes EPs Plus, Montage EP, DX7 Romance Tines, CP80, Wurlitzer), **órgãos** (Hammond B3, Gospel),

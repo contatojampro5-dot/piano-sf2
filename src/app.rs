@@ -347,6 +347,7 @@ impl eframe::App for PianoApp {
                     0 => mixer(ui, &mut core, &mut self.ui),
                     1 => pads_page(ui, &mut core, &mut self.ui),
                     2 => efeitos_page(ui, &mut core, &mut self.ui),
+                    4 => workstation_page(ui, &mut core, &self.stats),
                     _ => drum_page(ui, &mut core, &mut self.ui, &self.stats),
                 }
             });
@@ -1094,6 +1095,93 @@ fn status_dot(ui: &mut Ui, what: &str, name: Option<&str>, active: bool) -> egui
 
 // ---------- Abas ----------
 
+fn workstation_page(ui: &mut Ui, core: &mut Core, stats: &Stats) {
+    use crate::workstation::{Action, State, SLOTS};
+
+    let available = stats.workstation.available();
+    ui.ctx().request_repaint_after(Duration::from_millis(50));
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(format!("{:.0} BPM · 4/4", core.cfg.efeitos.bpm)).color(th().text));
+        if ui.button("Parar tudo").clicked() {
+            core.workstation_action(Action::StopAll);
+        }
+    });
+    if !available {
+        ui.label(RichText::new("Para gravar, use uma saída de áudio ativa de até 48 kHz.").color(th().dim));
+    }
+    let width = ui.available_width();
+    let columns = if width >= 720.0 { 4 } else if width >= 360.0 { 2 } else { 1 };
+    for row in (0..SLOTS).step_by(columns) {
+        ui.columns(columns, |cells| {
+            for (column, ui) in cells.iter_mut().enumerate() {
+                let index = row + column;
+                ui.push_id(index, |ui| {
+                    let (state, volume, muted) = stats.workstation.slot(index);
+                    let (caption, active) = match state {
+                        State::Empty => ("Vazio", false),
+                        State::Armed => ("Aguardando compasso", true),
+                        State::Recording => ("Gravando", true),
+                        State::Finishing => ("Fechando compasso", true),
+                        State::Ready => ("Pronto", false),
+                        State::Queued => ("Aguardando reprodução", true),
+                        State::Playing => ("Tocando", true),
+                    };
+                    let colors = accent_pair(SEQ_COLOR);
+                    let size = Vec2::new(ui.available_width(), 188.0);
+                    let (card, _) = ui.allocate_exact_size(size, Sense::hover());
+                    lit_glass(ui, card, 18, false, None, colors, 1.0);
+                    ui.scope_builder(
+                        egui::UiBuilder::new().max_rect(card.shrink(8.0)).layout(Layout::top_down(Align::Min)),
+                        |ui| {
+                            let size = Vec2::new(ui.available_width(), 42.0);
+                            let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+                            drum_tile(ui.painter(), rect, colors, if active { 0.7 } else { 0.15 }, None,
+                                &format!("Loop {}", index + 1), Some(caption));
+
+                            let record = match state {
+                                State::Armed => "Cancelar",
+                                State::Recording => "Fechar loop",
+                                State::Finishing => "Continuar gravando",
+                                _ => "Gravar",
+                            };
+                            let can_record = available && matches!(
+                                state, State::Empty | State::Armed | State::Recording | State::Finishing
+                            );
+                            if ui.add_enabled(can_record, egui::Button::new(record)).clicked() {
+                                core.workstation_action(Action::Record(index));
+                            }
+                            ui.horizontal_wrapped(|ui| {
+                                for (label, enabled, action) in [
+                                    ("Tocar", state == State::Ready, Action::Play(index)),
+                                    ("Parar", active, Action::Stop(index)),
+                                    ("Apagar", state != State::Empty, Action::Clear(index)),
+                                ] {
+                                    if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+                                        core.workstation_action(action);
+                                    }
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                let (_, changed) = fader(ui, Vec2::new(34.0, 66.0), volume, SEQ_COLOR, false);
+                                if let Some(volume) = changed {
+                                    core.workstation_action(Action::Volume(index, volume));
+                                }
+                                ui.vertical(|ui| {
+                                    ui.label(format!("Volume {:.0}%", volume * 100.0));
+                                    let mut muted = muted;
+                                    if ui.checkbox(&mut muted, "Mudo").changed() {
+                                        core.workstation_action(Action::Mute(index, muted));
+                                    }
+                                });
+                            });
+                        },
+                    );
+                });
+            }
+        });
+    }
+}
+
 fn tabs_bar(ui: &mut Ui, core: &mut Core) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
@@ -1113,13 +1201,15 @@ fn tabs_bar(ui: &mut Ui, core: &mut Core) {
             ),
             // v0.27: aba própria dos DrumPads (o ícone de grade é desenhado abaixo)
             ("      DrumPads".to_string(), core.drum_flash.iter().any(|t| t.is_some_and(|t| t.elapsed().as_secs_f32() < 0.45))),
+            ("Workstation".to_string(), false),
         ];
         for (i, (label, live)) in tabs.iter().enumerate() {
             if i == 1 && core.cfg.is_hidden("tab_pads") {
                 continue;
             }
             let active = core.cfg.tab == i;
-            let (rect, resp) = ui.allocate_exact_size(Vec2::new(210.0, 38.0), Sense::click());
+            let width = if i == 4 { ui.available_width().clamp(108.0, 210.0) } else { 210.0 };
+            let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, 38.0), Sense::click());
             let radius = CornerRadius {
                 nw: 10,
                 ne: 10,
