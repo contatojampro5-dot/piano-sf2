@@ -103,9 +103,11 @@ pub(crate) struct Looper {
 
 impl Looper {
     pub(crate) fn new() -> Self {
-        let capacity =
-            (step_samples(BPM_MIN, 1, MAX_RATE) * 4.0 * f64::from(MAX_BARS)).ceil() as usize;
-        Self::with_capacity(capacity)
+        Self::with_capacity(Self::required_capacity(MAX_RATE))
+    }
+
+    fn required_capacity(rate: u32) -> usize {
+        (step_samples(BPM_MIN, 1, rate) * 4.0 * f64::from(MAX_BARS)).ceil() as usize
     }
 
     fn with_capacity(capacity: usize) -> Self {
@@ -142,7 +144,9 @@ impl Looper {
             Action::Record(index) if (1..=MAX_RATE).contains(&self.rate) => {
                 let slot = &mut self.slots[index];
                 slot.state = match slot.state {
-                    State::Empty => State::Armed,
+                    State::Empty if slot.samples.len() >= Self::required_capacity(self.rate) => {
+                        State::Armed
+                    }
                     State::Armed => State::Empty,
                     State::Recording => State::Finishing,
                     State::Finishing => State::Recording,
@@ -279,7 +283,7 @@ mod tests {
 
     #[test]
     fn four_slots_quantize_and_keep_tempo_until_the_take_ends() {
-        let mut looper = Looper::with_capacity(128);
+        let mut looper = Looper::with_capacity(Looper::required_capacity(4));
         looper.sync_rate(4, 0);
         render(&mut looper, 0, 14, 0.0, 60.0);
         for index in 0..SLOTS {
@@ -313,14 +317,17 @@ mod tests {
 
     #[test]
     fn recording_stops_at_capacity_and_small_buffers_fail_safely() {
-        for capacity in [127, 128] {
+        let required = Looper::required_capacity(4);
+        for capacity in [required - 1, required] {
             let mut looper = Looper::with_capacity(capacity);
             looper.sync_rate(4, 0);
             looper.action(Action::Record(0));
-            render(&mut looper, 0, 129, 0.0, 60.0);
+            let expected = if capacity == required { State::Armed } else { State::Empty };
+            assert_eq!(looper.slots[0].state, expected);
+            render(&mut looper, 0, required + 1, 0.0, BPM_MIN);
             let slot = &looper.slots[0];
-            if capacity == 128 {
-                assert_eq!((slot.state, slot.len), (State::Playing, 128));
+            if capacity == required {
+                assert_eq!((slot.state, slot.len), (State::Playing, required));
             } else {
                 assert_eq!((slot.state, slot.len), (State::Empty, 0));
             }
