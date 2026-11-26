@@ -32,6 +32,7 @@ const MAX_PADS: usize = 8;
 
 /// Comandos para o motor (vindos do piano, da mesinha ou da tela).
 pub enum Cmd {
+    Workstation(crate::workstation::Action),
     NoteOn {
         key: u8,
         vel: u8,
@@ -158,6 +159,7 @@ pub struct Stats {
     pub overruns: AtomicU32,
     /// v0.33: passo do Sequencer que acabou de tocar + 1 (0 = parado). A tela acende a coluna e os pads.
     pub seq_pos: AtomicU32,
+    pub workstation: crate::workstation::Status,
 }
 
 const KILL_DELAY_MS: f32 = 60.0;
@@ -171,6 +173,7 @@ pub struct Engine {
     rx: Receiver<Cmd>,
     garbage: Sender<Garbage>,
     pub stats: Arc<Stats>,
+    workstation: crate::workstation::Looper,
     sample_rate: u32,
     audible: [bool; LAYERS],
     /// Contagem regressiva (em amostras) para calar de vez uma camada desligada.
@@ -253,6 +256,7 @@ impl Engine {
             rx,
             garbage,
             stats,
+            workstation: crate::workstation::Looper::new(),
             sample_rate: 48_000,
             audible: [false; LAYERS],
             kill_in: [-1; LAYERS],
@@ -481,8 +485,10 @@ impl Engine {
                 }
                 self.voicefx.note_off(k);
             }
+            Cmd::Workstation(action) => self.workstation.action(action),
             Cmd::Tempo(bpm) => self.bpm = bpm.clamp(efeitos::BPM_MIN, efeitos::BPM_MAX),
             Cmd::TempoSync => {
+                self.workstation.sync_tempo(self.clock);
                 self.pulse_origin = self.clock;
                 self.arp_next = self.clock as f64;
                 // v0.33: a batida acerta o tempo na batida do Tap (segue o compasso, pulando para o próximo tempo)
@@ -653,6 +659,7 @@ impl Engine {
                 }
             }
             Cmd::SetSampleRate(sr) => {
+                self.workstation.sync_rate(sr.max(8000), self.clock);
                 if self.synth.is_none() {
                     self.sample_rate = sr.max(8000);
                     self.reverb.set_sample_rate(self.sample_rate);
@@ -982,6 +989,7 @@ impl Engine {
             }
             // v0.17: DrumPads por último, secos (não entram no Congelar nem no pulso).
             self.drums.mix(l, r, self.drum_vol * self.master);
+            self.workstation.mix(l, r, self.clock, self.bpm, self.master);
             self.clock += n as u64;
             for f in 0..n {
                 let a = soft_clip(l[f]);
@@ -998,6 +1006,7 @@ impl Engine {
             }
             done += n;
         }
+        self.workstation.publish(&self.stats.workstation);
 
         // Pads que já sumiram: devolve para apagar fora daqui.
         let mut i = 0;
@@ -1087,6 +1096,37 @@ pub fn soft_clip(x: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn workstation_captures_the_drum_mix_without_recording_its_own_return() {
+        use crate::workstation::{Action, State};
+
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let (garbage, _rx) = crossbeam_channel::unbounded();
+        let stats = Arc::new(Stats::default());
+        let mut engine = Engine::new(rx, garbage, stats.clone());
+        engine.drums = efeitos::Drums::default();
+        tx.send(Cmd::SetSampleRate(8_000)).unwrap();
+        tx.send(Cmd::Tempo(120.0)).unwrap();
+        tx.send(Cmd::DrumKit(Arc::new(efeitos::DrumKit::build_synth(8_000)))).unwrap();
+        tx.send(Cmd::Workstation(Action::Record(0))).unwrap();
+        tx.send(Cmd::Drum { pad: 0, vel: 100 }).unwrap();
+        let mut audio = vec![0.0; 32_000];
+        engine.render_interleaved(&mut audio, 2);
+        assert!(audio.iter().any(|sample| sample.abs() > 0.001));
+        // A fresh drum bus stays silent while the first loop plays.
+        engine.drums = efeitos::Drums::default();
+        tx.send(Cmd::Workstation(Action::Record(0))).unwrap();
+        tx.send(Cmd::Workstation(Action::Record(1))).unwrap();
+        engine.render_interleaved(&mut audio, 2);
+        assert!(audio.iter().any(|sample| sample.abs() > 0.001));
+        assert_eq!(stats.workstation.slot(1).0, State::Recording);
+        tx.send(Cmd::Workstation(Action::Record(1))).unwrap();
+        tx.send(Cmd::Workstation(Action::Stop(0))).unwrap();
+        engine.render_interleaved(&mut audio, 2);
+        assert_eq!(stats.workstation.slot(1).0, State::Playing);
+        assert!(audio.iter().all(|sample| sample.abs() < 0.00001));
+    }
 
     #[test]
     fn soft_clip_limits() {

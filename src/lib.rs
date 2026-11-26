@@ -11,6 +11,7 @@ pub mod model;
 pub mod pads;
 pub mod sons;
 pub mod teoria;
+pub mod workstation;
 
 #[cfg(feature = "app")]
 pub mod app;
